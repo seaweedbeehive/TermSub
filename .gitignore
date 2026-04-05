@@ -15,3 +15,33 @@
 # Environment
 .env
 .env.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+env/
+
+# Database & large files
+*.db
+*.sqlite3
+uploads/
+exports/
+uploads/*
+models/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Environment
+.env
+EOF
+02_Code/termsub
