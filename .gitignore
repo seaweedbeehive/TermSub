@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+._*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Database & runtime files
+*.db
+*.sqlite3
+*.sqlite3-journal
+
+# User content directories
+uploads/
+exports/
+
+# Model downloads (local Whisper)
+models/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
