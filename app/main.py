@@ -295,7 +295,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                                 <option value="ja">Japanese</option>
                                 <option value="zh">Chinese</option>
                             </select>
-                            <p class="text-[10px] text-slate-500 mt-1">Select to skip auto-detection and speed up transcription</p>
+
                         </div>
 
                         <div>
@@ -316,11 +316,10 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 mb-1">Transcription Engine</label>
                             <select id="transcriptionEngine" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="groq">Cloud (Groq-Whisper)</option>
-                                <option value="gemini">Cloud (Gemini Flash)</option>
+                                <option value="gemini" selected>Cloud (Gemini Flash)</option>
                                 <option value="local">Local (Privacy First)</option>
                             </select>
-                            <p class="text-[10px] text-slate-500 mt-1">Groq is fastest. Gemini gives structured JSON. Local keeps audio private.</p>
+                            <p class="text-[10px] text-slate-500 mt-1">Cloud uses Google's AI for maximum accuracy.</p>
                         </div>
 
                         <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">

@@ -2,7 +2,7 @@
 
 > **AI-Powered Video Translation & Terminology Management**
 
-TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **three transcription providers**, a **built-in web UI**, and **real-time WebSocket progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
+TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **two transcription providers**, a **built-in web UI**, and **real-time progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
 
 Built with a focus on **Persian (Farsi)** and other RTL languages, but supports any language pair Gemini can handle.
 
@@ -15,8 +15,7 @@ Choose the transcription engine that fits your needs:
 
 | Provider | Speed | Privacy | Best For |
 |----------|-------|---------|----------|
-| **Groq (Whisper)** | ⚡ Fastest | ☁️ Cloud | Quick turnaround, high accuracy |
-| **Gemini Flash** | 🚀 Fast | ☁️ Cloud | Structured JSON output, Google ecosystem |
+| **Gemini Flash** | 🚀 Fast | ☁️ Cloud | High-accuracy cloud processing |
 | **Local (faster-whisper)** | 🐢 CPU-bound | 🔒 Offline | Privacy-sensitive content, no API keys |
 
 ### Multi-Agent Translation Pipeline
@@ -63,7 +62,7 @@ A complete single-page interface served at `http://localhost:8000/` with:
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────────┐
 │   Upload    │────▶│  FFmpeg Audio   │────▶│  Transcription      │
-│  (Video)    │     │   Extraction    │     │  (Groq/Gemini/Local)│
+│  (Video)    │     │   Extraction    │     │  (Gemini/Local)     │
 └─────────────┘     └─────────────────┘     └─────────────────────┘
                                                      │
 ┌────────────────────────────────────────────────────┘
@@ -105,7 +104,7 @@ A complete single-page interface served at `http://localhost:8000/` with:
 │   │   └── video.py          # Video, Segment, Term, JobQueue, ProcessingLog
 │   ├── schemas/              # Pydantic request/response models
 │   ├── services/
-│   │   ├── whisper_service.py    # Transcription (Groq/Gemini/Local)
+│   │   ├── whisper_service.py    # Transcription (Gemini/Local)
 │   │   ├── gemini_service.py     # Gemini translation + validation
 │   │   ├── translation_pipeline.py # Multi-agent pipeline
 │   │   ├── context_analysis_service.py # Director + Glossary agents
@@ -157,17 +156,15 @@ Edit `.env` and add your API keys:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GEMINI_API_KEY` | **Yes** | Google Gemini API key (translation + analysis) |
-| `GROQ_API_KEY` | No* | Groq API key (fastest transcription) |
-| `OPENAI_API_KEY` | No | Reserved for future use |
-| `TRANSCRIPTION_PROVIDER` | No | `groq` (default), `gemini`, or `local` |
+| `GEMINI_API_KEY` | **Yes** | Google Gemini API key (transcription + translation + analysis) |
+| `TRANSCRIPTION_PROVIDER` | No | `gemini` (default) or `local` |
 | `DATABASE_URL` | No | SQLite default: `sqlite:///./termsub.db` |
 | `UPLOAD_DIR` | No | Upload folder (default: `uploads`) |
 | `EXPORT_DIR` | No | Export folder (default: `exports`) |
 | `LOCAL_WHISPER_DEVICE` | No | `cpu` or `cuda` (default: `cpu`) |
 | `LOCAL_WHISPER_COMPUTE_TYPE` | No | `int8`, `float16`, etc. (default: `int8`) |
 
-\* Required only if using Groq transcription.
+
 
 ### 3. Run
 
@@ -198,7 +195,7 @@ Click **Transcribe** (or call the API). The background worker:
 - Saves segments with timestamps to the database
 
 ```bash
-POST /videos/{id}/transcribe?provider=groq
+POST /videos/{id}/transcribe?provider=gemini
 ```
 
 ### 3. Analyze (Multi-Agent)
@@ -237,21 +234,14 @@ GET /export/{id}/transcription   # Original (untranslated) SRT
 
 ## Transcription Providers
 
-### Groq (Default)
-Fastest option. Uses Groq's hosted Whisper API via the OpenAI-compatible client.
-```env
-TRANSCRIPTION_PROVIDER=groq
-GROQ_WHISPER_MODEL=whisper-large-v3
-```
-
-### Gemini Flash
-Returns structured JSON with segment timestamps. Good for Google ecosystem users.
+### Gemini Flash (Default)
+Cloud-based transcription powered by Google Gemini. Delivers high-accuracy results with structured segment output.
 ```env
 TRANSCRIPTION_PROVIDER=gemini
 ```
 
 ### Local (faster-whisper)
-Offline, privacy-first. Runs on CPU (or CUDA if configured). Model downloaded on first run.
+Offline, privacy-first transcription that runs entirely on your own hardware. Uses CPU by default; CUDA can be configured for faster processing. The model is downloaded automatically on first run.
 ```env
 TRANSCRIPTION_PROVIDER=local
 LOCAL_WHISPER_MODEL=large-v3
@@ -259,7 +249,7 @@ LOCAL_WHISPER_DEVICE=cpu
 LOCAL_WHISPER_COMPUTE_TYPE=int8
 ```
 
-You can also override the provider per-request via the UI dropdown or API:
+You can switch between providers at any time via the UI dropdown or API:
 ```bash
 POST /videos/{id}/transcribe?provider=gemini
 ```
@@ -309,7 +299,7 @@ If dependencies change:
 ## Tech Stack
 
 - **Backend**: FastAPI + SQLAlchemy + SQLite
-- **AI/ML**: Google Gemini (`google-genai`), Groq Whisper, faster-whisper
+- **AI/ML**: Google Gemini (`google-genai`), faster-whisper
 - **Queue**: SQLite-backed background worker with WebSocket updates
 - **Frontend**: Built-in vanilla JS + Tailwind CSS (served from `main.py`)
 - **Audio**: FFmpeg for extraction

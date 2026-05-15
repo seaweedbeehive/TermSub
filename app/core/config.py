@@ -9,12 +9,9 @@ class Settings(BaseSettings):
     UPLOAD_DIR: Path = Path("uploads")
     EXPORT_DIR: Path = Path("exports")
     GEMINI_API_KEY: str
-    OPENAI_API_KEY: str = ""
-    GROQ_API_KEY: str = ""
 
-    # Transcription provider: "groq" | "local" | "gemini"
-    TRANSCRIPTION_PROVIDER: str = "groq"
-    GROQ_WHISPER_MODEL: str = "whisper-large-v3"
+    # Transcription provider: "gemini" | "local"
+    TRANSCRIPTION_PROVIDER: str = "gemini"
     LOCAL_WHISPER_MODEL: str = "large-v3"
 
     # Local hardware settings

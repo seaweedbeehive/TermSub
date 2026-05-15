@@ -1,9 +1,8 @@
 """Whisper transcription service - extracts audio and transcribes video with progress tracking.
 
 Supports multiple transcription providers:
-  - groq   : Cloud API via Groq (fast, default)
+  - gemini : Google Gemini Flash (cloud, JSON-structured output, default)
   - local  : Local faster-whisper (offline, high-accuracy mode)
-  - gemini : Google Gemini 1.5 Flash (cloud, JSON-structured output)
 
 Provider is selected via TRANSCRIPTION_PROVIDER config variable or passed
 explicitly to transcribe_audio().
@@ -28,7 +27,7 @@ from app.services.progress_service import get_progress_tracker
 # ---------------------------------------------------------------------------
 
 class _SegmentWrapper:
-    """Universal segment wrapper — used by both Groq and local pipelines."""
+    """Universal segment wrapper — used by all transcription pipelines."""
     def __init__(self, start: float, end: float, text: str):
         self.start = start
         self.end = end
@@ -99,82 +98,6 @@ def extract_audio(video_path: str, audio_path: str, progress_tracker=None, video
         if progress_tracker:
             progress_tracker.error("AUDIO_EXTRACTION", "FFmpeg not found")
         raise RuntimeError("FFmpeg not found. Please install FFmpeg.")
-
-
-# ---------------------------------------------------------------------------
-# Provider: Groq (cloud API)
-# ---------------------------------------------------------------------------
-
-def groq_transcribe(
-    audio_path: str,
-    model_size: str = None,
-    language: str = None,
-    progress_tracker=None,
-    video_id: str = None,
-) -> tuple[List[_SegmentWrapper], _InfoWrapper]:
-    """Transcribe audio using the Groq Whisper API.
-
-    Args:
-        audio_path: Path to the audio file
-        model_size: Groq model identifier (default: from config GROQ_WHISPER_MODEL)
-        language: Optional language code (e.g., 'en', 'fa') to force detection
-        progress_tracker: Optional progress tracker for logging
-        video_id: Optional video ID (unused - kept for API compatibility)
-
-    Returns:
-        Tuple of (segments, info) where segments is a list of _SegmentWrapper objects
-    """
-    try:
-        from openai import OpenAI
-    except ImportError:
-        if progress_tracker:
-            progress_tracker.error("WHISPER", "openai not installed")
-        raise RuntimeError("openai not installed. Install with: pip install openai")
-
-    api_key = os.getenv("GROQ_API_KEY") or settings.GROQ_API_KEY
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY not configured in environment")
-
-    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-    model = model_size or settings.GROQ_WHISPER_MODEL
-
-    if progress_tracker:
-        progress_tracker.info("WHISPER", f"Sending audio to Groq Whisper API", f"model={model}")
-
-    transcribe_start = time.time()
-
-    with open(audio_path, "rb") as audio_file:
-        kwargs = {
-            "model": model,
-            "file": audio_file,
-            "response_format": "verbose_json",
-        }
-        if language:
-            kwargs["language"] = language
-            if progress_tracker:
-                progress_tracker.info("WHISPER", f"Using specified language: {language} (skipping auto-detection)")
-
-        transcript = client.audio.transcriptions.create(**kwargs)
-
-    transcribe_elapsed = time.time() - transcribe_start
-    detected_language = getattr(transcript, "language", None) or language or "en"
-
-    if progress_tracker:
-        lang_info = f"Specified: {language}" if language else f"Detected: {detected_language}"
-        progress_tracker.info("WHISPER",
-                             f"Transcription complete in {transcribe_elapsed:.2f}s",
-                             lang_info)
-
-    segments: List[_SegmentWrapper] = []
-    for seg in transcript.segments:
-        segments.append(_SegmentWrapper(
-            start=getattr(seg, "start", 0),
-            end=getattr(seg, "end", 0),
-            text=getattr(seg, "text", "").strip(),
-        ))
-
-    info = _InfoWrapper(language=detected_language)
-    return segments, info
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +303,7 @@ def transcribe_audio(
         language: Optional language code (e.g., 'en', 'fa') to force detection
         progress_tracker: Optional progress tracker for logging
         video_id: Optional video ID (unused - kept for API compatibility)
-        provider: Optional provider override ('groq', 'local', 'gemini').
+        provider: Optional provider override ('gemini', 'local').
                   If None, uses TRANSCRIPTION_PROVIDER from config.
 
     Returns:
@@ -388,15 +311,13 @@ def transcribe_audio(
     """
     active_provider = (provider or settings.TRANSCRIPTION_PROVIDER).lower()
 
-    if active_provider == "groq":
-        return groq_transcribe(audio_path, model_size, language, progress_tracker, video_id)
-    elif active_provider == "local":
+    if active_provider == "local":
         return local_transcribe(audio_path, model_size, language, progress_tracker, video_id)
     elif active_provider == "gemini":
         return gemini_transcribe(audio_path, model_size, language, progress_tracker, video_id)
     else:
         raise RuntimeError(f"Unknown transcription provider: '{active_provider}'. "
-                           f"Use 'groq', 'local', or 'gemini'.")
+                           f"Use 'gemini' or 'local'.")
 
 
 # ---------------------------------------------------------------------------
