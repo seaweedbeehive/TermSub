@@ -301,25 +301,94 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 mb-1">Target Language</label>
                             <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="fa">Persian (Farsi)</option>
+                                <option value="" disabled selected>Select target language...</option>
+                                <option value="en">English</option>
                                 <option value="es">Spanish</option>
                                 <option value="fr">French</option>
                                 <option value="de">German</option>
-                                <option value="en">English</option>
                                 <option value="ar">Arabic</option>
                                 <option value="it">Italian</option>
                                 <option value="ja">Japanese</option>
                                 <option value="zh">Chinese</option>
+                                <option value="fa">Persian (Farsi)</option>
                             </select>
                         </div>
 
+                        <!-- Engine Selection -->
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Transcription Engine</label>
-                            <select id="transcriptionEngine" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="gemini" selected>Cloud (Gemini Flash)</option>
-                                <option value="local">Local (Privacy First)</option>
-                            </select>
-                            <p class="text-[10px] text-slate-500 mt-1">Cloud uses Google's AI for maximum accuracy.</p>
+                            <label class="block text-xs font-medium text-slate-700 mb-2">Transcription Engine</label>
+                            <div class="grid grid-cols-1 gap-3" id="engineSelector">
+                                <!-- Local Engine Card -->
+                                <div class="engine-card cursor-pointer border-2 border-slate-200 rounded-lg p-3 hover:border-slate-300 transition-colors" data-engine="local">
+                                    <div class="flex items-start gap-3">
+                                        <div class="mt-0.5">
+                                            <div class="w-4 h-4 rounded-full border-2 border-slate-300 flex items-center justify-center engine-radio">
+                                                <div class="w-2 h-2 rounded-full bg-blue-600 hidden"></div>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="flex items-center justify-between">
+                                                <h3 class="text-sm font-semibold text-slate-900">Local Engine</h3>
+                                                <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">Fast-Whisper</span>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-1">100% Free & Offline. High local system hardware strain.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Cloud Engine Card -->
+                                <div class="engine-card cursor-pointer border-2 border-blue-500 rounded-lg p-3 bg-blue-50 transition-colors" data-engine="gemini">
+                                    <div class="flex items-start gap-3">
+                                        <div class="mt-0.5">
+                                            <div class="w-4 h-4 rounded-full border-2 border-blue-500 flex items-center justify-center engine-radio">
+                                                <div class="w-2 h-2 rounded-full bg-blue-600"></div>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="flex items-center justify-between">
+                                                <h3 class="text-sm font-semibold text-slate-900">Cloud Engine</h3>
+                                                <span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Gemini AI + WhisperX Sync</span>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-1">Maximum linguistic accuracy & slang processing. Low hardware strain. Requires API key.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Hidden input retains the selected value for downstream JS -->
+                            <input type="hidden" id="transcriptionEngine" value="gemini">
+                        </div>
+
+                        <!-- Engine Comparison -->
+                        <div class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                            <p class="text-[10px] font-semibold text-slate-700 uppercase tracking-wider mb-2">Quick Comparison</p>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <p class="font-medium text-slate-900">Local (Fast-Whisper)</p>
+                                    <ul class="text-slate-500 text-[10px] mt-1 space-y-0.5 list-disc list-inside">
+                                        <li>Free forever</li>
+                                        <li>Privacy guaranteed</li>
+                                        <li>Heavy CPU/GPU load</li>
+                                        <li>Basic slang support</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-slate-900">Cloud (Gemini + WhisperX)</p>
+                                    <ul class="text-slate-500 text-[10px] mt-1 space-y-0.5 list-disc list-inside">
+                                        <li>Requires API key</li>
+                                        <li>Minimal local load</li>
+                                        <li>Best for slang/idioms</li>
+                                        <li>Word-level timestamp sync</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gemini API Key Vault -->
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1" for="geminiApiKey">Gemini API Key</label>
+                            <input type="password" id="geminiApiKey" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Paste your Gemini API key here">
+                            <p class="text-[10px] text-slate-500 mt-1">
+                                <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 underline">Get a free API key at Google AI Studio</a>
+                            </p>
                         </div>
 
                         <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
@@ -1169,11 +1238,31 @@ HTML_INTERFACE = """<!DOCTYPE html>
             
             try {
                 const engine = document.getElementById('transcriptionEngine').value;
-            const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=${engine}`, {
-                    method: 'POST'
+                const requestHeaders = {};
+                
+                // Forward Gemini API key when using Cloud Engine
+                if (engine === 'gemini') {
+                    const apiKey = localStorage.getItem('termsub_gemini_api_key') || document.getElementById('geminiApiKey').value || '';
+                    if (apiKey.trim()) {
+                        requestHeaders['X-Gemini-API-Key'] = apiKey.trim();
+                    }
+                }
+                
+                const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=${engine}`, {
+                    method: 'POST',
+                    headers: requestHeaders
                 });
                 
-                if (!response.ok) throw new Error(isTextFile ? 'Text parsing failed' : 'Transcription failed');
+                if (!response.ok) {
+                    let errorMessage = isTextFile ? 'Text parsing failed' : 'Transcription failed';
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || errorMessage;
+                    } catch (e) {
+                        // response wasn't JSON — keep default
+                    }
+                    throw new Error(errorMessage);
+                }
                 
                 const data = await response.json();
                 showToast(isTextFile ? 'Text parsed!' : 'Transcription complete!');
@@ -1190,7 +1279,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 
             } catch (err) {
                 log((isTextFile ? 'Parsing' : 'Transcription') + ' failed: ' + err.message, 'error');
-                showToast(isTextFile ? 'Text parsing failed' : 'Transcription failed', 'error');
+                showToast(err.message || (isTextFile ? 'Text parsing failed' : 'Transcription failed'), 'error');
             }
         }
 
@@ -1333,6 +1422,48 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', () => {
+            // --- Engine Selection Cards ---
+            const engineCards = document.querySelectorAll('.engine-card');
+            const engineInput = document.getElementById('transcriptionEngine');
+
+            function updateEngineSelection(selectedEngine) {
+                engineCards.forEach(card => {
+                    const isSelected = card.dataset.engine === selectedEngine;
+                    const radioRing = card.querySelector('.engine-radio');
+                    const radioDot = radioRing.querySelector('div');
+                    if (isSelected) {
+                        card.classList.add('border-blue-500', 'bg-blue-50');
+                        card.classList.remove('border-slate-200', 'hover:border-slate-300');
+                        radioRing.classList.add('border-blue-500');
+                        radioRing.classList.remove('border-slate-300');
+                        radioDot.classList.remove('hidden');
+                    } else {
+                        card.classList.remove('border-blue-500', 'bg-blue-50');
+                        card.classList.add('border-slate-200', 'hover:border-slate-300');
+                        radioRing.classList.remove('border-blue-500');
+                        radioRing.classList.add('border-slate-300');
+                        radioDot.classList.add('hidden');
+                    }
+                });
+                engineInput.value = selectedEngine;
+            }
+
+            engineCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    updateEngineSelection(card.dataset.engine);
+                });
+            });
+
+            // --- Gemini API Key Vault (localStorage) ---
+            const apiKeyInput = document.getElementById('geminiApiKey');
+            const savedKey = localStorage.getItem('termsub_gemini_api_key');
+            if (savedKey) {
+                apiKeyInput.value = savedKey;
+            }
+            apiKeyInput.addEventListener('input', () => {
+                localStorage.setItem('termsub_gemini_api_key', apiKeyInput.value);
+            });
+
             // File input
             const fileInput = document.getElementById('fileInput');
             const fileLabel = document.getElementById('fileLabel');

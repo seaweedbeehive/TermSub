@@ -20,6 +20,7 @@ from typing import Optional, Dict, Any, List
 from app.core.config import settings
 from app.models.video import Video, VideoStatus, Segment
 from app.services.progress_service import get_progress_tracker
+from app.services.transcription import align_transcript_with_whisperx
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +190,7 @@ def gemini_transcribe(
     language: str = None,
     progress_tracker=None,
     video_id: str = None,
+    api_key: Optional[str] = None,
 ) -> tuple[List[_SegmentWrapper], _InfoWrapper]:
     """Transcribe audio using Google Gemini 1.5 Flash.
 
@@ -198,6 +200,7 @@ def gemini_transcribe(
         language: Optional language code (e.g., 'en', 'fa') to force detection
         progress_tracker: Optional progress tracker for logging
         video_id: Optional video ID (unused - kept for API compatibility)
+        api_key: Optional API key override. Falls back to settings.GEMINI_API_KEY.
 
     Returns:
         Tuple of (segments, info) where segments is a list of _SegmentWrapper objects
@@ -208,11 +211,11 @@ def gemini_transcribe(
     except ImportError:
         raise RuntimeError("google-genai not installed. Install with: pip install google-genai")
 
-    api_key = settings.GEMINI_API_KEY
-    if not api_key:
+    effective_api_key = api_key or settings.GEMINI_API_KEY
+    if not effective_api_key:
         raise RuntimeError("GEMINI_API_KEY not configured")
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=effective_api_key)
 
     if progress_tracker:
         progress_tracker.info("WHISPER", "Uploading audio to Gemini...", f"file={audio_path}")
@@ -225,8 +228,9 @@ def gemini_transcribe(
     # Build prompt
     lang_hint = f"The audio is in {language}. " if language else ""
     prompt = (
-        f"{lang_hint}Transcribe this audio. Return the output as a JSON list of objects, "
-        f"each with 'start' (float seconds), 'end' (float seconds), and 'text' (string). "
+        f"{lang_hint}Transcribe this audio. Return the output as a JSON object with two keys: "
+        f"'detected_language' (a standard ISO 2-letter code like 'en', 'de', or 'fa' based on the dominant spoken language) "
+        f"and 'segments' (a list of objects, each with 'start' (float seconds), 'end' (float seconds), and 'text' (string)). "
         f"Do not wrap the JSON in markdown code blocks."
     )
 
@@ -259,11 +263,23 @@ def gemini_transcribe(
     except json.JSONDecodeError as e:
         raise RuntimeError(f"Gemini returned invalid JSON: {e}\nRaw: {raw_text[:500]}")
 
-    if not isinstance(data, list):
-        raise RuntimeError(f"Gemini returned unexpected format (expected JSON list). Raw: {raw_text[:500]}")
+    # Support both new object format {"detected_language": "en", "segments": [...]}
+    # and legacy list format [...]
+    extracted_detected_language = None
+    segments_data: List[Dict[str, Any]] = []
+
+    if isinstance(data, dict):
+        extracted_detected_language = data.get("detected_language")
+        segments_data = data.get("segments", [])
+        if not isinstance(segments_data, list):
+            raise RuntimeError(f"Gemini returned unexpected format (expected 'segments' list). Raw: {raw_text[:500]}")
+    elif isinstance(data, list):
+        segments_data = data
+    else:
+        raise RuntimeError(f"Gemini returned unexpected format (expected JSON object or list). Raw: {raw_text[:500]}")
 
     segments: List[_SegmentWrapper] = []
-    for item in data:
+    for item in segments_data:
         if isinstance(item, dict):
             segments.append(_SegmentWrapper(
                 start=float(item.get("start", 0)),
@@ -271,7 +287,40 @@ def gemini_transcribe(
                 text=str(item.get("text", "")).strip(),
             ))
 
-    detected_language = language or "en"
+    detected_language = language or extracted_detected_language or "en"
+
+    # ------------------------------------------------------------------
+    # Hybrid alignment: refine Gemini timestamps with WhisperX
+    # ------------------------------------------------------------------
+    try:
+        aligned = align_transcript_with_whisperx(
+            audio_path=audio_path,
+            gemini_segments=segments,
+            language_code=detected_language,
+        )
+        segments = [
+            _SegmentWrapper(
+                start=seg["start"],
+                end=seg["end"],
+                text=seg["text"],
+            )
+            for seg in aligned
+        ]
+        if progress_tracker:
+            progress_tracker.info(
+                "WHISPER",
+                "WhisperX alignment applied",
+                f"{len(segments)} segments aligned",
+            )
+    except Exception as exc:
+        # Any unexpected error in the alignment layer must not break
+        # the transcription flow — we keep Gemini's original timestamps.
+        if progress_tracker:
+            progress_tracker.warning(
+                "WHISPER",
+                "WhisperX alignment failed, using Gemini timestamps",
+                str(exc),
+            )
 
     if progress_tracker:
         progress_tracker.info("WHISPER",
@@ -293,6 +342,7 @@ def transcribe_audio(
     progress_tracker=None,
     video_id: str = None,
     provider: str = None,
+    api_key: Optional[str] = None,
 ):
     """
     Transcribe audio using the configured or explicitly specified transcription provider.
@@ -305,6 +355,7 @@ def transcribe_audio(
         video_id: Optional video ID (unused - kept for API compatibility)
         provider: Optional provider override ('gemini', 'local').
                   If None, uses TRANSCRIPTION_PROVIDER from config.
+        api_key: Optional Gemini API key override (used only when provider='gemini').
 
     Returns:
         Tuple of (segments, info) where segments is a list of _SegmentWrapper objects
@@ -314,7 +365,7 @@ def transcribe_audio(
     if active_provider == "local":
         return local_transcribe(audio_path, model_size, language, progress_tracker, video_id)
     elif active_provider == "gemini":
-        return gemini_transcribe(audio_path, model_size, language, progress_tracker, video_id)
+        return gemini_transcribe(audio_path, model_size, language, progress_tracker, video_id, api_key=api_key)
     else:
         raise RuntimeError(f"Unknown transcription provider: '{active_provider}'. "
                            f"Use 'gemini' or 'local'.")
@@ -324,7 +375,7 @@ def transcribe_audio(
 # High-level video transcription orchestration (provider-agnostic)
 # ---------------------------------------------------------------------------
 
-def transcribe_video(video_id: str, model_size: str = None, language: str = None, provider: str = None) -> Dict[str, Any]:
+def transcribe_video(video_id: str, model_size: str = None, language: str = None, provider: str = None, api_key: Optional[str] = None) -> Dict[str, Any]:
     """
     Extract audio from video and transcribe using the configured provider.
     
@@ -416,11 +467,12 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
             step_detail="Uploading audio to transcription service..."
         )
         
-        # Use specified language from video if not provided
-        if not language and source_language:
+        # Propagate explicit source language from DB when caller didn't pass one.
+        # If both are None, we let Gemini auto-detect the spoken language.
+        if language is None:
             language = source_language
         
-        segments, info = transcribe_audio(audio_path, model_size, language, progress_tracker, provider=provider)
+        segments, info = transcribe_audio(audio_path, model_size, language, progress_tracker, provider=provider, api_key=api_key)
         
         # Store source language (use detected or specified)
         detected_language = info.language if info and hasattr(info, 'language') else None

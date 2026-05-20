@@ -21,6 +21,10 @@ alembic==1.14.0
 google-genai==1.2.0
 faster-whisper==1.1.1
 
+# Hybrid alignment (WhisperX + Gemini)
+whisperx>=3.1.0
+torch>=2.0.0,<3.0.0
+
 # Async Support
 aiofiles==24.1.0
 anyio==4.6.0

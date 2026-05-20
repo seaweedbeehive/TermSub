@@ -353,7 +353,7 @@ def build_system_instruction(batch: TranslationBatch) -> str:
         lines.append("")
         for term, translation in batch.glossary.items():
             lines.append(f"{term} == {translation}")
-            lines.append(f"If the source text contains {term}, you MUST use the {translation} for the provided {term}. However, you are allowed to add necessary grammatical suffixes or prefixes (like Persian 'ra', 'ye', or 'ha') to ensure the sentence is grammatically perfect. The core meaning of the term must not change.")
+            lines.append(f"If the source text contains {term}, you MUST use the {translation} for the provided {term}. However, you are allowed to add necessary grammatical suffixes, prefixes, or particles appropriate to ensure the sentence is grammatically perfect in the target language. The core meaning of the term must not change.")
         lines.append("")
         lines.append("You must obey these rules for every translation you produce.")
     return "\n".join(lines)
@@ -1020,7 +1020,9 @@ async def translate_video_sliding_window_async(
         
         # Extract needed data before closing session
         source_language = video.source_language or "en"
-        target_language = video.target_language or "fa"
+        target_language = video.target_language
+        if not target_language:
+            raise ValueError("Target language is not set for this video.")
         
         all_segments = (
             db.query(Segment)
@@ -1231,7 +1233,9 @@ def translate_video_simple(
     
     total_segments = len(all_segments)
     source_language = video.source_language or "en"
-    target_language = video.target_language or "fa"
+    target_language = video.target_language
+    if not target_language:
+        raise ValueError("Target language is not set for this video.")
     
     video.status = VideoStatus.TRANSLATING.value
     video.total_segments = total_segments

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query, Request
+from typing import Optional
 from sqlalchemy.orm import Session
 import json
 import asyncio
@@ -8,7 +9,7 @@ from app.db.session import get_db
 from app.models.video import Video, VideoStatus
 from app.schemas.video import VideoOut
 from app.core.config import settings
-from app.core.sqlite_queue import enqueue_job, get_job_status, set_transcription_provider
+from app.core.sqlite_queue import enqueue_job, get_job_status, set_transcription_provider, set_gemini_api_key
 from app.services.upload_service import save_uploaded_file
 from app.services.text_parser import parse_text_file
 from app.services.gemini_service import translate_video_sliding_window
@@ -37,7 +38,7 @@ router = APIRouter(prefix="/videos", tags=["videos"])
 @router.post("/upload", response_model=VideoOut)
 async def upload_video(
     file: UploadFile = File(...),
-    target_language: str = Form("fa"),
+    target_language: Optional[str] = Form(None),
     source_language: str = Form("auto"),
     db: Session = Depends(get_db),
 ):
@@ -67,12 +68,16 @@ def get_video(video_id: str, db: Session = Depends(get_db)):
 @router.post("/{video_id}/transcribe")
 def transcribe_video_endpoint(
     video_id: str,
+    request: Request,
     method: str = Query("whisper", description="Transcription method: 'whisper' only"),
     provider: str = Query(None, description="Transcription provider: 'groq', 'local', or 'gemini'"),
     db: Session = Depends(get_db)
 ):
     """Queue transcription job for video using Whisper, or parse text files."""
     print(f"[API Transcribe] Request for video {video_id}, provider={provider}")
+    
+    # Extract Gemini API key manually from raw headers to bypass Pydantic annotation quirks
+    gemini_api_key = request.headers.get("X-Gemini-API-Key")
     
     try:
         video = db.query(Video).filter(Video.id == video_id).first()
@@ -96,6 +101,18 @@ def transcribe_video_endpoint(
                 print(f"[API Transcribe] Text parsing error: {e}")
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Parsing failed: {str(e)}")
+        
+        # Determine effective provider for validation
+        effective_provider = (provider or settings.TRANSCRIPTION_PROVIDER).lower()
+        
+        # Validation: Cloud engine requires a Gemini API key
+        if effective_provider == "gemini":
+            if not gemini_api_key or not gemini_api_key.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Gemini API Key is required for Cloud Engine processing."
+                )
+            set_gemini_api_key(video_id, gemini_api_key.strip())
         
         # Store per-request provider override (if any) before enqueueing
         if provider:

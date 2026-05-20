@@ -258,7 +258,9 @@ class TranslationPipeline:
                 raise RuntimeError(f"Video {video_id} is in ERROR status, aborting analysis")
             
             # Extract needed data
-            target_language = video.target_language or "fa"
+            target_language = video.target_language
+            if not target_language:
+                raise ValueError("Target language is not set for this video.")
             segments = (
                 db.query(Segment)
                 .filter(Segment.video_id == video_id)
@@ -462,7 +464,9 @@ Consider:
             ])
             
             source_language = video.source_language or "en"
-            target_language = video.target_language or "fa"
+            target_language = video.target_language
+            if not target_language:
+                raise ValueError("Target language is not set for this video.")
             
             # Load style guide if not provided
             style_text = ""

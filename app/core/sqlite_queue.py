@@ -40,6 +40,11 @@ _worker_lock = threading.Lock()
 # Populated by the API endpoint before enqueue, consumed by the worker.
 _transcription_providers: Dict[str, str] = {}
 
+# In-memory store for per-request Gemini API keys.
+# Key: video_id, Value: API key string
+# Populated by the API endpoint before enqueue, consumed by the worker.
+_gemini_api_keys: Dict[str, str] = {}
+
 
 def set_transcription_provider(video_id: str, provider: str) -> None:
     """Store the transcription provider choice for a video before enqueueing.
@@ -61,6 +66,28 @@ def get_transcription_provider(video_id: str) -> Optional[str]:
         Provider name if set, None otherwise
     """
     return _transcription_providers.pop(video_id, None)
+
+
+def set_gemini_api_key(video_id: str, api_key: str) -> None:
+    """Store the Gemini API key for a video before enqueueing.
+    
+    Args:
+        video_id: The video ID
+        api_key: Gemini API key
+    """
+    _gemini_api_keys[video_id] = api_key
+
+
+def get_gemini_api_key(video_id: str) -> Optional[str]:
+    """Retrieve and clear the stored Gemini API key for a video.
+    
+    Args:
+        video_id: The video ID
+        
+    Returns:
+        API key if set, None otherwise
+    """
+    return _gemini_api_keys.pop(video_id, None)
 
 # Default timeout for job processing (in minutes)
 DEFAULT_JOB_TIMEOUT_MINUTES = 30
@@ -609,6 +636,11 @@ class SQLiteQueueWorker(threading.Thread):
         if provider_override:
             logger.info(f"Using per-request transcription provider: {provider_override}")
         
+        # Check for a per-request Gemini API key override
+        api_key_override = get_gemini_api_key(video_id)
+        if api_key_override:
+            logger.info("Using per-request Gemini API key")
+        
         # Send initial progress
         self._send_ws_sync(video_id, {
             'status': 'transcribing',
@@ -621,10 +653,10 @@ class SQLiteQueueWorker(threading.Thread):
         transcribe_result = None
         if source_language:
             logger.debug(f"Using specified language: {source_language}")
-            transcribe_result = transcribe_video(video_id, language=source_language, provider=provider_override)
+            transcribe_result = transcribe_video(video_id, language=source_language, provider=provider_override, api_key=api_key_override)
         else:
             logger.debug("Using auto-detect")
-            transcribe_result = transcribe_video(video_id, provider=provider_override)
+            transcribe_result = transcribe_video(video_id, provider=provider_override, api_key=api_key_override)
         
         # Check result - transcribe_video now returns a Dict with success flag
         if transcribe_result and not transcribe_result.get("success", True):

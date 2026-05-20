@@ -25,66 +25,60 @@ CONTEXT_ANALYSIS_PROMPTS = {
 
 1. MAIN TOPIC: The central political theme (e.g., "Democratic transitions in the Middle East")
 2. SUB-TOPICS: 3-5 specific political concepts covered
-3. KEY TERMS: 10-20 political terminology items with their STANDARD Persian translations:
+3. KEY TERMS: 10-20 political terminology items with their STANDARD {target_language} translations:
    - Political systems (democracy, authoritarianism, regime types)
    - Ideologies (liberalism, conservatism, socialism, nationalism)
    - Governance concepts (civil society, public policy, sovereignty)
    - Political actors (parties, movements, international organizations)
 4. NAMED ENTITIES: Important people, organizations, treaties, political theories
 
-IMPORTANT: For terms with multiple Persian translations (like "democracy" → دمکراسی vs مردم‌سالاری), 
-provide the MOST STANDARD/ACADEMIC translation used in Persian political discourse.""",
+IMPORTANT: For terms with multiple {target_language} translations, 
+provide the MOST STANDARD/ACADEMIC translation used in {target_language} political discourse.""",
 
     VideoDomain.MEDICINE.value: """You are analyzing a MEDICAL video transcript. Extract:
 
 1. MAIN TOPIC: The medical specialty or health topic (e.g., "Type 2 Diabetes Management")
 2. SUB-TOPICS: 3-5 specific medical concepts covered
-3. KEY TERMS: 10-20 medical terminology items with their STANDARD Persian translations:
+3. KEY TERMS: 10-20 medical terminology items with their STANDARD {target_language} translations:
    - Diseases and conditions
    - Medical procedures and treatments
    - Anatomy and physiology terms
    - Pharmaceuticals and dosages
 4. NAMED ENTITIES: Medical organizations, diagnostic criteria (DSM, ICD), treatment protocols
 
-IMPORTANT: Use the standard Persian medical terminology. For example:
-- "Diabetes" → "دیابت" (not "بیماری قندی")
-- "Hypertension" → "فشار خون بالا" or "هایپرتنشن"
-""",
+IMPORTANT: Use the standard {target_language} medical terminology.""",
 
     VideoDomain.PSYCHOLOGY.value: """You are analyzing a PSYCHOLOGY video transcript. Extract:
 
 1. MAIN TOPIC: The psychological domain (e.g., "Cognitive Behavioral Therapy for Anxiety")
 2. SUB-TOPICS: 3-5 specific psychological concepts covered
-3. KEY TERMS: 10-20 psychology terminology items with their STANDARD Persian translations:
+3. KEY TERMS: 10-20 psychology terminology items with their STANDARD {target_language} translations:
    - Mental health disorders
    - Therapeutic approaches (CBT, psychoanalysis, etc.)
    - Cognitive concepts (perception, memory, learning)
    - Assessment tools and diagnostic criteria
 4. NAMED ENTITIES: Psychological theories, test names (MMPI, Beck Depression Inventory), theorists
 
-IMPORTANT: Use established Persian psychological terminology:
-- "Cognitive Behavioral Therapy" → "درمان شناختی-رفتاری" or "رفتاردرمانی شناختی"
-- "Depression" → "افسردگی"
-""",
+IMPORTANT: Use established {target_language} psychological terminology.""",
 
     VideoDomain.SOCIOLOGY.value: """You are analyzing a SOCIOLOGY video transcript. Extract:
 
 1. MAIN TOPIC: The sociological theme (e.g., "Social Stratification and Inequality")
 2. SUB-TOPICS: 3-5 specific sociological concepts covered
-3. KEY TERMS: 10-20 sociology terminology items with their STANDARD Persian translations:
+3. KEY TERMS: 10-20 sociology terminology items with their STANDARD {target_language} translations:
    - Social structures and institutions
    - Concepts of inequality and stratification
    - Social processes (socialization, urbanization)
    - Research methodologies
 4. NAMED ENTITIES: Sociological theories, theorists (Weber, Durkheim, etc.), social movements
 
-IMPORTANT: Use standard Persian sociological academic terminology.""",
+IMPORTANT: Use standard {target_language} sociological academic terminology.""",
 
     VideoDomain.GENERAL.value: """You are analyzing a video transcript. Extract:
 
 1. MAIN TOPIC: The primary subject matter
 2. SUB-TOPICS: 3-5 key themes or concepts covered
-3. KEY TERMS: 10-20 important terminology items with their STANDARD Persian translations:
+3. KEY TERMS: 10-20 important terminology items with their STANDARD {target_language} translations:
    - Technical jargon specific to the field
    - Multi-word concepts and compound terms
    - Academic or specialized vocabulary
@@ -93,15 +87,16 @@ IMPORTANT: Use standard Persian sociological academic terminology.""",
 
 IMPORTANT: Focus on terms that:
 - Appear multiple times in the transcript
-- Have established Persian translations in the field
+- Have established {target_language} translations in the field
 - Are central to understanding the content"""
 }
 
 
-def build_context_analysis_prompt(full_transcript: str, domain: str) -> str:
+def build_context_analysis_prompt(full_transcript: str, domain: str, target_language: str) -> str:
     """Build the context analysis prompt for Pass 1."""
     
     domain_prompt = CONTEXT_ANALYSIS_PROMPTS.get(domain, CONTEXT_ANALYSIS_PROMPTS[VideoDomain.GENERAL.value])
+    domain_prompt = domain_prompt.format(target_language=target_language)
     
     return f"""{domain_prompt}
 
@@ -115,7 +110,7 @@ Respond in JSON format:
   "key_terms": [
     {{
       "original": "English term",
-      "persian_standard": "Standard Persian translation",
+      "target_standard": "Standard {target_language} translation",
       "category": "Technical|Proper Noun|Key Concept",
       "confidence": "high|medium|low"
     }}
@@ -124,7 +119,7 @@ Respond in JSON format:
     {{
       "name": "Entity name",
       "type": "Person|Organization|Theory|Product|Place",
-      "persian_translation": "Persian translation or transliteration"
+      "target_translation": "{target_language} translation or transliteration"
     }}
   ],
   "translation_notes": "Any special notes about translation approach for this content"
@@ -132,7 +127,7 @@ Respond in JSON format:
 
 Guidelines:
 - Extract 10-20 key terms maximum - focus on the most important
-- For each term, provide the SINGLE best standard Persian translation
+- For each term, provide the SINGLE best standard {target_language} translation
 - Prioritize terms that appear multiple times in the transcript
 - Include multi-word concepts (e.g., "cognitive behavioral therapy", not just "therapy")
 - If a term has multiple valid translations, choose the most common/academic one"""
@@ -180,6 +175,9 @@ def analyze_video_context(
         
         # Extract all needed data before session closes
         domain = video.domain or VideoDomain.GENERAL.value
+        target_language = video.target_language
+        if not target_language:
+            raise ValueError("Target language is not set for this video.")
         
         segments = (
             session.query(Segment)
@@ -206,7 +204,7 @@ def analyze_video_context(
     progress_tracker.start_step("CONTEXT_ANALYSIS", f"Analyzing {len(segments)} segments for context and terminology")
     
     # Build prompt
-    prompt = build_context_analysis_prompt(full_transcript, domain)
+    prompt = build_context_analysis_prompt(full_transcript, domain, target_language)
     
     # ========================================================================
     # PHASE 2: ANALYZE - Call Gemini API (NO DATABASE SESSION)
@@ -318,16 +316,16 @@ def _save_context_terms_bulk(
     
     for term_data in key_terms:
         original = term_data.get("original", "").strip()
-        persian = term_data.get("persian_standard", "").strip()
+        target_std = term_data.get("target_standard", "").strip()
         category = term_data.get("category", "Key Concept")
         
-        if not original or not persian:
+        if not original or not target_std:
             continue
         
         terms_to_insert.append({
             "video_id": video_id,
             "original_term": original,
-            "translated_term": f"[{category}] {persian}",
+            "translated_term": f"[{category}] {target_std}",
             "category": category,
             "frequency": 0,  # Will be updated during actual translation
             "is_standardized": False,
@@ -373,7 +371,7 @@ def get_context_glossary(video_id: str) -> Dict[str, str]:
         video_id: ID of the video
         
     Returns:
-        Dictionary mapping English terms to Persian translations
+        Dictionary mapping English terms to target language translations
     """
     with SessionLocal() as session:
         video = session.query(Video).filter(Video.id == video_id).first()
@@ -387,16 +385,16 @@ def get_context_glossary(video_id: str) -> Dict[str, str]:
             # Add key terms
             for term in context_data.get("key_terms", []):
                 original = term.get("original", "").strip()
-                persian = term.get("persian_standard", "").strip()
-                if original and persian:
-                    glossary[original.lower()] = persian
+                target_std = term.get("target_standard", "").strip()
+                if original and target_std:
+                    glossary[original.lower()] = target_std
             
             # Add named entities
             for entity in context_data.get("named_entities", []):
                 name = entity.get("name", "").strip()
-                persian = entity.get("persian_translation", "").strip()
-                if name and persian:
-                    glossary[name.lower()] = persian
+                target_trans = entity.get("target_translation", "").strip()
+                if name and target_trans:
+                    glossary[name.lower()] = target_trans
             
             return glossary
         except (json.JSONDecodeError, KeyError):
@@ -440,6 +438,11 @@ def extract_glossary(
         # Check if video is in ERROR status - abort early
         if video.status == VideoStatus.ERROR.value:
             raise RuntimeError(f"Video {video_id} is in ERROR status, aborting glossary extraction")
+        
+        # Get target language
+        target_language = video.target_language
+        if not target_language:
+            raise ValueError("Target language is not set for this video.")
         
         # Get context analysis if available
         context_analysis = {}
@@ -495,21 +498,21 @@ Extract a comprehensive glossary of terms:
 
 1. KEY TERMS (10-20 items): Technical terminology, jargon, and key concepts
    - original: The English term exactly as it appears
-   - persian_standard: The standard Persian translation
+   - target_standard: The standard {target_language} translation
    - category: Technical | Proper Noun | Key Concept | Academic Term
    - confidence: high | medium | low
 
 2. NAMED ENTITIES (5-10 items): People, organizations, products, places
    - name: The entity name
    - type: Person | Organization | Product | Place | Theory
-   - persian_translation: Persian translation or transliteration
+   - target_translation: {target_language} translation or transliteration
 
 Respond in JSON format:
 {{
   "key_terms": [
     {{
       "original": "English term",
-      "persian_standard": "Standard Persian translation",
+      "target_standard": "Standard {target_language} translation",
       "category": "Technical|Proper Noun|Key Concept|Academic Term",
       "confidence": "high|medium|low"
     }}
@@ -518,14 +521,14 @@ Respond in JSON format:
     {{
       "name": "Entity name",
       "type": "Person|Organization|Product|Place|Theory",
-      "persian_translation": "Persian translation"
+      "target_translation": "{target_language} translation"
     }}
   ]
 }}
 
 Guidelines:
 - Focus on terms that appear multiple times in the transcript
-- Use the most common/academic Persian translation
+- Use the most common/academic {target_language} translation
 - Include multi-word concepts (e.g., "cognitive behavioral therapy")
 - Prioritize terms central to the topic"""
 
