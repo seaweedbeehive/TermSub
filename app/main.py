@@ -246,6 +246,24 @@ HTML_INTERFACE = """<!DOCTYPE html>
             animation: pulse-dot 1.5s ease-in-out infinite;
         }
 
+        /* Activity Log — modern dark-editor scrollbar */
+        #activityLog::-webkit-scrollbar {
+            width: 6px;
+        }
+        #activityLog::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #activityLog::-webkit-scrollbar-thumb {
+            background-color: #475569;
+            border-radius: 3px;
+        }
+        #activityLog::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b;
+        }
+        #activityLog {
+            scrollbar-width: thin;
+            scrollbar-color: #475569 transparent;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -265,12 +283,10 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Left Panel - Upload & Controls -->
-            <div class="lg:col-span-1 space-y-6">
+            <div class="lg:col-span-1 flex flex-col gap-4 max-h-[calc(100vh-3rem)]">
                 <!-- Upload Card -->
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h2 class="text-sm font-semibold text-slate-900 mb-4">Upload File</h2>
-                    
-                    <div class="space-y-4">
+                <div id="uploadCard" class="bg-white rounded-xl shadow-sm p-6 shrink-0">
+                    <div id="uploadForm" class="space-y-4">
                         <div>
                             <input type="file" id="fileInput" accept="video/*,audio/*,.txt" class="hidden">
                             <label for="fileInput" id="dropZone"
@@ -281,6 +297,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             </label>
                         </div>
 
+                        <div id="setupConfigPanel" class="space-y-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-700 mb-1">Source Language</label>
                             <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -391,14 +408,27 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             </p>
                         </div>
 
+                        </div>
+
                         <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
-                            <i class="fa-solid fa-upload mr-2"></i>Upload File
+                            <i class="fa-solid fa-upload mr-2"></i>Start
+                        </button>
+                    </div>
+
+                    <!-- Post-upload compact state -->
+                    <div id="uploadCompleteCard" class="hidden space-y-3">
+                        <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                            <i class="fa-solid fa-file-check text-emerald-500"></i>
+                            <span id="uploadedFilename" class="text-sm font-medium text-slate-700 truncate">filename.mp4</span>
+                        </div>
+                        <button id="startNewProjectBtn" class="w-full py-2 px-3 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
+                            <i class="fa-solid fa-rotate-right mr-1"></i>Start New Project
                         </button>
                     </div>
                 </div>
 
                 <!-- Project Metadata & Status Card (Unified) -->
-                <div id="statusCard" class="bg-white rounded-xl shadow-sm overflow-hidden hidden">
+                <div id="statusCard" class="bg-white rounded-xl shadow-sm overflow-hidden hidden shrink-0">
                     <!-- Project Header -->
                     <div class="bg-slate-50 px-6 py-4 border-b border-slate-200">
                         <h2 id="projectTitle" class="text-sm font-semibold text-slate-900 truncate">Untitled Project</h2>
@@ -422,56 +452,43 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             </span>
                         </div>
                         
-                        <!-- Progress with Large Percentage -->
-                        <div class="mb-4">
-                            <div class="flex items-end justify-between mb-2">
-                                <span id="currentStep" class="text-sm text-slate-600">Ready to process</span>
-                                <span id="progressPercentLarge" class="text-2xl font-bold text-slate-900">0%</span>
-                            </div>
-                            <div class="w-full bg-slate-200 rounded-full h-3">
-                                <div id="progressBar" class="progress-bar bg-blue-600 h-3 rounded-full" style="width: 0%"></div>
-                            </div>
-                            <div class="flex justify-between mt-1.5 text-xs text-slate-500">
-                                <span id="segmentCount">0 segments</span>
-                                <span id="processedCount">0 processed</span>
-                            </div>
-                        </div>
-                        
                         <!-- Step Detail -->
                         <div id="stepDetail" class="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 hidden"></div>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="px-6 pb-6 space-y-2">
-                        <button id="transcribeBtn" class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors hidden">
-                            <i class="fa-solid fa-waveform mr-2"></i><span id="transcribeBtnText">Transcribe</span>
-                        </button>
-                        <button id="downloadTranscriptionBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors hidden">
-                            <i class="fa-solid fa-download mr-2"></i>Download Transcription
-                        </button>
-                        <button id="analyzeBtn" class="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors hidden">
-                            <i class="fa-solid fa-brain mr-2"></i>Analyze Content
-                        </button>
-                        <button id="translateBtn" class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors hidden">
-                            <i class="fa-solid fa-language mr-2"></i>Translate
-                        </button>
-                        <div id="exportSection" class="hidden space-y-2 pt-2 border-t border-slate-200">
-                            <p class="text-xs font-medium text-slate-700">Export Translation</p>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button id="exportSrtBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded-lg transition-colors">
-                                    <i class="fa-solid fa-closed-captioning mr-1"></i>SRT
-                                </button>
-                                <button id="exportVttBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded-lg transition-colors">
-                                    <i class="fa-brands fa-html5 mr-1"></i>VTT
-                                </button>
-                                <button id="exportTxtBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 text-white text-xs font-medium rounded-lg transition-colors">
-                                    <i class="fa-solid fa-file-text mr-1"></i>TXT
-                                </button>
-                                <button id="exportJsonBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 text-white text-xs font-medium rounded-lg transition-colors">
-                                    <i class="fa-solid fa-code mr-1"></i>JSON
-                                </button>
-                            </div>
+                        
+                        <!-- Director's Context Brief -->
+                        <div id="contextBriefContainer" class="hidden mt-3 pt-3 border-t border-slate-100">
+                            <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Director's Context Brief</p>
+                            <p id="contextBriefText" class="text-xs text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-100 leading-relaxed"></p>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Primary Action Container -->
+                <div id="primaryActionContainer" class="bg-white rounded-xl shadow-sm p-4 hidden shrink-0">
+                    <p id="primaryHelperText" class="text-xs text-amber-700 mb-2 hidden">💡 Review and edit your Extracted Terms before translating.</p>
+                    
+                    <button id="primaryActionBtn" class="w-full py-3 px-4 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                        Action
+                    </button>
+                    
+                    <div id="primaryGhostLink" class="mt-2 text-center hidden">
+                        <button id="downloadRawTranscriptionLink" class="text-xs text-slate-500 hover:text-slate-700 underline">or download raw transcription</button>
+                    </div>
+                    
+                    <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Download Subtitles & Translations</p>
+                    <div id="primaryExportGrid" class="hidden grid grid-cols-2 gap-2">
+                        <button id="exportSrtBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded-lg transition-colors">
+                            <i class="fa-solid fa-closed-captioning mr-1"></i>SRT
+                        </button>
+                        <button id="exportVttBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded-lg transition-colors">
+                            <i class="fa-brands fa-html5 mr-1"></i>VTT
+                        </button>
+                        <button id="exportTxtBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 text-white text-xs font-medium rounded-lg transition-colors">
+                            <i class="fa-solid fa-file-text mr-1"></i>TXT
+                        </button>
+                        <button id="exportJsonBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 text-white text-xs font-medium rounded-lg transition-colors">
+                            <i class="fa-solid fa-code mr-1"></i>JSON
+                        </button>
                     </div>
                 </div>
             </div>
@@ -483,7 +500,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     <h2 class="text-sm font-semibold text-slate-900 mb-4">Extracted Terms</h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
-                            <thead class="bg-slate-50 text-slate-600">
+                            <thead class="sticky top-0 bg-white z-10 shadow-sm text-slate-600">
                                 <tr>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Type</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Original</th>
@@ -532,14 +549,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50">
-        <div class="flex items-center gap-2">
-            <i id="toastIcon" class="fa-solid fa-check-circle text-emerald-400"></i>
-            <span id="toastMessage">Message</span>
-        </div>
-    </div>
-
     <script>
         // State
         let currentVideoId = null;
@@ -567,24 +576,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
         };
 
         // Utility functions
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            const toastIcon = document.getElementById('toastIcon');
-            const toastMessage = document.getElementById('toastMessage');
-            
-            toastMessage.textContent = message;
-            toastIcon.className = type === 'success' ? 'fa-solid fa-check-circle text-emerald-400' : 
-                                  type === 'error' ? 'fa-solid fa-exclamation-circle text-red-400' :
-                                  'fa-solid fa-info-circle text-blue-400';
-            
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
-        }
-
         function log(message, type = 'info') {
             const logEl = document.getElementById('activityLog');
             const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-            const color = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-emerald-400' : 'text-slate-300';
             
             if (logEl.children.length === 1 && logEl.children[0].textContent.includes('Waiting')) {
                 logEl.innerHTML = '';
@@ -596,8 +590,24 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 return; // Skip duplicate message
             }
             
-            logEl.innerHTML += `<div class="${color}">[${time}] ${message}</div>`;
-            logEl.scrollTop = logEl.scrollHeight;
+            // Badge map
+            const badgeMap = {
+                info:    { label: 'INFO',    bg: 'bg-slate-700',    text: 'text-slate-200' },
+                success: { label: 'SUCCESS', bg: 'bg-emerald-600',  text: 'text-white' },
+                error:   { label: 'ERROR',   bg: 'bg-red-600',      text: 'text-white' },
+                warning: { label: 'WARN',    bg: 'bg-amber-500',    text: 'text-white' },
+                align:   { label: 'ALIGN',   bg: 'bg-cyan-600',     text: 'text-white' },
+                context: { label: 'CONTEXT', bg: 'bg-indigo-600',   text: 'text-white' }
+            };
+            const cfg = badgeMap[type] || badgeMap.info;
+            
+            const html = `<div class="flex items-start gap-2 text-slate-300">
+                <span class="shrink-0 mt-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${cfg.bg} ${cfg.text}">${cfg.label}</span>
+                <span class="text-[11px] leading-tight">[${time}] ${message}</span>
+            </div>`;
+            
+            logEl.insertAdjacentHTML('beforeend', html);
+            logEl.scrollTo({ top: logEl.scrollHeight, behavior: 'smooth' });
         }
         
         function clearActivityLog() {
@@ -615,7 +625,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
         function updateStatus(data) {
             const cfg = statusConfig[data.status] || statusConfig.uploaded;
-            const progress = data.progress_percent || 0;
             const isProcessing = ['transcribing', 'extracting_audio', 'analyzing', 'glossary_extracting', 'translating', 'queued'].includes(data.status);
             
             // Update Status Badge in Card
@@ -623,10 +632,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
             statusBadge.className = `inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.color} text-xs font-semibold rounded-full transition-colors`;
             statusBadge.innerHTML = `<span id="statusDot" class="w-1.5 h-1.5 rounded-full ${cfg.dotColor} ${isProcessing ? 'pulse-indicator' : ''}"></span>${cfg.label}`;
             
-            // Update Progress Section
+            // Update step & segment counters
             document.getElementById('currentStep').textContent = data.current_step || 'Ready';
-            document.getElementById('progressPercentLarge').textContent = `${progress}%`;
-            document.getElementById('progressBar').style.width = `${progress}%`;
             document.getElementById('segmentCount').textContent = `${data.total_segments ?? 0} segments`;
             document.getElementById('processedCount').textContent = `${data.processed_segments || 0} processed`;
             
@@ -677,7 +684,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             <div class="flex items-center gap-2">
                                 <input type="text" value="${escapeHtml(term.standardized_term || '')}" 
                                     onchange="updateTerm('${term.id}', this.value)"
-                                    class="flex-1 px-2 py-1 border border-slate-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    class="flex-1 border-transparent bg-slate-50/50 hover:bg-slate-100/70 focus:bg-white focus:border-slate-300 focus:ring-1 focus:ring-slate-300 transition-all rounded px-2 py-1 text-xs">
                                 ${term.source === 'manual' ? `
                                     <button onclick="deleteCustomTerm('${term.id}')" 
                                         class="text-rose-500 hover:text-rose-700 p-1" title="Remove custom term">
@@ -703,7 +710,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     body: JSON.stringify({ standardized_term: value })
                 });
                 log(`Updated term ${termId.substring(0, 8)}...`, 'success');
-                showToast('Term updated');
             } catch (err) {
                 log('Failed to update term: ' + err.message, 'error');
             }
@@ -732,6 +738,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 });
                 
                 updateButtonVisibility(data.status);
+                updateContextBrief(data);
             } catch (err) {
                 console.error('Failed to fetch video status:', err);
             }
@@ -743,7 +750,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
         async function addCustomTerm() {
             if (!currentVideoId) {
-                showToast('Please upload a file first');
                 return;
             }
 
@@ -753,7 +759,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const translated = translatedInput.value.trim();
 
             if (!original || !translated) {
-                showToast('Please enter both original and translated terms');
                 return;
             }
 
@@ -766,7 +771,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
                 if (response.ok) {
                     log(`Added custom term: "${original}" → "${translated}"`, 'success');
-                    showToast('Custom term added');
                     originalInput.value = '';
                     translatedInput.value = '';
                     renderTerms(); // Refresh the terms table
@@ -776,7 +780,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 }
             } catch (err) {
                 log('Failed to add custom term: ' + err.message, 'error');
-                showToast('Error: ' + err.message);
             }
         }
 
@@ -790,7 +793,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
                 if (response.ok) {
                     log('Custom term removed', 'success');
-                    showToast('Custom term removed');
                     renderTerms(); // Refresh the terms table
                 } else {
                     const err = await response.json();
@@ -798,7 +800,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 }
             } catch (err) {
                 log('Failed to remove custom term: ' + err.message, 'error');
-                showToast('Error: ' + err.message);
             }
         }
 
@@ -926,7 +927,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     log(`Transcription complete${segText}`, 'success');
                     isJobRunning = false;
                     hasStartedProcessing = false;
-                    showToast('Transcription complete!');
                     updateButtonVisibility('transcribed');
                 } else if (jobType === 'analyze') {
                     if (!isJobRunning || !hasStartedProcessing) {
@@ -939,7 +939,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     log(`Analysis complete${termText}`, 'success');
                     isJobRunning = false;
                     hasStartedProcessing = false;
-                    showToast('Analysis complete!');
                     renderTerms();
                     updateButtonVisibility('terms_ready');
                 } else if (jobType === 'translate') {
@@ -956,7 +955,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     log(`Translation complete${countText}`, 'success');
                     isJobRunning = false;
                     hasStartedProcessing = false;
-                    showToast('Translation complete!');
                     updateButtonVisibility('completed');
                 } else {
                     log(`${jobType} complete`, 'success');
@@ -973,7 +971,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 const errorMsg = data.error || 'Unknown error';
                 console.log('[WebSocket] Job error:', data);
                 log(`${jobType} failed: ${errorMsg}`, 'error');
-                showToast(`Failed: ${errorMsg}`, 'error');
                 return;
             }
             
@@ -1007,7 +1004,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
             // Log the update (only if meaningful message exists)
             const logMessage = data.message || data.step_detail;
             if (logMessage && logMessage !== status && logMessage !== 'undefined') {
-                log(logMessage);
+                // Badge duration & completion metrics as SUCCESS
+                const isMetric = /(?:duration|elapsed|complete in|segments?|total)\s*[:\-]?\s*\d/i.test(logMessage);
+                log(logMessage, isMetric ? 'success' : 'info');
             }
             
             // Status Transition Guard: only mark after we see a processing state
@@ -1019,7 +1018,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
             switch (status) {
                 case 'queued':
                     log('Job queued - waiting for available worker...');
-                    showToast('Job queued, waiting to start...');
                     break;
                     
                 case 'transcribing':
@@ -1032,7 +1030,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         isJobRunning = false;
                         hasStartedProcessing = false;
                     }
-                    showToast('Transcription complete!');
                     updateButtonVisibility('transcribed');
                     break;
                     
@@ -1041,7 +1038,11 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     break;
                     
                 case 'context_ready':
-                    log(`Director Agent complete: ${data.tone} tone`, 'success');
+                    log(`Director Agent complete: ${data.tone} tone`, 'context');
+                    // Fetch full Pass 1 context_analysis for the narrative brief
+                    fetch(`/videos/${currentVideoId}`)
+                        .then(r => r.json())
+                        .then(videoData => updateContextBrief(videoData));
                     break;
                     
                 case 'glossary_extracting':
@@ -1055,7 +1056,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         hasStartedProcessing = false;
                     }
                     renderTerms();
-                    showToast('Terms ready!');
                     updateButtonVisibility('terms_ready');
                     break;
                     
@@ -1070,52 +1070,98 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         hasStartedProcessing = false;
                     }
                     renderTerms();
-                    showToast('Translation finished!');
                     updateButtonVisibility('completed');
                     break;
                     
                 case 'error':
                     log(`Error: ${data.message || data.error}`, 'error');
-                    showToast(data.message || 'Error occurred', 'error');
                     break;
             }
             
             // Handle job retry messages
             if (data.type === 'job_retry') {
                 log(`Retrying: ${data.job_type} (${data.retry_count}/${data.max_retries})`);
-                showToast(`Retrying... (${data.retry_count}/${data.max_retries})`);
             }
         }
         
         function updateButtonVisibility(status) {
-            const transcribeBtn = document.getElementById('transcribeBtn');
-            const downloadTranscriptionBtn = document.getElementById('downloadTranscriptionBtn');
-            const analyzeBtn = document.getElementById('analyzeBtn');
-            const translateBtn = document.getElementById('translateBtn');
-            const exportSection = document.getElementById('exportSection');
+            const primaryBtn = document.getElementById('primaryActionBtn');
+            const helperText = document.getElementById('primaryHelperText');
+            const ghostLink = document.getElementById('primaryGhostLink');
+            const exportGrid = document.getElementById('primaryExportGrid');
+            const container = document.getElementById('primaryActionContainer');
             
-            // Hide all first
-            transcribeBtn?.classList.add('hidden');
-            downloadTranscriptionBtn?.classList.add('hidden');
-            analyzeBtn?.classList.add('hidden');
-            translateBtn?.classList.add('hidden');
-            exportSection?.classList.add('hidden');
+            if (!container) return;
             
-            // Show based on status
+            // Reset all sub-elements
+            primaryBtn?.classList.remove('hidden');
+            helperText?.classList.add('hidden');
+            ghostLink?.classList.add('hidden');
+            exportGrid?.classList.add('hidden');
+            
+            // Configure primary action based on pipeline state
             switch (status) {
                 case 'uploaded':
-                    transcribeBtn?.classList.remove('hidden');
+                    primaryBtn.textContent = currentFileType === 'text' ? '1. Parse Text' : '1. Transcribe Audio';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.onclick = processFile;
                     break;
+                    
                 case 'transcribed':
-                    downloadTranscriptionBtn?.classList.remove('hidden');
-                    analyzeBtn?.classList.remove('hidden');
+                    primaryBtn.textContent = '2. Extract Terminology';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.onclick = analyzeVideo;
+                    ghostLink?.classList.remove('hidden');
                     break;
+                    
                 case 'terms_ready':
-                    translateBtn?.classList.remove('hidden');
+                    helperText?.classList.remove('hidden');
+                    primaryBtn.textContent = '3. Translate Subtitles';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.onclick = translateVideo;
                     break;
+                    
                 case 'completed':
-                    exportSection?.classList.remove('hidden');
+                    primaryBtn?.classList.add('hidden');
+                    exportGrid?.classList.remove('hidden');
                     break;
+                    
+                default:
+                    primaryBtn?.classList.add('hidden');
+            }
+        }
+        
+        function updateContextBrief(data) {
+            const container = document.getElementById('contextBriefContainer');
+            const textEl = document.getElementById('contextBriefText');
+            if (!container || !textEl) return;
+            
+            let brief = '';
+            
+            // Prefer explicit main_topic if available
+            if (data.main_topic) {
+                brief = data.main_topic;
+            }
+            // Try parsing context_analysis JSON (from polling)
+            else if (data.context_analysis) {
+                try {
+                    const ca = typeof data.context_analysis === 'string' ? JSON.parse(data.context_analysis) : data.context_analysis;
+                    if (ca.main_topic) brief = ca.main_topic;
+                    else if (ca.translation_notes) brief = ca.translation_notes;
+                } catch (e) { /* ignore parse errors */ }
+            }
+            // Fallback to style-guide metadata from WebSocket
+            else if (data.domain || data.tone) {
+                const parts = [];
+                if (data.domain) parts.push(data.domain);
+                if (data.tone) parts.push(`${data.tone} tone`);
+                if (data.formality_level) parts.push(`formality ${data.formality_level}/5`);
+                brief = parts.join(' • ');
+            }
+            
+            if (brief) {
+                textEl.textContent = brief;
+                container.classList.remove('hidden');
             }
         }
         
@@ -1137,6 +1183,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     const response = await fetch(`/videos/${videoId}`);
                     const data = await response.json();
                     updateStatus(data);
+                    updateContextBrief(data);
                     fallbackPollCount++;
                     
                     if (fallbackPollCount % 5 === 0) {
@@ -1156,6 +1203,50 @@ HTML_INTERFACE = """<!DOCTYPE html>
             }, 5000);
         }
 
+        function resetApp() {
+            currentVideoId = null;
+            currentFileType = 'video';
+            currentJobId = null;
+            isJobRunning = false;
+            hasStartedProcessing = false;
+            loggedCompletions.clear();
+            
+            // Reset upload form
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileLabel').textContent = 'Click to select file';
+            document.getElementById('dropZone').classList.remove('border-blue-400', 'bg-blue-50');
+            document.getElementById('uploadForm').classList.remove('hidden');
+            document.getElementById('uploadCompleteCard').classList.add('hidden');
+            document.getElementById('setupConfigPanel').classList.remove('hidden');
+            
+            // Hide status and action containers
+            document.getElementById('statusCard').classList.add('hidden');
+            document.getElementById('primaryActionContainer').classList.add('hidden');
+            
+            // Reset step & segment counters
+            document.getElementById('segmentCount').textContent = '0 segments';
+            document.getElementById('processedCount').textContent = '0 processed';
+            document.getElementById('currentStep').textContent = 'Ready to process';
+            
+            // Clear logs and terms
+            clearActivityLog();
+            document.getElementById('termsTable').innerHTML = `
+                <tr>
+                    <td colspan="5" class="px-3 py-8 text-center text-slate-400 text-sm">
+                        No terms extracted yet. Upload and process a video.
+                    </td>
+                </tr>
+            `;
+            
+            // Disconnect WebSocket
+            disconnectWebSocket();
+            
+            // Clear URL param
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            log('New project ready. Upload a file to begin.', 'success');
+        }
+
         // Upload handler
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
@@ -1163,7 +1254,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const sourceLangSelect = document.getElementById('sourceLanguage');
             
             if (!fileInput.files || !fileInput.files[0]) {
-                showToast('Please select a file', 'error');
                 return;
             }
 
@@ -1208,16 +1298,20 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 document.getElementById('projectId').textContent = currentVideoId.substring(0, 8);
                 
                 document.getElementById('statusCard').classList.remove('hidden');
+                document.getElementById('primaryActionContainer').classList.remove('hidden');
+                
+                // Swap upload form for compact filename card
+                document.getElementById('uploadForm').classList.add('hidden');
+                document.getElementById('uploadCompleteCard').classList.remove('hidden');
+                document.getElementById('uploadedFilename').textContent = data.filename || 'Untitled Project';
                 
                 log('Upload complete: ' + data.filename, 'success');
-                showToast('File uploaded successfully');
                 
                 updateStatus({ status: 'uploaded', progress_percent: 0 });
                 
             } catch (err) {
                 const errorMsg = err.message || 'Upload failed';
                 log('Upload failed: ' + errorMsg, 'error');
-                showToast('Upload failed: ' + errorMsg, 'error');
             }
         }
 
@@ -1225,8 +1319,10 @@ HTML_INTERFACE = """<!DOCTYPE html>
         async function processFile() {
             if (!currentVideoId) return;
             
-            // Clear log and reset state for new job
-            clearActivityLog();
+            // Collapse setup config panel once processing starts
+            document.getElementById('setupConfigPanel').classList.add('hidden');
+            
+            // Reset state for new job
             currentJobId = `transcribe-${currentVideoId}-${Date.now()}`;
             isJobRunning = true;
             hasStartedProcessing = false;
@@ -1265,7 +1361,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 }
                 
                 const data = await response.json();
-                showToast(isTextFile ? 'Text parsed!' : 'Transcription complete!');
                 
                 // Update UI silently — completion will be logged via WebSocket
                 updateStatus({ status: 'transcribed', total_segments: data.total_segments ?? 0 });
@@ -1279,7 +1374,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 
             } catch (err) {
                 log((isTextFile ? 'Parsing' : 'Transcription') + ' failed: ' + err.message, 'error');
-                showToast(err.message || (isTextFile ? 'Text parsing failed' : 'Transcription failed'), 'error');
             }
         }
 
@@ -1287,8 +1381,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
         async function analyzeVideo() {
             if (!currentVideoId) return;
             
-            // Clear log and reset state for new job
-            clearActivityLog();
+            // Reset state for new job
             currentJobId = `analyze-${currentVideoId}-${Date.now()}`;
             isJobRunning = true;
             hasStartedProcessing = false;
@@ -1307,7 +1400,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 }
                 
                 const data = await response.json();
-                showToast(`${data.terms_extracted} terms ready for review!`);
                 
                 // Update UI silently — completion will be logged via WebSocket
                 updateStatus({ status: 'terms_ready' });
@@ -1318,7 +1410,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 
             } catch (err) {
                 log('Analysis failed: ' + err.message, 'error');
-                showToast('Analysis failed', 'error');
             }
         }
 
@@ -1326,8 +1417,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
         async function translateVideo() {
             if (!currentVideoId) return;
             
-            // Clear log and reset state for new job
-            clearActivityLog();
+            // Reset state for new job
             currentJobId = `translate-${currentVideoId}-${Date.now()}`;
             isJobRunning = true;
             hasStartedProcessing = false;
@@ -1345,7 +1435,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     throw new Error(err.detail || 'Translation failed');
                 }
                 
-                showToast('Translation finished!');
                 
                 // Update UI silently — completion will be logged via WebSocket
                 updateStatus({ status: 'completed' });
@@ -1353,7 +1442,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 
             } catch (err) {
                 log('Translation failed: ' + err.message, 'error');
-                showToast('Translation failed', 'error');
             }
         }
 
@@ -1384,11 +1472,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 window.URL.revokeObjectURL(url);
                 
                 log(`${formatNames[format]} exported`, 'success');
-                showToast(`${formatNames[format]} downloaded`);
                 
             } catch (err) {
                 log('Export failed: ' + err.message, 'error');
-                showToast('Export failed', 'error');
             }
         }
 
@@ -1412,11 +1498,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 window.URL.revokeObjectURL(url);
                 
                 log('Transcription downloaded', 'success');
-                showToast('Transcription downloaded');
                 
             } catch (err) {
                 log('Download failed: ' + err.message, 'error');
-                showToast('Download failed', 'error');
             }
         }
 
@@ -1474,23 +1558,16 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     fileLabel.textContent = file.name;
                     document.getElementById('dropZone').classList.add('border-blue-400', 'bg-blue-50');
                     
-                    // Detect file type and update button text
+                    // Detect file type for downstream pipeline text
                     const isTextFile = file.name.toLowerCase().endsWith('.txt');
                     currentFileType = isTextFile ? 'text' : 'video';
-                    
-                    const transcribeBtnText = document.getElementById('transcribeBtnText');
-                    if (transcribeBtnText) {
-                        transcribeBtnText.textContent = isTextFile ? 'Parse Text' : 'Transcribe';
-                    }
                 }
             });
 
             // Buttons
             document.getElementById('uploadBtn').addEventListener('click', uploadFile);
-            document.getElementById('transcribeBtn').addEventListener('click', processFile);
-            document.getElementById('downloadTranscriptionBtn').addEventListener('click', downloadTranscription);
-            document.getElementById('analyzeBtn').addEventListener('click', analyzeVideo);
-            document.getElementById('translateBtn').addEventListener('click', translateVideo);
+            document.getElementById('startNewProjectBtn').addEventListener('click', resetApp);
+            document.getElementById('downloadRawTranscriptionLink').addEventListener('click', downloadTranscription);
             document.getElementById('exportSrtBtn').addEventListener('click', () => exportFormat('srt'));
             document.getElementById('exportVttBtn').addEventListener('click', () => exportFormat('vtt'));
             document.getElementById('exportTxtBtn').addEventListener('click', () => exportFormat('txt'));
@@ -1502,6 +1579,12 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 currentVideoId = videoId;
                 document.getElementById('videoIdShort').textContent = videoId.substring(0, 8);
                 document.getElementById('statusCard').classList.remove('hidden');
+                document.getElementById('primaryActionContainer').classList.remove('hidden');
+                
+                // Hide upload form, show compact card for loaded project
+                document.getElementById('uploadForm').classList.add('hidden');
+                document.getElementById('uploadCompleteCard').classList.remove('hidden');
+                document.getElementById('uploadedFilename').textContent = 'Loaded project';
                 
                 // Connect WebSocket for real-time updates
                 connectWebSocket(videoId);
