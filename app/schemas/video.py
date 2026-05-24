@@ -2,6 +2,17 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class SegmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: str
+    sequence_number: int
+    start_time: float
+    end_time: float
+    original_text: str
+    translated_text: str | None = None
+
+
 class VideoBase(BaseModel):
     filename: str
     target_language: str = "en"
@@ -38,6 +49,7 @@ class VideoOut(VideoBase):
     completed_at: datetime | None = None
     error_message: str | None = None
     context_analysis: str | None = None  # JSON from Pass 1
+    segments: list[SegmentOut] | None = None
 
 
 class VideoProgress(BaseModel):

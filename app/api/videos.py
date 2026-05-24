@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query, Request
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.orm import Session, selectinload
 import json
 import asyncio
 import traceback
 
 from app.db.session import get_db
-from app.models.video import Video, VideoStatus
+from app.models.video import Video, VideoStatus, Segment
 from app.schemas.video import VideoOut
 from app.core.config import settings
 from app.core.sqlite_queue import enqueue_job, get_job_status, set_transcription_provider, set_gemini_api_key
@@ -59,7 +60,7 @@ async def upload_video(
 
 @router.get("/{video_id}", response_model=VideoOut)
 def get_video(video_id: str, db: Session = Depends(get_db)):
-    video = db.query(Video).filter(Video.id == video_id).first()
+    video = db.query(Video).options(selectinload(Video.segments)).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
     return video
@@ -291,3 +292,76 @@ def translate_video_legacy_endpoint(
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{video_id}/segments/{segment_id}")
+def update_segment_translation(
+    video_id: str,
+    segment_id: str,
+    body: dict,
+    db: Session = Depends(get_db)
+):
+    """Update translated_text for a single subtitle segment."""
+    segment = db.query(Segment).filter(
+        Segment.id == segment_id,
+        Segment.video_id == video_id
+    ).first()
+    
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+    
+    new_text = body.get("translated_text")
+    if new_text is not None and isinstance(new_text, str):
+        segment.translated_text = new_text
+        db.commit()
+        db.refresh(segment)
+    
+    return {"status": "success"}
+
+
+@router.post("/{video_id}/replace")
+def batch_replace_segments(
+    video_id: str,
+    body: dict,
+    db: Session = Depends(get_db)
+):
+    """Batch replace text across all translated segments for a video."""
+    find_text = body.get("find_text", "")
+    replace_text = body.get("replace_text", "")
+    
+    if not find_text or not isinstance(find_text, str):
+        raise HTTPException(status_code=400, detail="find_text is required and must be a string")
+    
+    # Execute SQLite batch REPLACE on translated_text
+    result = db.execute(
+        text("""
+            UPDATE segments
+            SET translated_text = REPLACE(translated_text, :find, :replace)
+            WHERE video_id = :video_id
+        """),
+        {"find": find_text, "replace": replace_text or "", "video_id": video_id}
+    )
+    db.commit()
+    
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="No matching segments found for replacement")
+    
+    # Re-query updated segments ordered by sequence_number
+    updated_segments = db.query(Segment).filter(
+        Segment.video_id == video_id
+    ).order_by(Segment.sequence_number).all()
+    
+    return {
+        "status": "success",
+        "segments": [
+            {
+                "id": s.id,
+                "sequence_number": s.sequence_number,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "original_text": s.original_text,
+                "translated_text": s.translated_text,
+            }
+            for s in updated_segments
+        ]
+    }

@@ -452,7 +452,8 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
         progress_tracker.end_step("Audio extraction complete")
         
         # Update status to transcribing with short session
-        progress_tracker.start_step("TRANSCRIBING", "Transcribing audio with Whisper AI")
+        engine_name = 'Gemini Cloud' if provider == 'gemini' else 'Local Whisper'
+        progress_tracker.start_step("TRANSCRIBING", f"Transcribing audio with {engine_name}")
         with SessionLocal() as session:
             video = session.query(Video).filter(Video.id == video_id).first()
             if video:
@@ -463,7 +464,7 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
         progress_tracker.update_progress(
             status=VideoStatus.TRANSCRIBING.value,
             percent=10,
-            current_step="Sending to Whisper",
+            current_step=f"Sending to {engine_name}",
             step_detail="Uploading audio to transcription service..."
         )
         

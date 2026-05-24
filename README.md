@@ -2,7 +2,7 @@
 
 > **AI-Powered Video Translation & Terminology Management**
 
-TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **two transcription providers**, a **built-in web UI**, and **real-time progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
+TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **two transcription providers**, **WhisperX timestamp alignment**, a **built-in web UI with subtitle review**, and **real-time progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
 
 Built with a focus on **Persian (Farsi)** and other RTL languages, but supports any language pair Gemini can handle.
 
@@ -18,6 +18,8 @@ Choose the transcription engine that fits your needs:
 | **Gemini Flash** | 🚀 Fast | ☁️ Cloud | High-accuracy cloud processing |
 | **Local (faster-whisper)** | 🐢 CPU-bound | 🔒 Offline | Privacy-sensitive content, no API keys |
 
+**Hybrid Alignment (Gemini + WhisperX)** — When using Gemini transcription, WhisperX performs word-level alignment on the CPU to refine segment timestamps for maximum accuracy.
+
 ### Multi-Agent Translation Pipeline
 Translation is performed by three specialized AI agents working in sequence:
 
@@ -25,9 +27,16 @@ Translation is performed by three specialized AI agents working in sequence:
 2. **Glossary Agent** — Extracts key terms (names, places, technical terms) for consistent translation
 3. **Translator Agent** — Performs sliding-window translation using the glossary as constraints
 
+### Subtitle Review & Editing
+After translation, review and refine subtitles directly in the browser:
+
+- **Visual Timeline** — Card-based grid showing every segment with timecodes and sequence numbers
+- **Inline Editing** — Click any subtitle card to edit; changes auto-save on blur
+- **Global Find & Replace** — Batch-replace text across all segments instantly
+- **Context Brief** — Displays the auto-detected main topic from the content analysis
+
 ### Terminology Management
 - **Auto-extracted terms** — Detected by the Glossary Agent during analysis
-- **Custom terms** — Manual find-and-replace entries you can add via the UI
 - **Standardization** — Set a canonical translation for any term to ensure consistency across all segments
 - **Translation variant detection** — Tracks when the same term gets translated differently
 
@@ -36,9 +45,10 @@ A complete single-page interface served at `http://localhost:8000/` with:
 - Drag-and-drop file upload (video, audio, or text)
 - Source/target language selection
 - Transcription engine picker
-- Real-time progress bar with step details
+- Real-time activity log with WebSocket live updates and color-coded badges
 - Term review table with inline editing
-- Activity log with WebSocket live updates
+- **Subtitle review timeline** with editable cards and global find & replace
+- Toast notifications for save/replace confirmations
 - One-click export buttons
 
 ### Export Formats
@@ -62,23 +72,36 @@ A complete single-page interface served at `http://localhost:8000/` with:
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────────┐
 │   Upload    │────▶│  FFmpeg Audio   │────▶│  Transcription      │
-│  (Video)    │     │   Extraction    │     │  (Gemini/Local)     │
+│  (Video)    │     │   Extraction    │     │  (Gemini / Local)   │
 └─────────────┘     └─────────────────┘     └─────────────────────┘
                                                      │
-┌────────────────────────────────────────────────────┘
+                              ┌──────────────────────┘
+                              │
+                              ▼
+                     ┌─────────────────┐
+                     │ WhisperX Align  │  (Gemini path only)
+                     │  (CPU fallback) │
+                     └─────────────────┘
+                              │
+┌─────────────────────────────┘
 │
 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Multi-Agent Translation Pipeline               │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
 │  │Director Agent│─▶│Glossary Agent│─▶│   Translator Agent   │  │
-│  │Style Guide   │  │Term Extraction│  │Sliding-Window Translate│  │
+│  │Style Guide   │  │Term Extraction│  │Sliding-Window Translate│ │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Terminology Review  │  Custom Terms  │  Export (SRT/VTT/TXT/JSON) │
+│  Terminology Review  │  Subtitle Timeline (Edit / Find & Replace) │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Export (SRT / VTT / TXT / JSON)                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -89,8 +112,8 @@ A complete single-page interface served at `http://localhost:8000/` with:
 ```
 ├── app/
 │   ├── api/                  # FastAPI routers
-│   │   ├── videos.py         # Upload, transcribe, analyze, translate
-│   │   ├── terms.py          # Term CRUD + custom terms
+│   │   ├── videos.py         # Upload, transcribe, analyze, translate, segments
+│   │   ├── terms.py          # Term CRUD
 │   │   ├── export.py         # SRT/VTT/TXT/JSON export
 │   │   └── progress.py       # Progress tracking + logs
 │   ├── core/
@@ -104,13 +127,14 @@ A complete single-page interface served at `http://localhost:8000/` with:
 │   │   └── video.py          # Video, Segment, Term, JobQueue, ProcessingLog
 │   ├── schemas/              # Pydantic request/response models
 │   ├── services/
-│   │   ├── whisper_service.py    # Transcription (Gemini/Local)
-│   │   ├── gemini_service.py     # Gemini translation + validation
+│   │   ├── whisper_service.py      # Transcription (Gemini / Local)
+│   │   ├── transcription.py        # WhisperX alignment for hybrid pipeline
+│   │   ├── gemini_service.py       # Gemini translation + validation
 │   │   ├── translation_pipeline.py # Multi-agent pipeline
 │   │   ├── context_analysis_service.py # Director + Glossary agents
-│   │   ├── progress_service.py   # Progress tracking
-│   │   ├── upload_service.py     # File upload handling
-│   │   └── text_parser.py        # Text file ingestion
+│   │   ├── progress_service.py     # Progress tracking
+│   │   ├── upload_service.py       # File upload handling
+│   │   └── text_parser.py          # Text file ingestion
 │   └── main.py               # FastAPI app + WebSocket + built-in UI
 ├── migrations/               # Database migration scripts
 ├── uploads/                  # Uploaded files
@@ -192,6 +216,7 @@ POST /videos/upload
 Click **Transcribe** (or call the API). The background worker:
 - Extracts audio with FFmpeg (16kHz mono WAV)
 - Sends audio to your chosen transcription provider
+- (Gemini path) Runs WhisperX alignment to refine timestamps
 - Saves segments with timestamps to the database
 
 ```bash
@@ -209,9 +234,7 @@ POST /videos/{id}/analyze
 
 ### 4. Review Terms
 The UI shows all extracted terms. You can:
-- Edit the **standardized translation** inline
-- Add **custom terms** (manual find-and-replace)
-- Delete custom terms
+- Edit the **standardized translation** inline to lock in consistency
 
 ### 5. Translate
 Click **Translate**. The Translator Agent uses the glossary to consistently translate all segments with a sliding-window approach.
@@ -220,7 +243,13 @@ Click **Translate**. The Translator Agent uses the glossary to consistently tran
 POST /videos/{id}/translate
 ```
 
-### 6. Export
+### 6. Review & Edit Subtitles
+Once translation completes, the **Subtitle Review Timeline** appears:
+- Browse all segments in a visual card grid with timecodes
+- Click any card to edit translated text inline — changes auto-save on blur
+- Use the **Global Find & Replace** bar to batch-replace text across all segments
+
+### 7. Export
 Download subtitles in your preferred format:
 ```bash
 GET /export/{id}/srt
@@ -299,7 +328,7 @@ If dependencies change:
 ## Tech Stack
 
 - **Backend**: FastAPI + SQLAlchemy + SQLite
-- **AI/ML**: Google Gemini (`google-genai`), faster-whisper
+- **AI/ML**: Google Gemini (`google-genai`), faster-whisper, WhisperX, PyTorch
 - **Queue**: SQLite-backed background worker with WebSocket updates
 - **Frontend**: Built-in vanilla JS + Tailwind CSS (served from `main.py`)
 - **Audio**: FFmpeg for extraction

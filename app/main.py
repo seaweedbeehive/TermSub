@@ -329,6 +329,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                                 <option value="zh">Chinese</option>
                                 <option value="fa">Persian (Farsi)</option>
                             </select>
+                            <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
                         </div>
 
                         <!-- Engine Selection -->
@@ -452,6 +453,17 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             </span>
                         </div>
                         
+                        <!-- Current Step & Segment Counters (no progress bar) -->
+                        <div class="mb-4">
+                            <div class="flex items-end justify-between mb-2">
+                                <span id="currentStep" class="text-sm text-slate-600">Ready to process</span>
+                            </div>
+                            <div class="flex justify-between text-xs text-slate-500">
+                                <span id="segmentCount">0 segments</span>
+                                <span id="processedCount">0 processed</span>
+                            </div>
+                        </div>
+                        
                         <!-- Step Detail -->
                         <div id="stepDetail" class="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 hidden"></div>
                         
@@ -475,7 +487,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         <button id="downloadRawTranscriptionLink" class="text-xs text-slate-500 hover:text-slate-700 underline">or download raw transcription</button>
                     </div>
                     
-                    <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Download Subtitles & Translations</p>
+                    <p id="exportHeader" class="hidden text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Download Subtitles & Translations</p>
                     <div id="primaryExportGrid" class="hidden grid grid-cols-2 gap-2">
                         <button id="exportSrtBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded-lg transition-colors">
                             <i class="fa-solid fa-closed-captioning mr-1"></i>SRT
@@ -496,7 +508,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             <!-- Right Panel - Terms & Activity -->
             <div class="lg:col-span-2 space-y-6">
                 <!-- Terms Table -->
-                <div class="bg-white rounded-xl shadow-sm p-6">
+                <div id="termsPanel" class="bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-sm font-semibold text-slate-900 mb-4">Extracted Terms</h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
@@ -518,23 +530,21 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <!-- Subtitle Review Timeline -->
+                <div id="subtitleReviewPanel" class="hidden h-full flex flex-col bg-white rounded-xl shadow-sm p-6">
+                    <h2 class="text-sm font-semibold text-slate-900 mb-4">Translated Subtitle Timeline</h2>
                     
-                    <!-- Custom Terms (Find & Replace) -->
-                    <div id="customTermsSection" class="mt-6 pt-6 border-t border-slate-200">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-3">Custom Terms (Find & Replace)</h3>
-                        <p class="text-xs text-slate-500 mb-3">Add custom translations that will override auto-detected terms.</p>
-                        <div class="flex gap-2 mb-3">
-                            <input type="text" id="customOriginal" placeholder="Find (original)" 
-                                class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <input type="text" id="customTranslated" placeholder="Replace with (translation)" 
-                                class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <button onclick="addCustomTerm()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                </svg>
-                                Add
-                            </button>
-                        </div>
+                    <!-- Global Find & Replace Bar -->
+                    <div class="flex items-center gap-2 mb-3">
+                        <input type="text" id="findInput" placeholder="Find text..." class="flex-1 text-xs border border-slate-200 bg-slate-50 rounded px-2 py-1 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        <input type="text" id="replaceInput" placeholder="Replace with..." class="flex-1 text-xs border border-slate-200 bg-slate-50 rounded px-2 py-1 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        <button id="replaceAllBtn" class="px-3 py-1 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded transition-colors">Replace All</button>
+                    </div>
+                    
+                    <div id="timelineCardGrid" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
+                        <div class="text-slate-400 text-center py-8">No subtitles available yet.</div>
                     </div>
                 </div>
 
@@ -549,6 +559,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
+
     <script>
         // State
         let currentVideoId = null;
@@ -558,6 +571,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
         let currentJobId = null; // Track current job to ignore stale messages
         let isJobRunning = false; // Silver bullet: prevents stale completion logs
         let hasStartedProcessing = false; // Status Transition Guard: ignore COMPLETED until processing starts
+        let isSavingSegment = false; // Prevents concurrent blur / replace-all race conditions
 
         // Status config with colors
         const statusConfig = {
@@ -570,7 +584,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             context_ready: { label: 'Context Ready', color: 'bg-sky-100 text-sky-800', dotColor: 'bg-sky-500' },
             glossary_extracting: { label: 'Extracting Terms', color: 'bg-yellow-100 text-yellow-800', dotColor: 'bg-yellow-500' },
             terms_ready: { label: 'Terms Ready', color: 'bg-indigo-100 text-indigo-800', dotColor: 'bg-indigo-500' },
-            translating: { label: 'Translating', color: 'bg-purple-100 text-purple-800', dotColor: 'bg-purple-500' },
+            translating: { label: 'Translating via Gemini', color: 'bg-purple-100 text-purple-800', dotColor: 'bg-purple-500' },
             completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-800', dotColor: 'bg-emerald-500' },
             error: { label: 'Error', color: 'bg-rose-100 text-rose-800', dotColor: 'bg-rose-500' }
         };
@@ -623,6 +637,37 @@ HTML_INTERFACE = """<!DOCTYPE html>
             return div.innerHTML;
         }
 
+        function showToast(message, type = 'info') {
+            console.log("🔔 [Toast Triggered]:", message, type);
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const colorMap = {
+                info:    { bg: 'bg-blue-600',   icon: 'text-white' },
+                success: { bg: 'bg-emerald-600', icon: 'text-white' },
+                error:   { bg: 'bg-red-600',     icon: 'text-white' },
+                warning: { bg: 'bg-amber-500',   icon: 'text-white' }
+            };
+            const cfg = colorMap[type] || colorMap.info;
+
+            const el = document.createElement('div');
+            el.className = `pointer-events-auto ${cfg.bg} text-white shadow-xl px-4 py-2 rounded-lg font-sans text-sm flex items-center gap-2 transition-all duration-300 transform translate-x-full`;
+            el.innerHTML = `
+                <svg class="w-4 h-4 shrink-0 ${cfg.icon}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="font-medium">${message}</span>
+            `;
+            container.appendChild(el);
+
+            // Slide in
+            requestAnimationFrame(() => el.classList.remove('translate-x-full'));
+
+            // Auto-dismiss after 2.5 seconds
+            setTimeout(() => {
+                el.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => el.remove(), 300);
+            }, 2500);
+        }
+
         function updateStatus(data) {
             const cfg = statusConfig[data.status] || statusConfig.uploaded;
             const isProcessing = ['transcribing', 'extracting_audio', 'analyzing', 'glossary_extracting', 'translating', 'queued'].includes(data.status);
@@ -633,9 +678,12 @@ HTML_INTERFACE = """<!DOCTYPE html>
             statusBadge.innerHTML = `<span id="statusDot" class="w-1.5 h-1.5 rounded-full ${cfg.dotColor} ${isProcessing ? 'pulse-indicator' : ''}"></span>${cfg.label}`;
             
             // Update step & segment counters
-            document.getElementById('currentStep').textContent = data.current_step || 'Ready';
-            document.getElementById('segmentCount').textContent = `${data.total_segments ?? 0} segments`;
-            document.getElementById('processedCount').textContent = `${data.processed_segments || 0} processed`;
+            const currentStepEl = document.getElementById('currentStep');
+            if (currentStepEl) currentStepEl.textContent = data.current_step || 'Ready';
+            const segmentCountEl = document.getElementById('segmentCount');
+            if (segmentCountEl) segmentCountEl.textContent = `${data.total_segments ?? 0} segments`;
+            const processedCountEl = document.getElementById('processedCount');
+            if (processedCountEl) processedCountEl.textContent = `${data.processed_segments || 0} processed`;
             
             // Update Step Detail
             const stepDetail = document.getElementById('stepDetail');
@@ -666,7 +714,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
                 tbody.innerHTML = terms.map(term => {
                     // Clean translation: remove bracketed type prefix (e.g., "[Key Concept] ")
-                    const cleanTranslation = (term.translated_term || '').replace(/^\[.*?\]\s*/, '');
+                    const cleanTranslation = (term.translated_term || '').replace(/^\\[.*?\\]\\s*/, '');
                     return `
                     <tr class="hover:bg-slate-50 ${term.source === 'manual' ? 'bg-amber-50/50' : ''}">
                         <td class="px-3 py-2">
@@ -685,14 +733,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                                 <input type="text" value="${escapeHtml(term.standardized_term || '')}" 
                                     onchange="updateTerm('${term.id}', this.value)"
                                     class="flex-1 border-transparent bg-slate-50/50 hover:bg-slate-100/70 focus:bg-white focus:border-slate-300 focus:ring-1 focus:ring-slate-300 transition-all rounded px-2 py-1 text-xs">
-                                ${term.source === 'manual' ? `
-                                    <button onclick="deleteCustomTerm('${term.id}')" 
-                                        class="text-rose-500 hover:text-rose-700 p-1" title="Remove custom term">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    </button>
-                                ` : ''}
                             </div>
                         </td>
                     </tr>
@@ -702,6 +742,71 @@ HTML_INTERFACE = """<!DOCTYPE html>
             }
         }
 
+        function formatTimecode(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            const ms = Math.floor((seconds % 1) * 1000).toString().padStart(3, '0');
+            return `${m}:${s}.${ms}`;
+        }
+        
+        function renderSubtitleTimeline(segments) {
+            const grid = document.getElementById('timelineCardGrid');
+            if (!grid) return;
+            
+            if (!segments || segments.length === 0) {
+                grid.innerHTML = '<div class="text-slate-400 text-center py-8">No subtitles available yet.</div>';
+                return;
+            }
+            
+            grid.innerHTML = segments.map((seg, idx) => `
+                <div class="bg-slate-50 rounded-lg p-3 border border-slate-100 hover:border-slate-200 transition-colors">
+                    <div class="flex items-center gap-2 mb-1.5 text-slate-400">
+                        <span class="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">#${seg.sequence_number || idx + 1}</span>
+                        <span class="text-[11px] font-mono">⏱ [${formatTimecode(seg.start_time)} → ${formatTimecode(seg.end_time)}]</span>
+                    </div>
+                    <div contenteditable="true" data-segment-id="${seg.id || ''}"
+                        class="text-slate-800 leading-relaxed outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 rounded p-1 transition-all ${seg.translated_text ? '' : 'text-slate-400 italic'}"
+                    >${escapeHtml(seg.translated_text || seg.original_text || '(empty)')}</div>
+                </div>
+            `).join('');
+            
+            // Attach auto-save blur listeners to editable fields
+            grid.querySelectorAll('[data-segment-id]').forEach(el => {
+                el.addEventListener('blur', async (e) => {
+                    if (isSavingSegment) return;
+                    const segmentId = e.target.getAttribute('data-segment-id');
+                    const newText = e.target.innerText.trim();
+                    if (!segmentId || !currentVideoId) return;
+                    
+                    // Guard against accidental empty strings
+                    if (newText === '') {
+                        log('Segment text cannot be empty — change discarded.', 'warning');
+                        e.target.textContent = e.target.dataset.originalText || '(empty)';
+                        return;
+                    }
+                    
+                    isSavingSegment = true;
+                    try {
+                        const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ translated_text: newText })
+                        });
+                        if (!response.ok) throw new Error('Server returned ' + response.status);
+                        log('Segment updated and saved.', 'info');
+                        showToast('Segment saved successfully', 'success');
+                    } catch (err) {
+                        console.error('Auto-save failed:', err);
+                        log('Auto-save failed: ' + err.message, 'error');
+                    } finally {
+                        isSavingSegment = false;
+                    }
+                });
+                // Store original text for rollback on empty blur
+                el.dataset.originalText = el.textContent;
+            });
+        }
+        
         async function updateTerm(termId, value) {
             try {
                 await fetch(`/terms/${termId}`, {
@@ -739,67 +844,11 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 
                 updateButtonVisibility(data.status);
                 updateContextBrief(data);
+                if (data.status === 'completed' && data.segments) {
+                    renderSubtitleTimeline(data.segments);
+                }
             } catch (err) {
                 console.error('Failed to fetch video status:', err);
-            }
-        }
-
-        // ============================================================================
-        // Custom Terms (Find & Replace)
-        // ============================================================================
-
-        async function addCustomTerm() {
-            if (!currentVideoId) {
-                return;
-            }
-
-            const originalInput = document.getElementById('customOriginal');
-            const translatedInput = document.getElementById('customTranslated');
-            const original = originalInput.value.trim();
-            const translated = translatedInput.value.trim();
-
-            if (!original || !translated) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`/terms/video/${currentVideoId}/custom`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ original_term: original, translated_term: translated })
-                });
-
-                if (response.ok) {
-                    log(`Added custom term: "${original}" → "${translated}"`, 'success');
-                    originalInput.value = '';
-                    translatedInput.value = '';
-                    renderTerms(); // Refresh the terms table
-                } else {
-                    const err = await response.json();
-                    throw new Error(err.detail || 'Failed to add term');
-                }
-            } catch (err) {
-                log('Failed to add custom term: ' + err.message, 'error');
-            }
-        }
-
-        async function deleteCustomTerm(termId) {
-            if (!confirm('Are you sure you want to remove this custom term?')) return;
-
-            try {
-                const response = await fetch(`/terms/video/${currentVideoId}/custom/${termId}`, {
-                    method: 'DELETE'
-                });
-
-                if (response.ok) {
-                    log('Custom term removed', 'success');
-                    renderTerms(); // Refresh the terms table
-                } else {
-                    const err = await response.json();
-                    throw new Error(err.detail || 'Failed to remove term');
-                }
-            } catch (err) {
-                log('Failed to remove custom term: ' + err.message, 'error');
             }
         }
 
@@ -956,6 +1005,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     isJobRunning = false;
                     hasStartedProcessing = false;
                     updateButtonVisibility('completed');
+                    if (data.result?.segments) renderSubtitleTimeline(data.result.segments);
                 } else {
                     log(`${jobType} complete`, 'success');
                 }
@@ -1005,7 +1055,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const logMessage = data.message || data.step_detail;
             if (logMessage && logMessage !== status && logMessage !== 'undefined') {
                 // Badge duration & completion metrics as SUCCESS
-                const isMetric = /(?:duration|elapsed|complete in|segments?|total)\s*[:\-]?\s*\d/i.test(logMessage);
+                const isMetric = /(?:duration|elapsed|complete in|segments?|total)\\s*[:\\-]?\\s*\\d/i.test(logMessage);
                 log(logMessage, isMetric ? 'success' : 'info');
             }
             
@@ -1060,7 +1110,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     break;
                     
                 case 'translating':
-                    log('Translating...');
+                    log('Translating via Gemini AI...');
                     break;
                     
                 case 'completed':
@@ -1071,6 +1121,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     }
                     renderTerms();
                     updateButtonVisibility('completed');
+                    if (data.segments) renderSubtitleTimeline(data.segments);
                     break;
                     
                 case 'error':
@@ -1089,6 +1140,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const helperText = document.getElementById('primaryHelperText');
             const ghostLink = document.getElementById('primaryGhostLink');
             const exportGrid = document.getElementById('primaryExportGrid');
+            const exportHeader = document.getElementById('exportHeader');
             const container = document.getElementById('primaryActionContainer');
             
             if (!container) return;
@@ -1098,6 +1150,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             helperText?.classList.add('hidden');
             ghostLink?.classList.add('hidden');
             exportGrid?.classList.add('hidden');
+            exportHeader?.classList.add('hidden');
             
             // Configure primary action based on pipeline state
             switch (status) {
@@ -1124,10 +1177,15 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 case 'completed':
                     primaryBtn?.classList.add('hidden');
                     exportGrid?.classList.remove('hidden');
+                    exportHeader?.classList.remove('hidden');
+                    document.getElementById('termsPanel').classList.add('hidden');
+                    document.getElementById('subtitleReviewPanel').classList.remove('hidden');
                     break;
                     
                 default:
                     primaryBtn?.classList.add('hidden');
+                    document.getElementById('termsPanel').classList.remove('hidden');
+                    document.getElementById('subtitleReviewPanel').classList.add('hidden');
             }
         }
         
@@ -1196,6 +1254,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         if (data.status === 'terms_ready' || data.status === 'completed') {
                             renderTerms();
                         }
+                        if (data.status === 'completed' && data.segments) {
+                            renderSubtitleTimeline(data.segments);
+                        }
                     }
                 } catch (err) {
                     console.error('Fallback poll error:', err);
@@ -1212,25 +1273,43 @@ HTML_INTERFACE = """<!DOCTYPE html>
             loggedCompletions.clear();
             
             // Reset upload form
-            document.getElementById('fileInput').value = '';
-            document.getElementById('fileLabel').textContent = 'Click to select file';
-            document.getElementById('dropZone').classList.remove('border-blue-400', 'bg-blue-50');
-            document.getElementById('uploadForm').classList.remove('hidden');
-            document.getElementById('uploadCompleteCard').classList.add('hidden');
-            document.getElementById('setupConfigPanel').classList.remove('hidden');
+            const fileInputEl = document.getElementById('fileInput');
+            if (fileInputEl) fileInputEl.value = '';
+            const fileLabelEl = document.getElementById('fileLabel');
+            if (fileLabelEl) fileLabelEl.textContent = 'Click to select file';
+            const dropZoneEl = document.getElementById('dropZone');
+            if (dropZoneEl) dropZoneEl.classList.remove('border-blue-400', 'bg-blue-50');
+            const uploadFormReset = document.getElementById('uploadForm');
+            if (uploadFormReset) uploadFormReset.classList.remove('hidden');
+            const uploadCompleteCardReset = document.getElementById('uploadCompleteCard');
+            if (uploadCompleteCardReset) uploadCompleteCardReset.classList.add('hidden');
+            const setupConfigPanelReset = document.getElementById('setupConfigPanel');
+            if (setupConfigPanelReset) setupConfigPanelReset.classList.remove('hidden');
             
             // Hide status and action containers
-            document.getElementById('statusCard').classList.add('hidden');
-            document.getElementById('primaryActionContainer').classList.add('hidden');
+            const statusCardReset = document.getElementById('statusCard');
+            if (statusCardReset) statusCardReset.classList.add('hidden');
+            const primaryActionReset = document.getElementById('primaryActionContainer');
+            if (primaryActionReset) primaryActionReset.classList.add('hidden');
+            const termsPanelReset = document.getElementById('termsPanel');
+            if (termsPanelReset) termsPanelReset.classList.remove('hidden');
+            const subtitleReviewReset = document.getElementById('subtitleReviewPanel');
+            if (subtitleReviewReset) subtitleReviewReset.classList.add('hidden');
+            const timelineGridReset = document.getElementById('timelineCardGrid');
+            if (timelineGridReset) timelineGridReset.innerHTML = '<div class="text-slate-400 text-center py-8">No subtitles available yet.</div>';
             
             // Reset step & segment counters
-            document.getElementById('segmentCount').textContent = '0 segments';
-            document.getElementById('processedCount').textContent = '0 processed';
-            document.getElementById('currentStep').textContent = 'Ready to process';
+            const segCountReset = document.getElementById('segmentCount');
+            if (segCountReset) segCountReset.textContent = '0 segments';
+            const procCountReset = document.getElementById('processedCount');
+            if (procCountReset) procCountReset.textContent = '0 processed';
+            const stepReset = document.getElementById('currentStep');
+            if (stepReset) stepReset.textContent = 'Ready to process';
             
             // Clear logs and terms
             clearActivityLog();
-            document.getElementById('termsTable').innerHTML = `
+            const termsTableReset = document.getElementById('termsTable');
+            if (termsTableReset) termsTableReset.innerHTML = `
                 <tr>
                     <td colspan="5" class="px-3 py-8 text-center text-slate-400 text-sm">
                         No terms extracted yet. Upload and process a video.
@@ -1287,23 +1366,36 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 currentFileType = data.content_type || 'video';
                 
                 // Set Project Metadata
-                document.getElementById('projectTitle').textContent = data.filename || 'Untitled Project';
-                document.getElementById('projectType').innerHTML = 
+                const projectTitleEl = document.getElementById('projectTitle');
+                if (projectTitleEl) projectTitleEl.textContent = data.filename || 'Untitled Project';
+                
+                const projectTypeEl = document.getElementById('projectType');
+                if (projectTypeEl) projectTypeEl.innerHTML = 
                     `<i class="fa-solid ${currentFileType === 'text' ? 'fa-file-lines' : 'fa-video'} mr-1"></i>${currentFileType === 'text' ? 'Text File' : 'Video'}`;
                 
-                const sourceLang = document.getElementById('sourceLanguage').value === 'auto' ? 'Auto' : 
-                    document.getElementById('sourceLanguage').value.toUpperCase();
-                const targetLang = document.getElementById('targetLanguage').value.toUpperCase();
-                document.getElementById('projectLangs').textContent = `${sourceLang} → ${targetLang}`;
-                document.getElementById('projectId').textContent = currentVideoId.substring(0, 8);
+                const sourceLangSel = document.getElementById('sourceLanguage');
+                const sourceLang = sourceLangSel && sourceLangSel.value === 'auto' ? 'Auto' : 
+                    (sourceLangSel ? sourceLangSel.value.toUpperCase() : 'Auto');
+                const targetLangSel = document.getElementById('targetLanguage');
+                const targetLang = targetLangSel ? targetLangSel.value.toUpperCase() : '';
+                const projectLangsEl = document.getElementById('projectLangs');
+                if (projectLangsEl) projectLangsEl.textContent = `${sourceLang} → ${targetLang}`;
                 
-                document.getElementById('statusCard').classList.remove('hidden');
-                document.getElementById('primaryActionContainer').classList.remove('hidden');
+                const projectIdEl = document.getElementById('projectId');
+                if (projectIdEl) projectIdEl.textContent = currentVideoId.substring(0, 8);
+                
+                const statusCardEl = document.getElementById('statusCard');
+                if (statusCardEl) statusCardEl.classList.remove('hidden');
+                const primaryActionEl = document.getElementById('primaryActionContainer');
+                if (primaryActionEl) primaryActionEl.classList.remove('hidden');
                 
                 // Swap upload form for compact filename card
-                document.getElementById('uploadForm').classList.add('hidden');
-                document.getElementById('uploadCompleteCard').classList.remove('hidden');
-                document.getElementById('uploadedFilename').textContent = data.filename || 'Untitled Project';
+                const uploadFormEl = document.getElementById('uploadForm');
+                if (uploadFormEl) uploadFormEl.classList.add('hidden');
+                const uploadCompleteCardEl = document.getElementById('uploadCompleteCard');
+                if (uploadCompleteCardEl) uploadCompleteCardEl.classList.remove('hidden');
+                const uploadedFilenameEl = document.getElementById('uploadedFilename');
+                if (uploadedFilenameEl) uploadedFilenameEl.textContent = data.filename || 'Untitled Project';
                 
                 log('Upload complete: ' + data.filename, 'success');
                 
@@ -1319,8 +1411,21 @@ HTML_INTERFACE = """<!DOCTYPE html>
         async function processFile() {
             if (!currentVideoId) return;
             
+            // Validate target language is selected
+            const targetLangSelect = document.getElementById('targetLanguage');
+            if (!targetLangSelect || !targetLangSelect.value) {
+                const warningEl = document.getElementById('languageWarning');
+                if (warningEl) warningEl.classList.remove('hidden');
+                if (targetLangSelect) {
+                    targetLangSelect.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                    targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+            
             // Collapse setup config panel once processing starts
-            document.getElementById('setupConfigPanel').classList.add('hidden');
+            const setupPanel = document.getElementById('setupConfigPanel');
+            if (setupPanel) setupPanel.classList.add('hidden');
             
             // Reset state for new job
             currentJobId = `transcribe-${currentVideoId}-${Date.now()}`;
@@ -1330,7 +1435,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const isTextFile = currentFileType === 'text';
             const actionName = isTextFile ? 'parsing text' : 'transcription';
             
-            log(isTextFile ? 'Starting text parsing...' : 'Starting Whisper transcription...');
+            const engine = document.getElementById('transcriptionEngine').value;
+            const engineLabel = engine === 'gemini' ? 'Gemini Cloud' : 'Local Whisper';
+            log(isTextFile ? 'Starting text parsing...' : `Starting ${engineLabel} transcription...`);
             
             try {
                 const engine = document.getElementById('transcriptionEngine').value;
@@ -1364,7 +1471,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 
                 // Update UI silently — completion will be logged via WebSocket
                 updateStatus({ status: 'transcribed', total_segments: data.total_segments ?? 0 });
-                document.getElementById('segmentCount').textContent = data.total_segments ?? 0;
+                const segCountUpload = document.getElementById('segmentCount');
+                if (segCountUpload) segCountUpload.textContent = data.total_segments ?? 0;
                 
                 // Show analyze button
                 updateButtonVisibility('transcribed');
@@ -1422,7 +1530,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             isJobRunning = true;
             hasStartedProcessing = false;
             
-            log('Starting Translator Agent...');
+            log('Starting Gemini Translator Agent...');
             log('Using sliding window translation with glossary constraints');
             
             try {
@@ -1563,10 +1671,61 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     currentFileType = isTextFile ? 'text' : 'video';
                 }
             });
+            
+            // Target language change: clear validation warning
+            const targetLangSelect = document.getElementById('targetLanguage');
+            if (targetLangSelect) {
+                targetLangSelect.addEventListener('change', () => {
+                    if (targetLangSelect.value) {
+                        const warningEl = document.getElementById('languageWarning');
+                        if (warningEl) warningEl.classList.add('hidden');
+                        targetLangSelect.classList.remove('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                    }
+                });
+            }
 
             // Buttons
             document.getElementById('uploadBtn').addEventListener('click', uploadFile);
             document.getElementById('startNewProjectBtn').addEventListener('click', resetApp);
+            
+            // Global Find & Replace handler
+            document.getElementById('replaceAllBtn').addEventListener('click', async () => {
+                if (!currentVideoId || isSavingSegment) return;
+                const findInput = document.getElementById('findInput');
+                const replaceInput = document.getElementById('replaceInput');
+                const replaceBtn = document.getElementById('replaceAllBtn');
+                const findText = findInput ? findInput.value.trim() : '';
+                if (!findText) return;
+                
+                isSavingSegment = true;
+                if (replaceBtn) {
+                    replaceBtn.textContent = 'Replacing...';
+                    replaceBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+                
+                try {
+                    const response = await fetch(`/videos/${currentVideoId}/replace`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ find_text: findText, replace_text: replaceInput ? replaceInput.value : '' })
+                    });
+                    if (!response.ok) throw new Error('Replace failed');
+                    const data = await response.json();
+                    if (data.segments) renderSubtitleTimeline(data.segments);
+                    if (findInput) findInput.value = '';
+                    if (replaceInput) replaceInput.value = '';
+                    log('Global replace applied successfully.', 'success');
+                    showToast('Batch replacement complete!', 'success');
+                } catch (err) {
+                    log('Replace failed: ' + err.message, 'error');
+                } finally {
+                    isSavingSegment = false;
+                    if (replaceBtn) {
+                        replaceBtn.textContent = 'Replace All';
+                        replaceBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                }
+            });
             document.getElementById('downloadRawTranscriptionLink').addEventListener('click', downloadTranscription);
             document.getElementById('exportSrtBtn').addEventListener('click', () => exportFormat('srt'));
             document.getElementById('exportVttBtn').addEventListener('click', () => exportFormat('vtt'));
@@ -1577,14 +1736,20 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const videoId = new URLSearchParams(window.location.search).get('video');
             if (videoId) {
                 currentVideoId = videoId;
-                document.getElementById('videoIdShort').textContent = videoId.substring(0, 8);
-                document.getElementById('statusCard').classList.remove('hidden');
-                document.getElementById('primaryActionContainer').classList.remove('hidden');
+                const videoIdShortEl = document.getElementById('videoIdShort');
+                if (videoIdShortEl) videoIdShortEl.textContent = videoId.substring(0, 8);
+                const statusCardEl2 = document.getElementById('statusCard');
+                if (statusCardEl2) statusCardEl2.classList.remove('hidden');
+                const primaryActionEl2 = document.getElementById('primaryActionContainer');
+                if (primaryActionEl2) primaryActionEl2.classList.remove('hidden');
                 
                 // Hide upload form, show compact card for loaded project
-                document.getElementById('uploadForm').classList.add('hidden');
-                document.getElementById('uploadCompleteCard').classList.remove('hidden');
-                document.getElementById('uploadedFilename').textContent = 'Loaded project';
+                const uploadFormEl2 = document.getElementById('uploadForm');
+                if (uploadFormEl2) uploadFormEl2.classList.add('hidden');
+                const uploadCompleteCardEl2 = document.getElementById('uploadCompleteCard');
+                if (uploadCompleteCardEl2) uploadCompleteCardEl2.classList.remove('hidden');
+                const uploadedFilenameEl2 = document.getElementById('uploadedFilename');
+                if (uploadedFilenameEl2) uploadedFilenameEl2.textContent = 'Loaded project';
                 
                 // Connect WebSocket for real-time updates
                 connectWebSocket(videoId);
@@ -1595,8 +1760,13 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     .then(data => {
                         updateStatus(data);
                         updateButtonVisibility(data.status);
+                        updateContextBrief(data);
                         if (data.total_segments) {
-                            document.getElementById('segmentCount').textContent = data.total_segments;
+                            const segCountLoad = document.getElementById('segmentCount');
+                            if (segCountLoad) segCountLoad.textContent = data.total_segments;
+                        }
+                        if (data.status === 'completed' && data.segments) {
+                            renderSubtitleTimeline(data.segments);
                         }
                     });
             }

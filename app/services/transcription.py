@@ -38,8 +38,9 @@ def align_transcript_with_whisperx(
         import whisperx
         import torch
     except ImportError as exc:
-        logger.error(
-            "WhisperX alignment skipped: whisperx or torch not installed (%s)",
+        logger.warning(
+            "[WARN] WhisperX alignment skipped: whisperx or torch not installed (%s). "
+            "Falling back to coarse Gemini timestamps.",
             exc,
         )
         return [
@@ -61,8 +62,9 @@ def align_transcript_with_whisperx(
             language_code=language_code, device=device
         )
     except Exception as exc:
-        logger.error(
-            "Failed to load WhisperX alignment model for '%s': %s",
+        logger.warning(
+            "[WARN] Failed to load WhisperX alignment model for '%s': %s. "
+            "Falling back to coarse Gemini timestamps.",
             language_code,
             exc,
         )
@@ -81,8 +83,9 @@ def align_transcript_with_whisperx(
     try:
         audio = whisperx.load_audio(audio_path)
     except Exception as exc:
-        logger.error(
-            "Failed to load audio '%s' for WhisperX alignment: %s",
+        logger.warning(
+            "[WARN] Failed to load audio '%s' for WhisperX alignment: %s. "
+            "Falling back to coarse Gemini timestamps.",
             audio_path,
             exc,
         )
@@ -115,12 +118,17 @@ def align_transcript_with_whisperx(
         result = whisperx.align(
             transcript,
             model_a,
+            metadata,
             audio,
-            device,
+            device=device,
             return_char_alignments=False,
         )
     except Exception as exc:
-        logger.error("WhisperX alignment failed: %s", exc)
+        logger.warning(
+            "[WARN] WhisperX alignment failed: %s. "
+            "Falling back to coarse Gemini timestamps.",
+            exc,
+        )
         return [
             {
                 "start": getattr(s, "start", 0.0),

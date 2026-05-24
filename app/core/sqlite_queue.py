@@ -599,7 +599,7 @@ class SQLiteQueueWorker(threading.Thread):
                 # Session commits automatically on exit
     
     def _do_transcription(self, video_id: str) -> Dict[str, Any]:
-        """Execute transcription job using Whisper.
+        """Execute transcription job using the configured engine (Local Whisper or Gemini Cloud).
         
         This method does NOT hold a database session during the long-running
         transcription work. It passes only video_id to whisper_service which
@@ -642,10 +642,11 @@ class SQLiteQueueWorker(threading.Thread):
             logger.info("Using per-request Gemini API key")
         
         # Send initial progress
+        engine_label = 'Gemini Cloud' if provider_override == 'gemini' else 'Local Whisper'
         self._send_ws_sync(video_id, {
             'status': 'transcribing',
             'progress': 10,
-            'message': 'Starting Whisper transcription...'
+            'message': f'Starting {engine_label} transcription...'
         })
         
         # Execute transcription (NO db session - whisper_service manages its own sessions)
@@ -843,10 +844,11 @@ class SQLiteQueueWorker(threading.Thread):
         if self._current_job_id:
             self._update_heartbeat(self._current_job_id)
         
-        # Re-check video exists and count segments - fresh session
+        # Re-check video exists and fetch translated segments - fresh session
         video_status = 'unknown'
         total = 0
         translated = 0
+        segment_rows = []
         with get_db_session() as db:
             video_record = db.query(Video).filter(Video.id == video_id).first()
             if not video_record:
@@ -864,17 +866,35 @@ class SQLiteQueueWorker(threading.Thread):
                 Segment.video_id == video_id,
                 Segment.translated_text.isnot(None)
             ).scalar() or 0
+            
+            # Fetch subtitle timeline for frontend review panel
+            segment_rows = [
+                {
+                    'id': s.id,
+                    'sequence_number': s.sequence_number,
+                    'start_time': s.start_time,
+                    'end_time': s.end_time,
+                    'original_text': s.original_text,
+                    'translated_text': s.translated_text,
+                }
+                for s in db.query(Segment)
+                    .filter(Segment.video_id == video_id)
+                    .order_by(Segment.sequence_number)
+                    .all()
+            ]
         
         self._send_ws_sync(video_id, {
             'status': 'completed',
             'progress': 100,
-            'message': f'Translation complete: {translated}/{total} segments'
+            'message': f'Translation complete: {translated}/{total} segments',
+            'segments': segment_rows
         })
         
         return {
             'total_segments': total,
             'translated_segments': translated,
-            'video_status': video_status
+            'video_status': video_status,
+            'segments': segment_rows
         }
 
 
