@@ -101,22 +101,28 @@ def update_video_status(video_id: str, status: str, **kwargs) -> bool:
         return True
 
 
-def get_video_segments(video_id: str, limit: Optional[int] = None) -> list:
+def get_video_segments(video_id: str, limit: Optional[int] = None, language_code: Optional[str] = None) -> list:
     """Get segment texts for a video with short-lived session.
     
     Args:
         video_id: ID of the video
         limit: Optional limit on number of segments to return
+        language_code: Optional language filter (defaults to source/original)
         
     Returns:
         List of tuples (sequence_number, original_text, start_time, end_time)
     """
     with get_db_session() as db:
-        from app.models.video import Segment
+        from app.models.video import Segment, Video
+        
+        # Resolve language code if not provided
+        if not language_code:
+            video = db.query(Video).filter(Video.id == video_id).first()
+            language_code = video.source_language if video and video.source_language else "original"
         
         query = (
             db.query(Segment)
-            .filter(Segment.video_id == video_id)
+            .filter(Segment.video_id == video_id, Segment.language_code == language_code)
             .order_by(Segment.sequence_number)
         )
         

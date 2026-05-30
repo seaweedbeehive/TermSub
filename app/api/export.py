@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response, JSONResponse
 from sqlalchemy.orm import Session
+from typing import Optional
 import json
 
 from app.db.session import get_db
@@ -117,8 +118,12 @@ def generate_json(video: Video, segments: list[Segment]) -> dict:
     }
 
 
-def get_segments_or_404(video_id: str, db: Session) -> tuple[Video, list[Segment]]:
-    """Get video and segments, raising 404 if not found or 400 if incomplete."""
+def get_segments_or_404(
+    video_id: str,
+    db: Session,
+    language_code: Optional[str] = None
+) -> tuple[Video, list[Segment]]:
+    """Get video and segments for a specific language track, raising 404/400 if invalid."""
     # Check if video exists in database
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
@@ -131,31 +136,38 @@ def get_segments_or_404(video_id: str, db: Session) -> tuple[Video, list[Segment
             detail="Translation is still in progress"
         )
     
+    # Resolve language code: explicit param > video.target_language
+    effective_lang = language_code or video.target_language or "original"
+    
     segments = (
         db.query(Segment)
-        .filter(Segment.video_id == video_id)
+        .filter(Segment.video_id == video_id, Segment.language_code == effective_lang)
         .order_by(Segment.sequence_number)
         .all()
     )
     
     if not segments:
-        raise HTTPException(status_code=400, detail="No segments found. Processing may not be complete.")
+        raise HTTPException(status_code=400, detail=f"No segments found for language '{effective_lang}'. Processing may not be complete.")
     
     # Check if any segments have translated text
     has_translations = any(seg.translated_text for seg in segments)
     if not has_translations:
         raise HTTPException(
-            status_code=400, 
-            detail="No translated segments found. Translation step may not be complete."
+            status_code=400,
+            detail=f"No translated segments found for language '{effective_lang}'. Translation step may not be complete."
         )
     
     return video, segments
 
 
 @router.get("/{video_id}/srt")
-def export_srt(video_id: str, db: Session = Depends(get_db)):
+def export_srt(
+    video_id: str,
+    lang: Optional[str] = Query(None, description="Language code for the subtitle track (e.g., 'de', 'fa')"),
+    db: Session = Depends(get_db)
+):
     """Export the final SRT file with consistent terminology."""
-    video, segments = get_segments_or_404(video_id, db)
+    video, segments = get_segments_or_404(video_id, db, language_code=lang)
     
     # Generate SRT content
     srt_content = generate_srt(segments)
@@ -174,9 +186,13 @@ def export_srt(video_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{video_id}/vtt")
-def export_vtt(video_id: str, db: Session = Depends(get_db)):
+def export_vtt(
+    video_id: str,
+    lang: Optional[str] = Query(None, description="Language code for the subtitle track (e.g., 'de', 'fa')"),
+    db: Session = Depends(get_db)
+):
     """Export the final WebVTT file."""
-    video, segments = get_segments_or_404(video_id, db)
+    video, segments = get_segments_or_404(video_id, db, language_code=lang)
     
     # Generate VTT content
     vtt_content = generate_vtt(segments)
@@ -194,9 +210,13 @@ def export_vtt(video_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{video_id}/txt")
-def export_txt(video_id: str, db: Session = Depends(get_db)):
+def export_txt(
+    video_id: str,
+    lang: Optional[str] = Query(None, description="Language code for the text track (e.g., 'de', 'fa')"),
+    db: Session = Depends(get_db)
+):
     """Export plain translated text only."""
-    video, segments = get_segments_or_404(video_id, db)
+    video, segments = get_segments_or_404(video_id, db, language_code=lang)
     
     # Generate TXT content
     txt_content = generate_txt(segments)
@@ -214,9 +234,13 @@ def export_txt(video_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{video_id}/json")
-def export_json(video_id: str, db: Session = Depends(get_db)):
+def export_json(
+    video_id: str,
+    lang: Optional[str] = Query(None, description="Language code for the JSON track (e.g., 'de', 'fa')"),
+    db: Session = Depends(get_db)
+):
     """Export full JSON with metadata and all segments."""
-    video, segments = get_segments_or_404(video_id, db)
+    video, segments = get_segments_or_404(video_id, db, language_code=lang)
     
     # Generate JSON content
     json_data = generate_json(video, segments)
@@ -258,10 +282,11 @@ def export_original_transcription(video_id: str, db: Session = Depends(get_db)):
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
     
-    # Get all segments for this video
+    # Get source-language segments for this video
+    source_language = video.source_language or "original"
     segments = (
         db.query(Segment)
-        .filter(Segment.video_id == video_id)
+        .filter(Segment.video_id == video_id, Segment.language_code == source_language)
         .order_by(Segment.sequence_number)
         .all()
     )

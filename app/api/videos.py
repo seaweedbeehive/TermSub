@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.models.video import Video, VideoStatus, Segment
 from app.schemas.video import VideoOut
 from app.core.config import settings
-from app.core.sqlite_queue import enqueue_job, get_job_status, set_transcription_provider, set_gemini_api_key
+from app.core.sqlite_queue import enqueue_job, get_job_status, set_transcription_provider, set_gemini_api_key, set_translation_target_language
 from app.services.upload_service import save_uploaded_file
 from app.services.text_parser import parse_text_file
 from app.services.gemini_service import translate_video_sliding_window
@@ -59,11 +59,59 @@ async def upload_video(
 
 
 @router.get("/{video_id}", response_model=VideoOut)
-def get_video(video_id: str, db: Session = Depends(get_db)):
+def get_video(
+    video_id: str,
+    lang: Optional[str] = Query(None, description="Filter segments by language code (e.g., 'de', 'fa')"),
+    db: Session = Depends(get_db)
+):
     video = db.query(Video).options(selectinload(Video.segments)).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
-    return video
+    
+    # Compute available language tracks from distinct segment language codes
+    # Exclude 'original' and the source language
+    all_langs = db.query(Segment.language_code).filter(
+        Segment.video_id == video_id
+    ).distinct().all()
+    excluded = {"original", video.source_language}
+    available_tracks = sorted([l[0] for l in all_langs if l[0] and l[0] not in excluded])
+    
+    # Resolve language filter: explicit param > source language > first available track > no filter
+    if not lang:
+        lang = video.source_language or "original"
+        has_track = any(s.language_code == lang for s in video.segments)
+        if not has_track and video.segments:
+            # Fall back to first available language track if source track missing
+            lang = video.segments[0].language_code
+    
+    # Filter segments to the resolved language track only
+    video.segments = [s for s in video.segments if s.language_code == lang]
+    
+    # Build response manually so available_tracks is populated
+    from app.schemas.video import SegmentOut
+    return VideoOut(
+        id=video.id,
+        filename=video.filename,
+        file_path=video.file_path,
+        status=video.status,
+        source_language=video.source_language,
+        target_language=video.target_language,
+        domain=video.domain,
+        created_at=video.created_at,
+        updated_at=video.updated_at,
+        progress_percent=video.progress_percent,
+        current_step=video.current_step,
+        step_detail=video.step_detail,
+        total_segments=video.total_segments,
+        processed_segments=video.processed_segments,
+        current_segment_index=video.current_segment_index,
+        started_at=video.started_at,
+        completed_at=video.completed_at,
+        error_message=video.error_message,
+        context_analysis=video.context_analysis,
+        available_tracks=available_tracks,
+        segments=[SegmentOut.model_validate(s) for s in video.segments] if video.segments else []
+    )
 
 
 @router.post("/{video_id}/transcribe")
@@ -175,11 +223,12 @@ def analyze_video_endpoint(
 
 @router.post("/{video_id}/translate")
 def translate_video_endpoint(
-    video_id: str, 
+    video_id: str,
+    target_language: Optional[str] = Query(None, description="Override target language for this translation (e.g., 'de', 'fa')"),
     db: Session = Depends(get_db)
 ):
     """Queue translation job."""
-    print(f"[API Translate] Request for video {video_id}")
+    print(f"[API Translate] Request for video {video_id}, target_language={target_language}")
     
     try:
         video = db.query(Video).filter(Video.id == video_id).first()
@@ -192,7 +241,8 @@ def translate_video_endpoint(
             VideoStatus.TRANSLATING.value,
             VideoStatus.QUEUED.value,
             VideoStatus.TRANSCRIBING.value,
-            VideoStatus.UPLOADED.value
+            VideoStatus.UPLOADED.value,
+            VideoStatus.COMPLETED.value  # Allow re-translation to new languages
         ]
         
         if video.status not in valid_statuses:
@@ -202,15 +252,25 @@ def translate_video_endpoint(
                 detail=f"Video status is {video.status}. Need terms_ready or transcribed."
             )
         
+        # If a new target language is specified, update the video and store override
+        effective_target = target_language or video.target_language
+        if target_language and target_language != video.target_language:
+            video.target_language = target_language
+            db.commit()
+        
+        # Store target language override for the worker (supports multi-language tracks)
+        set_translation_target_language(video_id, effective_target)
+        
         job_id = enqueue_job('translate', video_id)
-        print(f"[API Translate] Job {job_id} queued")
+        print(f"[API Translate] Job {job_id} queued for language={effective_target}")
         
         return {
             "status": "queued",
             "job_id": job_id,
             "video_id": video_id,
             "job_type": "translate",
-            "message": "Translation queued"
+            "target_language": effective_target,
+            "message": f"Translation queued for {effective_target}"
         }
     except HTTPException:
         raise
@@ -325,34 +385,46 @@ def batch_replace_segments(
     body: dict,
     db: Session = Depends(get_db)
 ):
-    """Batch replace text across all translated segments for a video."""
+    """Batch replace text across translated segments for a specific language track."""
     find_text = body.get("find_text", "")
     replace_text = body.get("replace_text", "")
+    language_code = body.get("language_code")
     
     if not find_text or not isinstance(find_text, str):
         raise HTTPException(status_code=400, detail="find_text is required and must be a string")
     
-    # Execute SQLite batch REPLACE on translated_text
+    # Resolve language_code: explicit body param > video.target_language > fallback
+    if not language_code:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if video:
+            language_code = video.target_language
+    if not language_code:
+        language_code = "original"
+    
+    # Execute SQLite batch REPLACE on translated_text for the specified language track
     result = db.execute(
         text("""
             UPDATE segments
             SET translated_text = REPLACE(translated_text, :find, :replace)
             WHERE video_id = :video_id
+              AND language_code = :lang
         """),
-        {"find": find_text, "replace": replace_text or "", "video_id": video_id}
+        {"find": find_text, "replace": replace_text or "", "video_id": video_id, "lang": language_code}
     )
     db.commit()
     
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="No matching segments found for replacement")
     
-    # Re-query updated segments ordered by sequence_number
+    # Re-query updated segments for the specified language track
     updated_segments = db.query(Segment).filter(
-        Segment.video_id == video_id
+        Segment.video_id == video_id,
+        Segment.language_code == language_code
     ).order_by(Segment.sequence_number).all()
     
     return {
         "status": "success",
+        "language_code": language_code,
         "segments": [
             {
                 "id": s.id,
@@ -361,6 +433,7 @@ def batch_replace_segments(
                 "end_time": s.end_time,
                 "original_text": s.original_text,
                 "translated_text": s.translated_text,
+                "language_code": s.language_code,
             }
             for s in updated_segments
         ]

@@ -19,6 +19,70 @@ from app.models.video import Video, VideoStatus, VideoDomain, Segment, Term
 from app.services.progress_service import get_progress_tracker
 
 
+def clean_and_load_json(raw_text: str) -> Any:
+    """Robustly extract and parse JSON from an LLM response.
+    
+    Strips markdown code blocks, conversational prefix/suffix text,
+    and trailing commas before parsing.
+    
+    Args:
+        raw_text: Raw text from the model
+        
+    Returns:
+        Parsed JSON data (dict or list)
+        
+    Raises:
+        json.JSONDecodeError: If no valid JSON can be extracted
+    """
+    if not raw_text or not isinstance(raw_text, str):
+        raise json.JSONDecodeError("Empty or non-string input", "", 0)
+    
+    cleaned = raw_text.strip()
+    
+    # If wrapped in markdown code block, extract content
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*\n?", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\n?```\s*$", "", cleaned)
+        cleaned = cleaned.strip()
+    
+    # If still has conversational garbage, find innermost JSON object/array
+    if not (cleaned.startswith("{") or cleaned.startswith("[")):
+        obj_start = cleaned.find("{")
+        arr_start = cleaned.find("[")
+        if obj_start == -1 and arr_start == -1:
+            raise json.JSONDecodeError(
+                f"No JSON object or array found. Raw: {cleaned[:500]}", cleaned, 0
+            )
+        start = min(x for x in [obj_start, arr_start] if x != -1)
+        cleaned = cleaned[start:]
+    
+    # Find matching closing brace/bracket from the end
+    if cleaned.startswith("{"):
+        end = cleaned.rfind("}")
+        if end == -1:
+            raise json.JSONDecodeError(
+                f"No closing brace found. Raw: {cleaned[:500]}", cleaned, 0
+            )
+        cleaned = cleaned[:end+1]
+    elif cleaned.startswith("["):
+        end = cleaned.rfind("]")
+        if end == -1:
+            raise json.JSONDecodeError(
+                f"No closing bracket found. Raw: {cleaned[:500]}", cleaned, 0
+            )
+        cleaned = cleaned[:end+1]
+    
+    # Remove trailing commas before closing braces/brackets
+    cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
+    
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        raise json.JSONDecodeError(
+            f"{e}. Cleaned text: {cleaned[:500]}", cleaned, e.pos if e.pos else 0
+        ) from e
+
+
 # Domain-specific context analysis prompts
 CONTEXT_ANALYSIS_PROMPTS = {
     VideoDomain.POLITICS.value: """You are analyzing a POLITICAL video transcript. Extract:
@@ -179,9 +243,10 @@ def analyze_video_context(
         if not target_language:
             raise ValueError("Target language is not set for this video.")
         
+        source_language = video.source_language or "original"
         segments = (
             session.query(Segment)
-            .filter(Segment.video_id == video_id)
+            .filter(Segment.video_id == video_id, Segment.language_code == source_language)
             .order_by(Segment.sequence_number)
             .all()
         )
@@ -232,15 +297,8 @@ def analyze_video_context(
         # Parse response
         response_text = response.text
         
-        # Extract JSON from response
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response_text, re.DOTALL)
-        if json_match:
-            response_text = json_match.group(1)
-        
-        response_text = response_text.strip()
-        
         try:
-            context_data = json.loads(response_text)
+            context_data = clean_and_load_json(response_text)
         except json.JSONDecodeError as e:
             progress_tracker.error("CONTEXT_ANALYSIS", "Failed to parse JSON response", str(e))
             raise RuntimeError(f"Failed to parse context analysis: {e}") from e
@@ -276,7 +334,12 @@ def analyze_video_context(
                 make_transient(video)
         
         # Save key terms using bulk insert for efficiency
-        _save_context_terms_bulk(video_id, context_data.get("key_terms", []), progress_tracker)
+        _save_context_terms_bulk(
+            video_id,
+            context_data.get("key_terms", []),
+            progress_tracker,
+            target_language=target_language
+        )
         
         return context_data
         
@@ -296,10 +359,66 @@ def analyze_video_context(
         raise RuntimeError(f"Context analysis failed: {error_msg}") from e
 
 
+def _looks_like_english_fallback(text: str, original: str, target_language: str) -> bool:
+    """Check if a translation looks like an untranslated English fallback.
+    
+    Script-agnostic: uses target_language code to decide what constitutes
+    a real translation vs. a raw English string.
+    
+    Args:
+        text: The candidate translation
+        original: The original English/source term
+        target_language: ISO language code (e.g., 'de', 'fa', 'es')
+        
+    Returns:
+        True if the text appears to be an English fallback
+    """
+    if not text or not isinstance(text, str):
+        return True
+    
+    # English target is never a fallback
+    if target_language == "en":
+        return False
+    
+    # Non-Latin script families
+    non_latin_patterns = {
+        "fa": r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]',
+        "ar": r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]',
+        "ur": r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]',
+        "ru": r'[\u0400-\u04FF\u0500-\u052F]',
+        "uk": r'[\u0400-\u04FF\u0500-\u052F]',
+        "zh": r'[\u4E00-\u9FFF\u3400-\u4DBF]',
+        "ja": r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]',
+        "ko": r'[\uAC00-\uD7AF\u1100-\u11FF]',
+        "el": r'[\u0370-\u03FF\u1F00-\u1FFF]',
+        "he": r'[\u0590-\u05FF\uFB1D-\uFB4F]',
+        "th": r'[\u0E00-\u0E7F]',
+        "hi": r'[\u0900-\u097F]',
+    }
+    
+    pattern = non_latin_patterns.get(target_language)
+    if pattern:
+        return not bool(re.search(pattern, text))
+    
+    # For Latin-script languages (de, fr, es, it, pt, etc.)
+    # If identical to source, it's a fallback
+    if text.lower().strip() == original.lower().strip():
+        return True
+    
+    # If it contains accented characters typical of European languages,
+    # treat it as a real translation
+    accented = re.search(
+        r'[àáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿßÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝŸąćęłńóśźżĄĆĘŁŃÓŚŹŻ]',
+        text
+    )
+    return not bool(accented)
+
+
 def _save_context_terms_bulk(
     video_id: str,
     key_terms: List[Dict[str, Any]],
-    progress_tracker=None
+    progress_tracker=None,
+    target_language: str = "en"
 ) -> None:
     """Save extracted context terms to database using bulk insert for efficiency.
     
@@ -307,6 +426,7 @@ def _save_context_terms_bulk(
         video_id: ID of the video
         key_terms: List of term dictionaries from context analysis
         progress_tracker: Optional progress tracker for logging
+        target_language: Target language code for script-aware overwrite guard
     """
     if not key_terms:
         return
@@ -334,32 +454,60 @@ def _save_context_terms_bulk(
     if not terms_to_insert:
         return
     
-    # Use bulk insert with a single session
+    # Use bulk upsert with a single session
     with SessionLocal() as session:
-        # Check for existing terms to avoid duplicates
+        # Fetch full existing term records for this video
         existing_terms = (
-            session.query(Term.original_term)
+            session.query(Term)
             .filter(Term.video_id == video_id)
             .all()
         )
-        existing_originals = {t.original_term for t in existing_terms}
+        existing_map = {t.original_term.lower(): t for t in existing_terms}
         
-        # Filter out duplicates
-        new_terms = [
-            t for t in terms_to_insert 
-            if t["original_term"] not in existing_originals
-        ]
+        new_terms = []
+        updated_count = 0
+        
+        for t in terms_to_insert:
+            original_lower = t["original_term"].lower()
+            existing = existing_map.get(original_lower)
+            
+            if existing:
+                # Script-agnostic guard: don't overwrite a real translation with English fallback
+                existing_translation = existing.translated_term or ""
+                new_translation = t["translated_term"] or ""
+                # Strip category prefix for comparison
+                existing_plain = re.sub(r'^\[.*?\]\s*', '', existing_translation)
+                new_plain = re.sub(r'^\[.*?\]\s*', '', new_translation)
+                
+                if target_language != "en":
+                    existing_is_fallback = _looks_like_english_fallback(
+                        existing_plain, existing.original_term, target_language
+                    )
+                    new_is_fallback = _looks_like_english_fallback(
+                        new_plain, existing.original_term, target_language
+                    )
+                    # If existing is good and new is English fallback, skip update
+                    if not existing_is_fallback and new_is_fallback:
+                        continue
+                
+                # Otherwise update the record
+                existing.translated_term = new_translation
+                existing.category = t["category"]
+                updated_count += 1
+            else:
+                new_terms.append(t)
         
         # Bulk insert new terms
         if new_terms:
             session.bulk_insert_mappings(Term, new_terms)
-            session.commit()
+        
+        session.commit()
         
         if progress_tracker:
             progress_tracker.info(
-                "CONTEXT_TERMS", 
-                f"Saved {len(new_terms)} new terms from context analysis",
-                f"Skipped {len(terms_to_insert) - len(new_terms)} duplicates"
+                "CONTEXT_TERMS",
+                f"Saved {len(new_terms)} new terms, updated {updated_count} existing",
+                f"Total processed: {len(terms_to_insert)}"
             )
 
 
@@ -452,10 +600,11 @@ def extract_glossary(
             except json.JSONDecodeError:
                 pass
         
-        # Get segments for building transcript
+        # Get segments for building transcript (source language only)
+        source_language = video.source_language or "original"
         segments = (
             session.query(Segment)
-            .filter(Segment.video_id == video_id)
+            .filter(Segment.video_id == video_id, Segment.language_code == source_language)
             .order_by(Segment.sequence_number)
             .all()
         )
@@ -552,15 +701,8 @@ Guidelines:
         # Parse response
         response_text = response.text
         
-        # Extract JSON from response
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response_text, re.DOTALL)
-        if json_match:
-            response_text = json_match.group(1)
-        
-        response_text = response_text.strip()
-        
         try:
-            glossary_data = json.loads(response_text)
+            glossary_data = clean_and_load_json(response_text)
         except json.JSONDecodeError as e:
             progress_tracker.error("GLOSSARY", "Failed to parse JSON response", str(e))
             raise RuntimeError(f"Failed to parse glossary extraction: {e}") from e
@@ -583,16 +725,47 @@ Guidelines:
         # ========================================================================
         # Merge context_analysis key_terms with glossary_data key_terms
         # (to ensure we don't lose terms from Pass 1)
-        existing_terms = {t.get("original", "").lower() for t in glossary_data.get("key_terms", [])}
+        pass1_lookup = {
+            t.get("original", "").lower(): t
+            for t in context_analysis.get("key_terms", [])
+        }
+        
+        # If Pass 1 has a real translation and Pass 2 returned English fallback,
+        # keep Pass 1's translation instead
+        for term in glossary_data.get("key_terms", []):
+            original = term.get("original", "").lower()
+            pass1_term = pass1_lookup.get(original)
+            if not pass1_term:
+                continue
+            
+            pass1_trans = pass1_term.get("target_standard", "")
+            pass2_trans = term.get("target_standard", "")
+            
+            if target_language != "en":
+                pass1_is_fallback = _looks_like_english_fallback(
+                    pass1_trans, pass1_term.get("original", ""), target_language
+                )
+                pass2_is_fallback = _looks_like_english_fallback(
+                    pass2_trans, term.get("original", ""), target_language
+                )
+                if not pass1_is_fallback and pass2_is_fallback:
+                    term["target_standard"] = pass1_trans
         
         # Add any terms from context analysis that aren't in glossary_data
+        existing_terms = {t.get("original", "").lower() for t in glossary_data.get("key_terms", [])}
+        
         for term in context_analysis.get("key_terms", []):
             original = term.get("original", "").lower()
             if original and original not in existing_terms:
                 glossary_data.setdefault("key_terms", []).append(term)
         
         # Save terms to database
-        _save_context_terms_bulk(video_id, glossary_data.get("key_terms", []), progress_tracker)
+        _save_context_terms_bulk(
+            video_id,
+            glossary_data.get("key_terms", []),
+            progress_tracker,
+            target_language=target_language
+        )
         
         # Update video status
         with SessionLocal() as session:

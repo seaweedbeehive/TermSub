@@ -11,6 +11,7 @@ class SegmentOut(BaseModel):
     end_time: float
     original_text: str
     translated_text: str | None = None
+    language_code: str = "original"
 
 
 class VideoBase(BaseModel):
@@ -49,6 +50,7 @@ class VideoOut(VideoBase):
     completed_at: datetime | None = None
     error_message: str | None = None
     context_analysis: str | None = None  # JSON from Pass 1
+    available_tracks: list[str] = []
     segments: list[SegmentOut] | None = None
 
 

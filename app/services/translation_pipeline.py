@@ -82,23 +82,59 @@ class LLMResponseParser:
     def extract_json(text: str) -> Optional[str]:
         """Extract JSON from markdown code blocks or plain text.
         
+        Handles conversational prefix/suffix text, markdown wrapping,
+        and finds the innermost balanced JSON object/array.
+        
         Args:
             text: Raw LLM response text
             
         Returns:
             Extracted JSON string or None if not found
         """
-        # Try to extract from markdown code blocks
-        patterns = [
-            r'```(?:json)?\s*\n?(.*?)\n?```',  # Markdown code block
-            r'\{.*\}',  # Raw JSON object
-            r'\[.*\]',  # Raw JSON array
-        ]
+        if not text or not isinstance(text, str):
+            return None
         
-        for pattern in patterns:
-            match = re.search(pattern, text, re.DOTALL)
-            if match:
-                return match.group(1) if match.groups() else match.group(0)
+        cleaned = text.strip()
+        
+        # Strip markdown code block if present
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*\n?", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\n?```\s*$", "", cleaned)
+            cleaned = cleaned.strip()
+        
+        # If text starts directly with JSON, find the balanced closing brace/bracket
+        if cleaned.startswith("{") or cleaned.startswith("["):
+            # For objects: find the last }
+            if cleaned.startswith("{"):
+                end = cleaned.rfind("}")
+                if end != -1:
+                    return cleaned[:end+1]
+            # For arrays: find the last ]
+            elif cleaned.startswith("["):
+                end = cleaned.rfind("]")
+                if end != -1:
+                    return cleaned[:end+1]
+        
+        # Fallback: scan for first { or [ and extract to matching closing char
+        obj_start = cleaned.find("{")
+        arr_start = cleaned.find("[")
+        
+        if obj_start == -1 and arr_start == -1:
+            return None
+        
+        start = min(x for x in [obj_start, arr_start] if x != -1)
+        cleaned = cleaned[start:]
+        
+        if cleaned.startswith("{"):
+            end = cleaned.rfind("}")
+            if end != -1:
+                result = cleaned[:end+1]
+                return re.sub(r",(\s*[}\]])", r"\1", result)
+        elif cleaned.startswith("["):
+            end = cleaned.rfind("]")
+            if end != -1:
+                result = cleaned[:end+1]
+                return re.sub(r",(\s*[}\]])", r"\1", result)
         
         return None
     
@@ -628,7 +664,8 @@ Only include terms that actually appear in the text.
     async def translate_with_glossary(
         self, 
         video_id: str, 
-        glossary: Optional[List[Term]] = None
+        glossary: Optional[List[Term]] = None,
+        target_language: Optional[str] = None
     ) -> Dict[str, Any]:
         """Translator Agent: Translate using sliding window with glossary.
         
@@ -637,6 +674,7 @@ Only include terms that actually appear in the text.
         Args:
             video_id: ID of the video to translate
             glossary: Optional list of approved terms to use during translation
+            target_language: Optional target language override for multi-language tracks
             
         Returns:
             Dict with video_id, status, total_segments, translated_segments, success
@@ -654,6 +692,11 @@ Only include terms that actually appear in the text.
             # Check if video is in ERROR status - abort early
             if video.status == VideoStatus.ERROR.value:
                 raise RuntimeError(f"Video {video_id} is in ERROR status, aborting translation")
+            
+            # Resolve target language
+            effective_target = target_language or video.target_language
+            if not effective_target:
+                raise ValueError("Target language is not set for this video.")
             
             # ALWAYS fetch terms from DB so manual terms and updates are picked up
             auto_terms = (
@@ -696,7 +739,21 @@ Only include terms that actually appear in the text.
                     normalized_original = term.original_term.lower().replace('-', ' ').strip()
                     glossary_dict[normalized_original] = translation
             
-            total_segments = len(db.query(Segment).filter(Segment.video_id == video_id).all())
+            # Count source segments (original language) for batch sizing
+            source_language = video.source_language or "original"
+            source_segments = (
+                db.query(Segment)
+                .filter(Segment.video_id == video_id, Segment.language_code == source_language)
+                .all()
+            )
+            if not source_segments:
+                # Fallback: segments may have been stored under "original" (legacy/auto-detect)
+                source_segments = (
+                    db.query(Segment)
+                    .filter(Segment.video_id == video_id, Segment.language_code == "original")
+                    .all()
+                )
+            total_segments = len(source_segments)
             
             # Update status
             video.status = VideoStatus.TRANSLATING.value
@@ -707,14 +764,14 @@ Only include terms that actually appear in the text.
         
         await self._send_progress(
             "translating",
-            message="Translator Agent starting translation with glossary",
+            message=f"Translator Agent starting translation to {effective_target} with glossary",
             glossary_size=len(glossary_dict),
             progress=0
         )
         
         progress_tracker.start_step(
             "TRANSLATING",
-            f"Translator Agent: Translating with {len(glossary_dict)} glossary terms"
+            f"Translator Agent: Translating to {effective_target} with {len(glossary_dict)} glossary terms"
         )
         
         try:
@@ -723,6 +780,7 @@ Only include terms that actually appear in the text.
             
             print(f"\n[TranslatorAgent] Starting batch translation with {num_batches} batches")
             print(f"[TranslatorAgent] Total segments: {total_segments}, Window: {DEFAULT_WINDOW_SIZE}, Overlap: {DEFAULT_OVERLAP}")
+            print(f"[TranslatorAgent] Target language: {effective_target}")
             print(f"[TranslatorAgent] Using glossary with {len(glossary_dict)} terms")
             
             # Use the existing sliding window translation service
@@ -734,6 +792,7 @@ Only include terms that actually appear in the text.
                 window_size=DEFAULT_WINDOW_SIZE,
                 overlap=DEFAULT_OVERLAP,
                 glossary=glossary_dict,
+                target_language=effective_target,
             )
             
             # Update to completed with short session
@@ -751,12 +810,12 @@ Only include terms that actually appear in the text.
             
             await self._send_progress(
                 "completed",
-                message="Translation finished successfully",
+                message=f"Translation to {effective_target} finished successfully",
                 total_segments=total_segs,
                 processed_segments=processed_segs
             )
             
-            progress_tracker.end_step("Translator Agent complete: translation finished")
+            progress_tracker.end_step(f"Translator Agent complete: translation to {effective_target} finished")
             
             # Return primitives only - ZERO LEAK POLICY
             return {
@@ -764,6 +823,7 @@ Only include terms that actually appear in the text.
                 "status": video_status,
                 "total_segments": total_segs,
                 "translated_segments": processed_segs,
+                "target_language": effective_target,
                 "success": True
             }
             
@@ -846,16 +906,18 @@ Only include terms that actually appear in the text.
     def translate_with_glossary_sync(
         self, 
         video_id: str, 
-        glossary: Optional[List[Term]] = None
+        glossary: Optional[List[Term]] = None,
+        target_language: Optional[str] = None
     ) -> Dict[str, Any]:
         """Synchronous version of translate_with_glossary for background worker.
         
         Args:
             video_id: ID of the video to translate
             glossary: Optional list of approved terms
+            target_language: Optional target language override for multi-language tracks
             
         Returns:
-            Updated Video record
+            Dict with translation results
         """
         import asyncio
-        return asyncio.run(self.translate_with_glossary(video_id, glossary))
+        return asyncio.run(self.translate_with_glossary(video_id, glossary, target_language))

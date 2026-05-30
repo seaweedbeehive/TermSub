@@ -78,6 +78,7 @@ def parse_text_file(video_id: str) -> Dict[str, Any]:
         # Extract needed data before closing session
         file_path_str = video.file_path
         filename = video.filename
+        source_language = video.source_language
         
         progress_tracker.info("TEXT_PARSE", f"Parsing text file: {filename}")
         
@@ -120,6 +121,7 @@ def parse_text_file(video_id: str) -> Dict[str, Any]:
                     start_time=0.0,  # No timestamps for text
                     end_time=0.0,
                     original_text=sentence,
+                    language_code=source_language or "original",
                 )
                 segments_to_add.append(segment)
                 

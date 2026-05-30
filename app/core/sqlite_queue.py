@@ -45,6 +45,33 @@ _transcription_providers: Dict[str, str] = {}
 # Populated by the API endpoint before enqueue, consumed by the worker.
 _gemini_api_keys: Dict[str, str] = {}
 
+# In-memory store for per-request translation target language overrides.
+# Key: video_id, Value: language code string (e.g., 'de', 'fa')
+# Populated by the API endpoint before enqueue, consumed by the worker.
+_translation_target_languages: Dict[str, str] = {}
+
+
+def set_translation_target_language(video_id: str, language_code: str) -> None:
+    """Store the translation target language for a video before enqueueing.
+    
+    Args:
+        video_id: The video ID
+        language_code: Target language code (e.g., 'de', 'fa')
+    """
+    _translation_target_languages[video_id] = language_code
+
+
+def get_translation_target_language(video_id: str) -> Optional[str]:
+    """Retrieve and clear the stored translation target language for a video.
+    
+    Args:
+        video_id: The video ID
+        
+    Returns:
+        Language code if set, None otherwise
+    """
+    return _translation_target_languages.pop(video_id, None)
+
 
 def set_transcription_provider(video_id: str, provider: str) -> None:
     """Store the transcription provider choice for a video before enqueueing.
@@ -682,8 +709,12 @@ class SQLiteQueueWorker(threading.Thread):
             video_status = video.status
             logger.debug(f"Transcription complete. Video status: {video_status}")
             
-            # Verify segments
-            segment_count = db.query(Segment).filter(Segment.video_id == video_id).count()
+            # Verify segments (count source-language segments)
+            source_language = video.source_language or "original"
+            segment_count = db.query(Segment).filter(
+                Segment.video_id == video_id,
+                Segment.language_code == source_language
+            ).count()
             logger.debug(f"Segments created: {segment_count}")
         
         if segment_count == 0:
@@ -803,6 +834,8 @@ class SQLiteQueueWorker(threading.Thread):
         """Execute translation job using Translator agent.
         
         Uses short-lived sessions - NEVER holds db session during long operations.
+        Supports multi-language tracks by tagging translated segments with the
+        target language code rather than overwriting a single field.
         
         Args:
             video_id: ID of the video to translate
@@ -815,7 +848,8 @@ class SQLiteQueueWorker(threading.Thread):
         """
         logger.info(f"Starting translation for {video_id}")
         
-        # Check video exists and is not in ERROR - short session
+        # Check video exists and resolve target language - short session
+        target_language = None
         with get_db_session() as db:
             video_record = db.query(Video).filter(Video.id == video_id).first()
             if not video_record:
@@ -824,17 +858,42 @@ class SQLiteQueueWorker(threading.Thread):
             # Check if video is in ERROR status - abort early
             if video_record.status == VideoStatus.ERROR.value:
                 raise RuntimeError(f"Video {video_id} is in ERROR status, aborting translation")
+            
+            target_language = video_record.target_language
+        
+        # Check for a per-request target language override
+        language_override = get_translation_target_language(video_id)
+        if language_override:
+            logger.info(f"Using per-request translation target language: {language_override}")
+            target_language = language_override
+        
+        # Pre-translation cleanup: delete any existing segments for this target language
+        # to prevent duplication blocks and ensure a clean re-translation
+        logger.info(f"Pre-translation cleanup: removing old '{target_language}' segments for {video_id}")
+        with get_db_session() as db:
+            old_count = db.query(Segment).filter(
+                Segment.video_id == video_id,
+                Segment.language_code == target_language
+            ).count()
+            if old_count > 0:
+                db.query(Segment).filter(
+                    Segment.video_id == video_id,
+                    Segment.language_code == target_language
+                ).delete(synchronize_session=False)
+                logger.info(f"Deleted {old_count} existing '{target_language}' segment rows")
+            else:
+                logger.info(f"No existing '{target_language}' segments to clean up")
         
         self._send_ws_sync(video_id, {
             'status': 'translating',
             'progress': 0,
-            'message': 'Starting translation...'
+            'message': f'Starting translation to {target_language}...'
         })
         
         # Perform translation via the pipeline so glossary terms are fetched and enforced
         from app.services.translation_pipeline import TranslationPipeline
         pipeline = TranslationPipeline()
-        translate_result = pipeline.translate_with_glossary_sync(video_id)
+        translate_result = pipeline.translate_with_glossary_sync(video_id, target_language=target_language)
         
         # Check result - translate_video_sliding_window now returns a Dict
         if translate_result and not translate_result.get("success", True):
@@ -844,7 +903,7 @@ class SQLiteQueueWorker(threading.Thread):
         if self._current_job_id:
             self._update_heartbeat(self._current_job_id)
         
-        # Re-check video exists and fetch translated segments - fresh session
+        # Re-check video exists and fetch translated segments for the target language - fresh session
         video_status = 'unknown'
         total = 0
         translated = 0
@@ -857,17 +916,19 @@ class SQLiteQueueWorker(threading.Thread):
             video_status = video_record.status
             logger.debug(f"Translation complete. Status: {video_status}")
             
-            # Count translated segments
+            # Count segments for the target language track
             total = db.query(func.count(Segment.id)).filter(
-                Segment.video_id == video_id
+                Segment.video_id == video_id,
+                Segment.language_code == target_language
             ).scalar() or 0
             
             translated = db.query(func.count(Segment.id)).filter(
                 Segment.video_id == video_id,
+                Segment.language_code == target_language,
                 Segment.translated_text.isnot(None)
             ).scalar() or 0
             
-            # Fetch subtitle timeline for frontend review panel
+            # Fetch subtitle timeline for frontend review panel (target language only)
             segment_rows = [
                 {
                     'id': s.id,
@@ -876,9 +937,10 @@ class SQLiteQueueWorker(threading.Thread):
                     'end_time': s.end_time,
                     'original_text': s.original_text,
                     'translated_text': s.translated_text,
+                    'language_code': s.language_code,
                 }
                 for s in db.query(Segment)
-                    .filter(Segment.video_id == video_id)
+                    .filter(Segment.video_id == video_id, Segment.language_code == target_language)
                     .order_by(Segment.sequence_number)
                     .all()
             ]
@@ -886,7 +948,8 @@ class SQLiteQueueWorker(threading.Thread):
         self._send_ws_sync(video_id, {
             'status': 'completed',
             'progress': 100,
-            'message': f'Translation complete: {translated}/{total} segments',
+            'message': f'Translation complete: {translated}/{total} segments ({target_language})',
+            'target_language': target_language,
             'segments': segment_rows
         })
         
@@ -894,6 +957,7 @@ class SQLiteQueueWorker(threading.Thread):
             'total_segments': total,
             'translated_segments': translated,
             'video_status': video_status,
+            'target_language': target_language,
             'segments': segment_rows
         }
 

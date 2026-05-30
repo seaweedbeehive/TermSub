@@ -20,6 +20,7 @@ from typing import Optional, Dict, Any, List
 from app.core.config import settings
 from app.models.video import Video, VideoStatus, Segment
 from app.services.progress_service import get_progress_tracker
+from app.services.context_analysis_service import clean_and_load_json
 from app.services.transcription import align_transcript_with_whisperx
 
 
@@ -251,15 +252,8 @@ def gemini_transcribe(
     # Parse JSON response
     raw_text = response.text or "[]"
 
-    # Strip markdown code block if present
-    clean_json = raw_text.strip()
-    if clean_json.startswith("```"):
-        clean_json = clean_json.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    if clean_json.startswith("json"):
-        clean_json = clean_json.split("\n", 1)[-1].strip()
-
     try:
-        data = json.loads(clean_json)
+        data = clean_and_load_json(raw_text)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"Gemini returned invalid JSON: {e}\nRaw: {raw_text[:500]}")
 
@@ -515,6 +509,7 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
                     start_time=segment.start,
                     end_time=segment.end,
                     original_text=text,
+                    language_code=final_language or source_language or "original",
                 )
                 session.add(db_segment)
                 session.commit()

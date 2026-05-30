@@ -296,21 +296,13 @@ HTML_INTERFACE = """<!DOCTYPE html>
                                 <p class="text-xs text-slate-400 mt-1">MP4, MOV, AVI, MP3, TXT</p>
                             </label>
                         </div>
+                    </div>
 
-                        <div id="setupConfigPanel" class="space-y-4">
+                    <div id="setupConfigPanel" class="space-y-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-700 mb-1">Source Language</label>
                             <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="auto">Auto-detect</option>
-                                <option value="en">English</option>
-                                <option value="fa">Persian (Farsi)</option>
-                                <option value="ar">Arabic</option>
-                                <option value="de">German</option>
-                                <option value="fr">French</option>
-                                <option value="es">Spanish</option>
-                                <option value="it">Italian</option>
-                                <option value="ja">Japanese</option>
-                                <option value="zh">Chinese</option>
+                                <option value="auto" selected>Auto-Detect Language</option>
                             </select>
 
                         </div>
@@ -319,15 +311,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             <label class="block text-xs font-medium text-slate-700 mb-1">Target Language</label>
                             <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                 <option value="" disabled selected>Select target language...</option>
-                                <option value="en">English</option>
-                                <option value="es">Spanish</option>
-                                <option value="fr">French</option>
-                                <option value="de">German</option>
-                                <option value="ar">Arabic</option>
-                                <option value="it">Italian</option>
-                                <option value="ja">Japanese</option>
-                                <option value="zh">Chinese</option>
-                                <option value="fa">Persian (Farsi)</option>
                             </select>
                             <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
                         </div>
@@ -409,12 +392,11 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             </p>
                         </div>
 
-                        </div>
-
-                        <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
-                            <i class="fa-solid fa-upload mr-2"></i>Start
-                        </button>
                     </div>
+
+                    <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                        <i class="fa-solid fa-upload mr-2"></i>Start
+                    </button>
 
                     <!-- Post-upload compact state -->
                     <div id="uploadCompleteCard" class="hidden space-y-3">
@@ -536,6 +518,15 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 <div id="subtitleReviewPanel" class="hidden h-full flex flex-col bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-sm font-semibold text-slate-900 mb-4">Translated Subtitle Timeline</h2>
                     
+                    <!-- Language Track Manager -->
+                    <div id="trackManagerBar" class="flex items-center gap-2 mb-3 pb-3 border-b border-slate-100">
+                        <span class="text-xs font-semibold text-slate-500">Language Track:</span>
+                        <select id="trackSelector" class="text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
+                            <option value="">Loading tracks...</option>
+                        </select>
+                        <button id="addNewTrackBtn" class="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 transition-colors">+ Translate Another Language</button>
+                    </div>
+                    
                     <!-- Global Find & Replace Bar -->
                     <div class="flex items-center gap-2 mb-3">
                         <input type="text" id="findInput" placeholder="Find text..." class="flex-1 text-xs border border-slate-200 bg-slate-50 rounded px-2 py-1 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
@@ -572,6 +563,34 @@ HTML_INTERFACE = """<!DOCTYPE html>
         let isJobRunning = false; // Silver bullet: prevents stale completion logs
         let hasStartedProcessing = false; // Status Transition Guard: ignore COMPLETED until processing starts
         let isSavingSegment = false; // Prevents concurrent blur / replace-all race conditions
+        let currentTrackLanguage = null; // Active language track being viewed
+        let isRetranslationMode = false; // True when user is adding a new translation language
+
+        const GEMINI_SUPPORTED_LANGUAGES = [
+            { code: 'en', name: 'English' },
+            { code: 'fa', name: 'Persian (Farsi)' },
+            { code: 'de', name: 'German (Deutsch)' },
+            { code: 'es', name: 'Spanish (Español)' },
+            { code: 'fr', name: 'French (Français)' },
+            { code: 'it', name: 'Italian (Italiano)' },
+            { code: 'ar', name: 'Arabic (العربية)' },
+            { code: 'zh', name: 'Chinese (简体中文)' },
+            { code: 'ja', name: 'Japanese (日本語)' },
+            { code: 'ko', name: 'Korean (한국어)' },
+            { code: 'tr', name: 'Turkish (Türkçe)' },
+            { code: 'ru', name: 'Russian (Русский)' },
+            { code: 'pt', name: 'Portuguese (Português)' },
+            { code: 'nl', name: 'Dutch (Nederlands)' },
+            { code: 'pl', name: 'Polish (Polski)' },
+            { code: 'hi', name: 'Hindi (हिन्दी)' },
+            { code: 'uk', name: 'Ukrainian (Українська)' },
+            { code: 'vi', name: 'Vietnamese (Tiếng Việt)' },
+            { code: 'id', name: 'Indonesian (Bahasa Indonesia)' },
+            { code: 'sv', name: 'Swedish (Svenska)' },
+            { code: 'no', name: 'Norwegian (Norsk)' },
+            { code: 'fi', name: 'Finnish (Suomi)' },
+            { code: 'da', name: 'Danish (Dansk)' }
+        ];
 
         // Status config with colors
         const statusConfig = {
@@ -693,6 +712,28 @@ HTML_INTERFACE = """<!DOCTYPE html>
             } else {
                 stepDetail.classList.add('hidden');
             }
+            
+            // Explicit sub-text overwrites to prevent stale frozen text
+            if (stepDetail) {
+                switch (data.status) {
+                    case 'transcribing':
+                        stepDetail.textContent = 'Transcribing audio...';
+                        stepDetail.classList.remove('hidden');
+                        break;
+                    case 'analyzing':
+                        stepDetail.textContent = 'Analyzing context & terminology...';
+                        stepDetail.classList.remove('hidden');
+                        break;
+                    case 'translating':
+                        stepDetail.textContent = 'Translating subtitles...';
+                        stepDetail.classList.remove('hidden');
+                        break;
+                    case 'completed':
+                        stepDetail.textContent = 'Project complete.';
+                        stepDetail.classList.remove('hidden');
+                        break;
+                }
+            }
 
             // Show/hide buttons based on status
             updateButtonVisibility(data.status);
@@ -742,6 +783,168 @@ HTML_INTERFACE = """<!DOCTYPE html>
             }
         }
 
+        function populateTrackSelector(tracks, currentLang) {
+            const selector = document.getElementById('trackSelector');
+            if (!selector) return;
+            
+            // Build a lookup map from code to full name
+            const nameMap = {};
+            GEMINI_SUPPORTED_LANGUAGES.forEach(lang => { nameMap[lang.code] = lang.name; });
+            
+            // Clear existing options (including "Loading tracks..." placeholder)
+            selector.innerHTML = '';
+            
+            if (!tracks || tracks.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = currentLang || '';
+                opt.textContent = nameMap[currentLang] || (currentLang ? currentLang.toUpperCase() : 'Default');
+                selector.appendChild(opt);
+                selector.disabled = true;
+                currentTrackLanguage = currentLang || null;
+                return;
+            }
+            
+            selector.disabled = false;
+            tracks.forEach(lang => {
+                const opt = document.createElement('option');
+                opt.value = lang;
+                opt.textContent = nameMap[lang] || lang.toUpperCase();
+                if (lang === currentLang) opt.selected = true;
+                selector.appendChild(opt);
+            });
+            
+            // Also add source/original option if it's the current view
+            if (currentLang && !tracks.includes(currentLang)) {
+                const opt = document.createElement('option');
+                opt.value = currentLang;
+                opt.textContent = (nameMap[currentLang] || currentLang.toUpperCase()) + ' (Source)';
+                opt.selected = true;
+                selector.insertBefore(opt, selector.firstChild);
+            }
+            
+            currentTrackLanguage = currentLang || (tracks[0] || null);
+        }
+        
+        function populateLanguageDropdowns() {
+            // Target Language
+            const targetSelect = document.getElementById('targetLanguage');
+            if (targetSelect) {
+                // Preserve the placeholder option
+                const placeholder = targetSelect.querySelector('option[value=""]');
+                targetSelect.innerHTML = '';
+                if (placeholder) targetSelect.appendChild(placeholder);
+                else {
+                    const ph = document.createElement('option');
+                    ph.value = '';
+                    ph.disabled = true;
+                    ph.selected = true;
+                    ph.textContent = 'Select target language...';
+                    targetSelect.appendChild(ph);
+                }
+                GEMINI_SUPPORTED_LANGUAGES.forEach(lang => {
+                    const opt = document.createElement('option');
+                    opt.value = lang.code;
+                    opt.textContent = lang.name;
+                    targetSelect.appendChild(opt);
+                });
+            }
+            
+            // Source Language
+            const sourceSelect = document.getElementById('sourceLanguage');
+            if (sourceSelect) {
+                sourceSelect.innerHTML = '';
+                const autoOpt = document.createElement('option');
+                autoOpt.value = 'auto';
+                autoOpt.selected = true;
+                autoOpt.textContent = 'Auto-Detect Language';
+                sourceSelect.appendChild(autoOpt);
+                GEMINI_SUPPORTED_LANGUAGES.forEach(lang => {
+                    const opt = document.createElement('option');
+                    opt.value = lang.code;
+                    opt.textContent = lang.name;
+                    sourceSelect.appendChild(opt);
+                });
+            }
+        }
+        
+        async function switchLanguageTrack(lang) {
+            if (!currentVideoId || !lang) return;
+            try {
+                const response = await fetch(`/videos/${currentVideoId}?lang=${encodeURIComponent(lang)}`);
+                if (!response.ok) throw new Error('Failed to load track');
+                const data = await response.json();
+                if (data.segments) {
+                    renderSubtitleTimeline(data.segments);
+                    currentTrackLanguage = lang;
+                    // Sync the selector to reflect the newly loaded track
+                    const selector = document.getElementById('trackSelector');
+                    if (selector) selector.value = lang;
+                }
+            } catch (err) {
+                console.error('Track switch failed:', err);
+                log('Failed to switch language track: ' + err.message, 'error');
+            }
+        }
+        
+        async function runTranslationAgent() {
+            if (!currentVideoId) return;
+            
+            const targetLangSelect = document.getElementById('targetLanguage');
+            if (!targetLangSelect || !targetLangSelect.value) {
+                const warningEl = document.getElementById('languageWarning');
+                if (warningEl) warningEl.classList.remove('hidden');
+                if (targetLangSelect) {
+                    targetLangSelect.classList.add('border-red-500', 'ring-2', 'ring-red-100', 'focus:ring-red-500', 'focus:border-red-500');
+                    targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+            
+            const targetLang = targetLangSelect.value;
+            
+            // Collapse setup config panel
+            const setupPanel = document.getElementById('setupConfigPanel');
+            if (setupPanel) setupPanel.classList.add('hidden');
+            const uploadBtnRun = document.getElementById('uploadBtn');
+            if (uploadBtnRun) uploadBtnRun.classList.add('hidden');
+            
+            // Show subtitle review panel again
+            const subtitlePanel = document.getElementById('subtitleReviewPanel');
+            if (subtitlePanel) subtitlePanel.classList.remove('hidden');
+            
+            // Reset retranslation mode
+            isRetranslationMode = false;
+            
+            // Reset state for new job
+            currentJobId = `translate-${currentVideoId}-${Date.now()}`;
+            isJobRunning = true;
+            hasStartedProcessing = false;
+            
+            log(`Starting translation to ${targetLang.toUpperCase()}...`);
+            
+            try {
+                const response = await fetch(`/videos/${currentVideoId}/translate?target_language=${encodeURIComponent(targetLang)}`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Translation failed');
+                }
+                
+                const data = await response.json();
+                log(`Translation queued for ${targetLang.toUpperCase()}`, 'info');
+                
+                // Restore primary action button to normal pipeline state
+                updateButtonVisibility('translating');
+                
+            } catch (err) {
+                log('Translation failed: ' + err.message, 'error');
+                isJobRunning = false;
+                hasStartedProcessing = false;
+            }
+        }
+        
         function formatTimecode(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, '0');
             const s = Math.floor(seconds % 60).toString().padStart(2, '0');
@@ -825,7 +1028,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
             if (!currentVideoId) return;
             
             try {
-                const response = await fetch(`/videos/${currentVideoId}`);
+                const langParam = currentTrackLanguage ? `?lang=${encodeURIComponent(currentTrackLanguage)}` : '';
+                const response = await fetch(`/videos/${currentVideoId}${langParam}`);
                 const data = await response.json();
                 
                 // Guard: Don't update status if we have an active job and this is stale data
@@ -844,6 +1048,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 
                 updateButtonVisibility(data.status);
                 updateContextBrief(data);
+                if (data.available_tracks) {
+                    populateTrackSelector(data.available_tracks, currentTrackLanguage || data.target_language);
+                }
                 if (data.status === 'completed' && data.segments) {
                     renderSubtitleTimeline(data.segments);
                 }
@@ -1006,6 +1213,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     hasStartedProcessing = false;
                     updateButtonVisibility('completed');
                     if (data.result?.segments) renderSubtitleTimeline(data.result.segments);
+                    if (data.result?.target_language) currentTrackLanguage = data.result.target_language;
                 } else {
                     log(`${jobType} complete`, 'success');
                 }
@@ -1122,6 +1330,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     renderTerms();
                     updateButtonVisibility('completed');
                     if (data.segments) renderSubtitleTimeline(data.segments);
+                    if (data.target_language) currentTrackLanguage = data.target_language;
                     break;
                     
                 case 'error':
@@ -1158,32 +1367,86 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     primaryBtn.textContent = currentFileType === 'text' ? '1. Parse Text' : '1. Transcribe Audio';
                     primaryBtn.className = 'w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
                     primaryBtn.onclick = processFile;
+                    document.getElementById('setupConfigPanel')?.classList.add('hidden');
+                    document.getElementById('uploadBtn')?.classList.add('hidden');
                     break;
                     
-                case 'transcribed':
+                case 'transcribed': {
                     primaryBtn.textContent = '2. Extract Terminology';
                     primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
                     primaryBtn.onclick = analyzeVideo;
                     ghostLink?.classList.remove('hidden');
+                    const scp = document.getElementById('setupConfigPanel');
+                    if (scp) {
+                        scp.classList.remove('hidden');
+                        const tl = document.getElementById('targetLanguage');
+                        if (tl) tl.disabled = false;
+                    }
+                    document.getElementById('uploadBtn')?.classList.add('hidden');
                     break;
+                }
                     
-                case 'terms_ready':
+                case 'terms_ready': {
                     helperText?.classList.remove('hidden');
                     primaryBtn.textContent = '3. Translate Subtitles';
                     primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
                     primaryBtn.onclick = translateVideo;
+                    const scp2 = document.getElementById('setupConfigPanel');
+                    if (scp2) {
+                        scp2.classList.remove('hidden');
+                        const tl2 = document.getElementById('targetLanguage');
+                        if (tl2) tl2.disabled = false;
+                    }
+                    document.getElementById('uploadBtn')?.classList.add('hidden');
+                    break;
+                }
+                    
+                case 'translating':
+                    primaryBtn?.classList.add('hidden');
+                    helperText?.classList.add('hidden');
+                    ghostLink?.classList.add('hidden');
+                    exportGrid?.classList.add('hidden');
+                    exportHeader?.classList.add('hidden');
+                    document.getElementById('setupConfigPanel')?.classList.add('hidden');
+                    document.getElementById('uploadBtn')?.classList.add('hidden');
+                    // Show subtitle review during retranslation (active track exists),
+                    // otherwise show terms panel for first-pass translation flow
+                    if (currentTrackLanguage) {
+                        document.getElementById('termsPanel')?.classList.add('hidden');
+                        document.getElementById('subtitleReviewPanel')?.classList.remove('hidden');
+                    } else {
+                        document.getElementById('termsPanel')?.classList.remove('hidden');
+                        document.getElementById('subtitleReviewPanel')?.classList.add('hidden');
+                    }
                     break;
                     
-                case 'completed':
-                    primaryBtn?.classList.add('hidden');
-                    exportGrid?.classList.remove('hidden');
-                    exportHeader?.classList.remove('hidden');
+                case 'completed': {
+                    if (isRetranslationMode) {
+                        primaryBtn.textContent = 'Run Translation Agent';
+                        primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                        primaryBtn.onclick = runTranslationAgent;
+                        const scp3 = document.getElementById('setupConfigPanel');
+                        if (scp3) {
+                            scp3.classList.remove('hidden');
+                            const tl3 = document.getElementById('targetLanguage');
+                            if (tl3) tl3.disabled = false;
+                        }
+                    } else {
+                        primaryBtn?.classList.add('hidden');
+                        exportGrid?.classList.remove('hidden');
+                        exportHeader?.classList.remove('hidden');
+                        document.getElementById('setupConfigPanel')?.classList.add('hidden');
+                    }
+                    document.getElementById('uploadBtn')?.classList.add('hidden');
                     document.getElementById('termsPanel').classList.add('hidden');
                     document.getElementById('subtitleReviewPanel').classList.remove('hidden');
                     break;
+                }
                     
                 default:
                     primaryBtn?.classList.add('hidden');
+                    document.getElementById('setupConfigPanel')?.classList.add('hidden');
+                    document.getElementById('uploadBtn')?.classList.add('hidden');
                     document.getElementById('termsPanel').classList.remove('hidden');
                     document.getElementById('subtitleReviewPanel').classList.add('hidden');
             }
@@ -1238,7 +1501,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
             fallbackPollCount = 0;
             fallbackPollInterval = setInterval(async () => {
                 try {
-                    const response = await fetch(`/videos/${videoId}`);
+                    const langParam = currentTrackLanguage ? `?lang=${encodeURIComponent(currentTrackLanguage)}` : '';
+                    const response = await fetch(`/videos/${videoId}${langParam}`);
                     const data = await response.json();
                     updateStatus(data);
                     updateContextBrief(data);
@@ -1253,6 +1517,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         fallbackPollInterval = null;
                         if (data.status === 'terms_ready' || data.status === 'completed') {
                             renderTerms();
+                        }
+                        if (data.available_tracks) {
+                            populateTrackSelector(data.available_tracks, currentTrackLanguage || data.target_language);
                         }
                         if (data.status === 'completed' && data.segments) {
                             renderSubtitleTimeline(data.segments);
@@ -1285,6 +1552,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
             if (uploadCompleteCardReset) uploadCompleteCardReset.classList.add('hidden');
             const setupConfigPanelReset = document.getElementById('setupConfigPanel');
             if (setupConfigPanelReset) setupConfigPanelReset.classList.remove('hidden');
+            const uploadBtnReset = document.getElementById('uploadBtn');
+            if (uploadBtnReset) uploadBtnReset.classList.remove('hidden');
             
             // Hide status and action containers
             const statusCardReset = document.getElementById('statusCard');
@@ -1392,6 +1661,10 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 // Swap upload form for compact filename card
                 const uploadFormEl = document.getElementById('uploadForm');
                 if (uploadFormEl) uploadFormEl.classList.add('hidden');
+                const uploadBtnEl = document.getElementById('uploadBtn');
+                if (uploadBtnEl) uploadBtnEl.classList.add('hidden');
+                const setupPanelEl = document.getElementById('setupConfigPanel');
+                if (setupPanelEl) setupPanelEl.classList.add('hidden');
                 const uploadCompleteCardEl = document.getElementById('uploadCompleteCard');
                 if (uploadCompleteCardEl) uploadCompleteCardEl.classList.remove('hidden');
                 const uploadedFilenameEl = document.getElementById('uploadedFilename');
@@ -1426,6 +1699,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
             // Collapse setup config panel once processing starts
             const setupPanel = document.getElementById('setupConfigPanel');
             if (setupPanel) setupPanel.classList.add('hidden');
+            const uploadBtnProc = document.getElementById('uploadBtn');
+            if (uploadBtnProc) uploadBtnProc.classList.add('hidden');
             
             // Reset state for new job
             currentJobId = `transcribe-${currentVideoId}-${Date.now()}`;
@@ -1565,7 +1840,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
             };
             
             try {
-                const response = await fetch(`/export/${currentVideoId}/${format}`);
+                const langParam = currentTrackLanguage ? `?lang=${encodeURIComponent(currentTrackLanguage)}` : '';
+                const response = await fetch(`/export/${currentVideoId}/${format}${langParam}`);
                 
                 if (!response.ok) throw new Error('Export failed');
                 
@@ -1614,6 +1890,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', () => {
+            // --- Populate Language Dropdowns ---
+            populateLanguageDropdowns();
+            
             // --- Engine Selection Cards ---
             const engineCards = document.querySelectorAll('.engine-card');
             const engineInput = document.getElementById('transcriptionEngine');
@@ -1679,7 +1958,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     if (targetLangSelect.value) {
                         const warningEl = document.getElementById('languageWarning');
                         if (warningEl) warningEl.classList.add('hidden');
-                        targetLangSelect.classList.remove('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                        targetLangSelect.classList.remove('border-red-500', 'ring-2', 'ring-red-100', 'focus:ring-red-500', 'focus:border-red-500');
                     }
                 });
             }
@@ -1687,6 +1966,62 @@ HTML_INTERFACE = """<!DOCTYPE html>
             // Buttons
             document.getElementById('uploadBtn').addEventListener('click', uploadFile);
             document.getElementById('startNewProjectBtn').addEventListener('click', resetApp);
+            
+            // Language Track Selector
+            const trackSelector = document.getElementById('trackSelector');
+            if (trackSelector) {
+                trackSelector.addEventListener('change', (e) => {
+                    const lang = e.target.value;
+                    if (lang) switchLanguageTrack(lang);
+                });
+            }
+            
+            // Add New Track button
+            const addNewTrackBtn = document.getElementById('addNewTrackBtn');
+            if (addNewTrackBtn) {
+                addNewTrackBtn.addEventListener('click', () => {
+                    isRetranslationMode = true;
+                    
+                    // Show setup config panel so user can pick a new target language
+                    const setupPanel = document.getElementById('setupConfigPanel');
+                    if (setupPanel) setupPanel.classList.remove('hidden');
+                    
+                    // Hide subtitle review panel
+                    const subtitlePanel = document.getElementById('subtitleReviewPanel');
+                    if (subtitlePanel) subtitlePanel.classList.add('hidden');
+                    
+                    // Hide terms panel
+                    const termsPanel = document.getElementById('termsPanel');
+                    if (termsPanel) termsPanel.classList.add('hidden');
+                    
+                    // Ensure target language dropdown is clean, enabled, and visible
+                    const targetLangSelect = document.getElementById('targetLanguage');
+                    if (targetLangSelect) {
+                        targetLangSelect.disabled = false;
+                        targetLangSelect.classList.remove('border-red-500', 'ring-2', 'ring-red-100', 'focus:ring-red-500', 'focus:border-red-500');
+                        targetLangSelect.value = '';
+                    }
+                    const warningEl = document.getElementById('languageWarning');
+                    if (warningEl) warningEl.classList.add('hidden');
+                    
+                    // Ensure uploadBtn stays hidden when in retranslation mode
+                    const uploadBtnTrack = document.getElementById('uploadBtn');
+                    if (uploadBtnTrack) uploadBtnTrack.classList.add('hidden');
+                    
+                    // Update primary action button to "Run Translation Agent"
+                    const primaryBtn = document.getElementById('primaryActionBtn');
+                    if (primaryBtn) {
+                        primaryBtn.textContent = 'Run Translation Agent';
+                        primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                        primaryBtn.onclick = runTranslationAgent;
+                    }
+                    
+                    const primaryContainer = document.getElementById('primaryActionContainer');
+                    if (primaryContainer) primaryContainer.classList.remove('hidden');
+                    
+                    log('Select a new target language, then click "Run Translation Agent"', 'info');
+                });
+            }
             
             // Global Find & Replace handler
             document.getElementById('replaceAllBtn').addEventListener('click', async () => {
@@ -1746,6 +2081,10 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 // Hide upload form, show compact card for loaded project
                 const uploadFormEl2 = document.getElementById('uploadForm');
                 if (uploadFormEl2) uploadFormEl2.classList.add('hidden');
+                const uploadBtnEl2 = document.getElementById('uploadBtn');
+                if (uploadBtnEl2) uploadBtnEl2.classList.add('hidden');
+                const setupPanelEl2 = document.getElementById('setupConfigPanel');
+                if (setupPanelEl2) setupPanelEl2.classList.add('hidden');
                 const uploadCompleteCardEl2 = document.getElementById('uploadCompleteCard');
                 if (uploadCompleteCardEl2) uploadCompleteCardEl2.classList.remove('hidden');
                 const uploadedFilenameEl2 = document.getElementById('uploadedFilename');
@@ -1764,6 +2103,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         if (data.total_segments) {
                             const segCountLoad = document.getElementById('segmentCount');
                             if (segCountLoad) segCountLoad.textContent = data.total_segments;
+                        }
+                        if (data.available_tracks) {
+                            populateTrackSelector(data.available_tracks, currentTrackLanguage || data.target_language);
                         }
                         if (data.status === 'completed' && data.segments) {
                             renderSubtitleTimeline(data.segments);

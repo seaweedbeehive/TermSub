@@ -28,6 +28,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.video import Video, VideoStatus, Segment, Term, TermOccurrence, TranslationVariant
 from app.services.progress_service import get_progress_tracker
+from app.services.context_analysis_service import clean_and_load_json
 
 
 # Configuration constants
@@ -422,6 +423,7 @@ INSTRUCTIONS:
 5. MANDATORY: You must use the provided glossary for translation. If a term is in the glossary, YOU MUST use that exact translation. This is a strict requirement.
 6. Use previous context to maintain narrative flow and character voice
 7. Return translations for ALL segments provided
+8. CRITICAL: You must translate EVERY single segment in the array into natural, fluent {target_lang_name}. Do not leave short phrases, fillers, or conversational exclamation blocks in {source_language}. Every text field value in your output JSON array must be entirely translated.
 
 Return STRICTLY as JSON with this exact format:
 {{
@@ -496,15 +498,9 @@ async def translate_single_batch(
         # Parse response
         response_text = response.text
         
-        # Extract JSON from markdown code blocks if present
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response_text, re.DOTALL)
-        if json_match:
-            response_text = json_match.group(1)
-        response_text = response_text.strip()
-        
         # Parse and validate JSON using Pydantic
         try:
-            parsed_json = json.loads(response_text)
+            parsed_json = clean_and_load_json(response_text)
             validated = TranslationResponseSchema(**parsed_json)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON response: {e}")
@@ -749,11 +745,22 @@ def merge_translations(
             if is_overlap:
                 priority = batch_index + 0.5  # Slightly higher priority
             
+            # Smart overlap guard: never overwrite Persian/Arabic with English fallback
+            existing_text = translation_map[seq_num]["translated_text"] if seq_num in translation_map else ""
+            new_text = translation.get("translated_text", "")
+            has_existing_persian = bool(
+                re.search(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]', existing_text)
+            )
+            has_new_english = bool(re.search(r'[a-zA-Z]', new_text))
+            if has_existing_persian and has_new_english:
+                # Keep the existing translated text; do not overwrite with English
+                continue
+            
             # Update if this is the first translation or higher priority
             if seq_num not in translation_map or translation_map[seq_num]["priority"] < priority:
                 translation_map[seq_num] = {
                     "sequence_number": seq_num,
-                    "translated_text": translation.get("translated_text", ""),
+                    "translated_text": new_text,
                     "priority": priority,
                 }
         
@@ -878,30 +885,36 @@ def bulk_save_segments_with_short_sessions(
     translations: List[Dict[str, Any]],
     batch_size: int = 50,
     progress_tracker: Any = None,
+    target_language: str = "original",
+    source_segments: Optional[List[Dict[str, Any]]] = None,
 ) -> int:
     """Bulk save segment translations using short-lived database sessions.
     
-    This function processes all translations in memory and performs updates
+    This function processes all translations in memory and performs upserts
     in batches using short-lived sessions to avoid holding database locks.
+    For multi-language tracks, it creates new segment rows with the target
+    language code rather than overwriting existing ones.
     
     Args:
         video_id: Video ID
         translations: List of translation dicts with sequence_number and translated_text
         batch_size: Number of segments per batch (default 50)
         progress_tracker: Optional progress tracker for logging
+        target_language: Language code to tag saved segments with (e.g., 'de', 'fa')
+        source_segments: List of source segment dicts for creating new language rows
     
     Returns:
         Number of segments successfully saved
     """
     import time
-    from app.db.session import bulk_update_segment_translations
+    from app.db.session import bulk_upsert_segment_translations
     
     if not translations:
         return 0
     
     start_time = time.time()
     
-    # Build translation data for bulk update
+    # Build translation data for bulk upsert
     translation_data = []
     for translation in translations:
         seq_num = translation.get("sequence_number")
@@ -915,6 +928,12 @@ def bulk_save_segments_with_short_sessions(
     
     if not translation_data:
         return 0
+    
+    # Build source segment lookup for new row creation
+    source_lookup = {}
+    if source_segments:
+        for seg in source_segments:
+            source_lookup[seg.get("sequence_number")] = seg
     
     # Update video batch tracking with short session
     total_batches = (len(translation_data) + batch_size - 1) // batch_size
@@ -932,8 +951,13 @@ def bulk_save_segments_with_short_sessions(
         batch_start = time.time()
         batch = translation_data[i:i + batch_size]
         
-        # Use the bulk update function (creates its own session)
-        batch_saved = bulk_update_segment_translations(video_id, batch)
+        # Use the bulk upsert function (creates its own session)
+        batch_saved = bulk_upsert_segment_translations(
+            video_id=video_id,
+            translations=batch,
+            target_language=target_language,
+            source_lookup=source_lookup,
+        )
         saved_count += batch_saved
         
         # Update video progress with short session
@@ -983,6 +1007,7 @@ async def translate_video_sliding_window_async(
     window_size: int = DEFAULT_WINDOW_SIZE,
     overlap: int = DEFAULT_OVERLAP,
     glossary: Optional[Dict[str, str]] = None,
+    target_language: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Async sliding window translation with concurrent batch processing.
     
@@ -993,7 +1018,7 @@ async def translate_video_sliding_window_async(
     1. Creates overlapping sliding window batches
     2. Translates batches concurrently (max 5 at a time via semaphore)
     3. Merges overlapping translations
-    4. Saves results to database
+    4. Saves results to database tagged with the target language code
     
     Args:
         video_id: ID of the video to translate
@@ -1001,6 +1026,8 @@ async def translate_video_sliding_window_async(
         model_name: Gemini model name (default: 'gemini-2.5-flash')
         window_size: Segments per batch (default: 20)
         overlap: Overlapping segments between batches (default: 10)
+        glossary: Optional glossary dictionary for constrained translation
+        target_language: Optional target language override (e.g., 'de', 'fa')
     
     Returns:
         Dict with video_id, status, translated_count, total_segments, success flag
@@ -1012,27 +1039,36 @@ async def translate_video_sliding_window_async(
     # Initialize progress tracker (uses short-lived sessions internally)
     progress_tracker = get_progress_tracker(video_id, None)
     
-    # Step 1: Get video and segments with short session
+    # Step 1: Get video and source segments with short session
     with SessionLocal() as db:
         video = db.query(Video).filter(Video.id == video_id).first()
         if not video:
             raise ValueError(f"Video not found: {video_id}")
         
         # Extract needed data before closing session
-        source_language = video.source_language or "en"
-        target_language = video.target_language
-        if not target_language:
+        source_language = video.source_language or "original"
+        effective_target = target_language or video.target_language
+        if not effective_target:
             raise ValueError("Target language is not set for this video.")
         
+        # Fetch SOURCE segments only (original language track)
         all_segments = (
             db.query(Segment)
-            .filter(Segment.video_id == video_id)
+            .filter(Segment.video_id == video_id, Segment.language_code == source_language)
             .order_by(Segment.sequence_number)
             .all()
         )
         
         if not all_segments:
-            raise ValueError("No segments to translate")
+            # Fallback: segments may have been stored under "original" (legacy/auto-detect)
+            all_segments = (
+                db.query(Segment)
+                .filter(Segment.video_id == video_id, Segment.language_code == "original")
+                .order_by(Segment.sequence_number)
+                .all()
+            )
+            if not all_segments:
+                raise ValueError("No segments to translate")
         
         total_segments = len(all_segments)
         
@@ -1049,6 +1085,8 @@ async def translate_video_sliding_window_async(
                 "id": seg.id,
                 "sequence_number": seg.sequence_number,
                 "original_text": seg.original_text,
+                "start_time": seg.start_time,
+                "end_time": seg.end_time,
             }
             for seg in all_segments
         ]
@@ -1111,13 +1149,15 @@ async def translate_video_sliding_window_async(
         )
         
         # Step 5: Apply translations using short-lived sessions
-        progress_tracker.info("TRANSLATING", "Saving translations to database...")
+        progress_tracker.info("TRANSLATING", f"Saving translations to database for language={effective_target}...")
         
         translation_count = bulk_save_segments_with_short_sessions(
             video_id=video_id,
             translations=final_translations,
             batch_size=50,
             progress_tracker=progress_tracker,
+            target_language=effective_target,
+            source_segments=all_segment_dicts,
         )
         
         # Save extracted terms (simplified - just store as-is for now)
