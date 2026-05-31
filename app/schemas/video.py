@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SegmentOut(BaseModel):
@@ -15,7 +15,7 @@ class SegmentOut(BaseModel):
 
 class VideoBase(BaseModel):
     filename: str
-    target_language: str = "en"
+    target_language: str = Field(..., min_length=1)
 
 
 class VideoCreate(VideoBase):
@@ -49,6 +49,7 @@ class VideoOut(VideoBase):
     completed_at: datetime | None = None
     error_message: str | None = None
     context_analysis: str | None = None  # JSON from Pass 1
+    skip_glossary: bool = False
     segments: list[SegmentOut] | None = None
 
 

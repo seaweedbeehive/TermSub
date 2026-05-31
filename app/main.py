@@ -228,7 +228,17 @@ HTML_INTERFACE = """<!DOCTYPE html>
             originalWarn.apply(console, args);
         };
     </script>
+    <script>
+      // Prevent FOUC: apply theme before Tailwind loads
+      (function() {
+        const theme = localStorage.getItem('termsub_theme') || 'light';
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+      })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: 'Inter', system-ui, sans-serif; }
@@ -266,18 +276,24 @@ HTML_INTERFACE = """<!DOCTYPE html>
         }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="bg-slate-50 dark:bg-[#121214] min-h-screen">
     <div class="max-w-6xl mx-auto p-6">
         <!-- App Header -->
-        <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <i class="fa-solid fa-closed-captioning text-white"></i>
+        <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fa-solid fa-closed-captioning text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-slate-900 dark:text-[#E2E2E8]">TermSub</h1>
+                        <p class="text-sm text-slate-500 dark:text-[#8A8F98]">Video Translation & Terminology Management</p>
+                    </div>
                 </div>
-                <div>
-                    <h1 class="text-xl font-bold text-slate-900">TermSub</h1>
-                    <p class="text-sm text-slate-500">Video Translation & Terminology Management</p>
-                </div>
+                <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="Toggle theme">
+                    <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
+                    <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
+                </button>
             </div>
         </div>
 
@@ -285,22 +301,22 @@ HTML_INTERFACE = """<!DOCTYPE html>
             <!-- Left Panel - Upload & Controls -->
             <div class="lg:col-span-1 flex flex-col gap-4 max-h-[calc(100vh-3rem)]">
                 <!-- Upload Card -->
-                <div id="uploadCard" class="bg-white rounded-xl shadow-sm p-6 shrink-0">
+                <div id="uploadCard" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 shrink-0">
                     <div id="uploadForm" class="space-y-4">
                         <div>
                             <input type="file" id="fileInput" accept="video/*,audio/*,.txt" class="hidden">
                             <label for="fileInput" id="dropZone"
-                                class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors">
-                                <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-400 mb-2"></i>
-                                <p class="text-sm text-slate-600 font-medium" id="fileLabel">Click to select file</p>
-                                <p class="text-xs text-slate-400 mt-1">MP4, MOV, AVI, MP3, TXT</p>
+                                class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 dark:border-[#2A2A30] rounded-lg bg-slate-50 dark:bg-[#0F0F12] hover:bg-slate-100 dark:hover:bg-[#0F0F12] cursor-pointer transition-colors dark:hover:border-[#00F0FF]">
+                                <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-400 dark:text-[#6B7280] mb-2"></i>
+                                <p class="text-sm text-slate-600 dark:text-[#8A8F98] font-medium" id="fileLabel">Click to select file</p>
+                                <p class="text-xs text-slate-400 dark:text-[#6B7280] mt-1">MP4, MOV, AVI, MP3, TXT</p>
                             </label>
                         </div>
 
                         <div id="setupConfigPanel" class="space-y-4">
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Source Language</label>
-                            <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Source Language</label>
+                            <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
                                 <option value="auto">Auto-detect</option>
                                 <option value="en">English</option>
                                 <option value="fa">Persian (Farsi)</option>
@@ -316,8 +332,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Target Language</label>
-                            <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Target Language</label>
+                            <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
                                 <option value="" disabled selected>Select target language...</option>
                                 <option value="en">English</option>
                                 <option value="es">Spanish</option>
@@ -329,111 +345,44 @@ HTML_INTERFACE = """<!DOCTYPE html>
                                 <option value="zh">Chinese</option>
                                 <option value="fa">Persian (Farsi)</option>
                             </select>
-                            <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
-                        </div>
-
-                        <!-- Engine Selection -->
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-2">Transcription Engine</label>
-                            <div class="grid grid-cols-1 gap-3" id="engineSelector">
-                                <!-- Local Engine Card -->
-                                <div class="engine-card cursor-pointer border-2 border-slate-200 rounded-lg p-3 hover:border-slate-300 transition-colors" data-engine="local">
-                                    <div class="flex items-start gap-3">
-                                        <div class="mt-0.5">
-                                            <div class="w-4 h-4 rounded-full border-2 border-slate-300 flex items-center justify-center engine-radio">
-                                                <div class="w-2 h-2 rounded-full bg-blue-600 hidden"></div>
-                                            </div>
-                                        </div>
-                                        <div class="flex-1">
-                                            <div class="flex items-center justify-between">
-                                                <h3 class="text-sm font-semibold text-slate-900">Local Engine</h3>
-                                                <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">Fast-Whisper</span>
-                                            </div>
-                                            <p class="text-xs text-slate-500 mt-1">100% Free & Offline. High local system hardware strain.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- Cloud Engine Card -->
-                                <div class="engine-card cursor-pointer border-2 border-blue-500 rounded-lg p-3 bg-blue-50 transition-colors" data-engine="gemini">
-                                    <div class="flex items-start gap-3">
-                                        <div class="mt-0.5">
-                                            <div class="w-4 h-4 rounded-full border-2 border-blue-500 flex items-center justify-center engine-radio">
-                                                <div class="w-2 h-2 rounded-full bg-blue-600"></div>
-                                            </div>
-                                        </div>
-                                        <div class="flex-1">
-                                            <div class="flex items-center justify-between">
-                                                <h3 class="text-sm font-semibold text-slate-900">Cloud Engine</h3>
-                                                <span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Gemini AI + WhisperX Sync</span>
-                                            </div>
-                                            <p class="text-xs text-slate-500 mt-1">Maximum linguistic accuracy & slang processing. Low hardware strain. Requires API key.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Hidden input retains the selected value for downstream JS -->
-                            <input type="hidden" id="transcriptionEngine" value="gemini">
-                        </div>
-
-                        <!-- Engine Comparison -->
-                        <div class="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                            <p class="text-[10px] font-semibold text-slate-700 uppercase tracking-wider mb-2">Quick Comparison</p>
-                            <div class="grid grid-cols-2 gap-2 text-xs">
-                                <div>
-                                    <p class="font-medium text-slate-900">Local (Fast-Whisper)</p>
-                                    <ul class="text-slate-500 text-[10px] mt-1 space-y-0.5 list-disc list-inside">
-                                        <li>Free forever</li>
-                                        <li>Privacy guaranteed</li>
-                                        <li>Heavy CPU/GPU load</li>
-                                        <li>Basic slang support</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <p class="font-medium text-slate-900">Cloud (Gemini + WhisperX)</p>
-                                    <ul class="text-slate-500 text-[10px] mt-1 space-y-0.5 list-disc list-inside">
-                                        <li>Requires API key</li>
-                                        <li>Minimal local load</li>
-                                        <li>Best for slang/idioms</li>
-                                        <li>Word-level timestamp sync</li>
-                                    </ul>
-                                </div>
-                            </div>
+                            <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
                         </div>
 
                         <!-- Gemini API Key Vault -->
+                        <!-- Gemini API Key Vault -->
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1" for="geminiApiKey">Gemini API Key</label>
-                            <input type="password" id="geminiApiKey" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Paste your Gemini API key here">
-                            <p class="text-[10px] text-slate-500 mt-1">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1" for="geminiApiKey">Gemini API Key</label>
+                            <input type="password" id="geminiApiKey" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]" placeholder="Paste your Gemini API key here">
+                            <p class="text-[10px] text-slate-500 dark:text-[#8A8F98] mt-1">
                                 <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 underline">Get a free API key at Google AI Studio</a>
                             </p>
                         </div>
 
                         </div>
 
-                        <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                        <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
                             <i class="fa-solid fa-upload mr-2"></i>Start
                         </button>
                     </div>
 
                     <!-- Post-upload compact state -->
                     <div id="uploadCompleteCard" class="hidden space-y-3">
-                        <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/10">
                             <i class="fa-solid fa-file-check text-emerald-500"></i>
-                            <span id="uploadedFilename" class="text-sm font-medium text-slate-700 truncate">filename.mp4</span>
+                            <span id="uploadedFilename" class="text-sm font-medium text-slate-700 dark:text-[#E2E2E8] truncate">filename.mp4</span>
                         </div>
-                        <button id="startNewProjectBtn" class="w-full py-2 px-3 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
+                        <button id="startNewProjectBtn" class="w-full py-2 px-3 text-xs font-medium text-slate-600 dark:text-[#8A8F98] bg-white dark:bg-[#2A2A30] border border-slate-300 dark:border-[#2A2A30] rounded-lg hover:bg-slate-50 dark:hover:bg-[#1A1A1E] transition-colors">
                             <i class="fa-solid fa-rotate-right mr-1"></i>Start New Project
                         </button>
                     </div>
                 </div>
 
                 <!-- Project Metadata & Status Card (Unified) -->
-                <div id="statusCard" class="bg-white rounded-xl shadow-sm overflow-hidden hidden shrink-0">
+                <div id="statusCard" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm overflow-hidden hidden shrink-0">
                     <!-- Project Header -->
-                    <div class="bg-slate-50 px-6 py-4 border-b border-slate-200">
-                        <h2 id="projectTitle" class="text-sm font-semibold text-slate-900 truncate">Untitled Project</h2>
-                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-500">
+                    <div class="bg-slate-50 dark:bg-[#121214] px-6 py-4 border-b border-slate-200 dark:border-white/10">
+                        <h2 id="projectTitle" class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] truncate">Untitled Project</h2>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-[#8A8F98]">
                             <span id="projectType"><i class="fa-solid fa-video mr-1"></i>Video</span>
                             <span>•</span>
                             <span id="projectLangs">EN → FA</span>
@@ -446,9 +395,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     <div class="p-6">
                         <!-- Status Badge with Color -->
                         <div class="flex items-center justify-between mb-4">
-                            <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Status</span>
-                            <span id="statusBadge" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-full">
-                                <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            <span class="text-xs font-medium text-slate-500 dark:text-[#8A8F98] uppercase tracking-wider">Status</span>
+                            <span id="statusBadge" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-cyan-500/20 text-slate-700 dark:text-cyan-300 text-xs font-semibold rounded-full">
+                                <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-cyan-400"></span>
                                 Uploaded
                             </span>
                         </div>
@@ -456,27 +405,27 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         <!-- Current Step & Segment Counters (no progress bar) -->
                         <div class="mb-4">
                             <div class="flex items-end justify-between mb-2">
-                                <span id="currentStep" class="text-sm text-slate-600">Ready to process</span>
+                                <span id="currentStep" class="text-sm text-slate-600 dark:text-[#8A8F98]">Ready to process</span>
                             </div>
-                            <div class="flex justify-between text-xs text-slate-500">
+                            <div class="flex justify-between text-xs text-slate-500 dark:text-[#8A8F98]">
                                 <span id="segmentCount">0 segments</span>
                                 <span id="processedCount">0 processed</span>
                             </div>
                         </div>
                         
                         <!-- Step Detail -->
-                        <div id="stepDetail" class="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 hidden"></div>
+                        <div id="stepDetail" class="text-xs text-slate-500 dark:text-[#8A8F98] bg-slate-50 dark:bg-[#121214] rounded-lg px-3 py-2 hidden"></div>
                         
                         <!-- Director's Context Brief -->
-                        <div id="contextBriefContainer" class="hidden mt-3 pt-3 border-t border-slate-100">
-                            <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Director's Context Brief</p>
-                            <p id="contextBriefText" class="text-xs text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-100 leading-relaxed"></p>
+                        <div id="contextBriefContainer" class="hidden mt-3 pt-3 border-t border-slate-100 dark:border-white/10">
+                            <p class="text-[10px] font-semibold text-slate-400 dark:text-[#6B7280] uppercase tracking-wider mb-1">Director's Context Brief</p>
+                            <p id="contextBriefText" class="text-xs text-slate-600 dark:text-[#8A8F98] italic bg-slate-50 dark:bg-[#121214] p-2 rounded border border-slate-100 dark:border-white/10 leading-relaxed"></p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Primary Action Container -->
-                <div id="primaryActionContainer" class="bg-white rounded-xl shadow-sm p-4 hidden shrink-0">
+                <div id="primaryActionContainer" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-4 hidden shrink-0">
                     <p id="primaryHelperText" class="text-xs text-amber-700 mb-2 hidden">💡 Review and edit your Extracted Terms before translating.</p>
                     
                     <button id="primaryActionBtn" class="w-full py-3 px-4 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
@@ -484,21 +433,21 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     </button>
                     
                     <div id="primaryGhostLink" class="mt-2 text-center hidden">
-                        <button id="downloadRawTranscriptionLink" class="text-xs text-slate-500 hover:text-slate-700 underline">or download raw transcription</button>
+                        <button id="downloadRawTranscriptionLink" class="text-xs text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] underline">or download raw transcription</button>
                     </div>
                     
-                    <p id="exportHeader" class="hidden text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Download Subtitles & Translations</p>
+                    <p id="exportHeader" class="hidden text-[10px] font-semibold text-slate-400 dark:text-[#6B7280] uppercase tracking-wider mb-2">Download Subtitles & Translations</p>
                     <div id="primaryExportGrid" class="hidden grid grid-cols-2 gap-2">
-                        <button id="exportSrtBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded-lg transition-colors">
+                        <button id="exportSrtBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
                             <i class="fa-solid fa-closed-captioning mr-1"></i>SRT
                         </button>
-                        <button id="exportVttBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded-lg transition-colors">
+                        <button id="exportVttBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
                             <i class="fa-brands fa-html5 mr-1"></i>VTT
                         </button>
-                        <button id="exportTxtBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 text-white text-xs font-medium rounded-lg transition-colors">
+                        <button id="exportTxtBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
                             <i class="fa-solid fa-file-text mr-1"></i>TXT
                         </button>
-                        <button id="exportJsonBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 text-white text-xs font-medium rounded-lg transition-colors">
+                        <button id="exportJsonBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
                             <i class="fa-solid fa-code mr-1"></i>JSON
                         </button>
                     </div>
@@ -508,11 +457,11 @@ HTML_INTERFACE = """<!DOCTYPE html>
             <!-- Right Panel - Terms & Activity -->
             <div class="lg:col-span-2 space-y-6">
                 <!-- Terms Table -->
-                <div id="termsPanel" class="bg-white rounded-xl shadow-sm p-6">
-                    <h2 class="text-sm font-semibold text-slate-900 mb-4">Extracted Terms</h2>
+                <div id="termsPanel" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
+                    <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-4">Extracted Terms</h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
-                            <thead class="sticky top-0 bg-white z-10 shadow-sm text-slate-600">
+                            <thead class="sticky top-0 bg-white dark:bg-[#1A1A1E] z-10 shadow-sm text-slate-600 dark:text-[#8A8F98]">
                                 <tr>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Type</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Original</th>
@@ -521,9 +470,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Standard</th>
                                 </tr>
                             </thead>
-                            <tbody id="termsTable" class="divide-y divide-slate-100">
+                            <tbody id="termsTable" class="divide-y divide-slate-100 dark:divide-white/10">
                                 <tr>
-                                    <td colspan="5" class="px-3 py-8 text-center text-slate-400 text-sm">
+                                    <td colspan="5" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
                                         No terms extracted yet. Upload and process a video.
                                     </td>
                                 </tr>
@@ -533,26 +482,26 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 </div>
 
                 <!-- Subtitle Review Timeline -->
-                <div id="subtitleReviewPanel" class="hidden h-full flex flex-col bg-white rounded-xl shadow-sm p-6">
-                    <h2 class="text-sm font-semibold text-slate-900 mb-4">Translated Subtitle Timeline</h2>
+                <div id="subtitleReviewPanel" class="hidden h-full flex flex-col bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
+                    <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-4">Translated Subtitle Timeline</h2>
                     
                     <!-- Global Find & Replace Bar -->
                     <div class="flex items-center gap-2 mb-3">
-                        <input type="text" id="findInput" placeholder="Find text..." class="flex-1 text-xs border border-slate-200 bg-slate-50 rounded px-2 py-1 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
-                        <input type="text" id="replaceInput" placeholder="Replace with..." class="flex-1 text-xs border border-slate-200 bg-slate-50 rounded px-2 py-1 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
-                        <button id="replaceAllBtn" class="px-3 py-1 bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium rounded transition-colors">Replace All</button>
+                        <input type="text" id="findInput" placeholder="Find text..." class="flex-1 text-xs border border-slate-200 dark:border-[#2A2A30] bg-slate-50 dark:bg-[#0F0F12] rounded px-2 py-1 focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF] outline-none transition-all">
+                        <input type="text" id="replaceInput" placeholder="Replace with..." class="flex-1 text-xs border border-slate-200 dark:border-[#2A2A30] bg-slate-50 dark:bg-[#0F0F12] rounded px-2 py-1 focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF] outline-none transition-all">
+                        <button id="replaceAllBtn" class="px-3 py-1 bg-slate-700 hover:bg-slate-800 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded transition-colors">Replace All</button>
                     </div>
                     
                     <div id="timelineCardGrid" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
-                        <div class="text-slate-400 text-center py-8">No subtitles available yet.</div>
+                        <div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>
                     </div>
                 </div>
 
                 <!-- Activity Log -->
-                <div class="bg-slate-900 rounded-xl shadow-sm p-4">
-                    <h2 class="text-sm font-semibold text-slate-200 mb-3">Activity Log</h2>
+                <div class="bg-slate-900 dark:bg-[#0A0A0C] rounded-xl shadow-sm p-4">
+                    <h2 class="text-sm font-semibold text-slate-200 dark:text-[#E2E2E8] mb-3">Activity Log</h2>
                     <div id="activityLog" class="h-48 overflow-y-auto font-mono text-xs space-y-1">
-                        <div class="text-slate-500">Waiting for file upload...</div>
+                        <div class="text-slate-500 dark:text-[#8A8F98]">Waiting for file upload...</div>
                     </div>
                 </div>
             </div>
@@ -575,7 +524,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
         // Status config with colors
         const statusConfig = {
-            uploaded: { label: 'Uploaded', color: 'bg-slate-100 text-slate-700', dotColor: 'bg-slate-400' },
+            uploaded: { label: 'Uploaded', color: 'bg-slate-100 dark:bg-cyan-500/20 text-slate-700 dark:text-cyan-300', dotColor: 'bg-slate-400 dark:bg-cyan-400' },
             queued: { label: 'Queued', color: 'bg-gray-100 text-gray-700', dotColor: 'bg-gray-400' },
             extracting_audio: { label: 'Extracting Audio', color: 'bg-amber-100 text-amber-800', dotColor: 'bg-amber-500' },
             transcribing: { label: 'Transcribing', color: 'bg-orange-100 text-orange-800', dotColor: 'bg-orange-500' },
@@ -586,6 +535,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             terms_ready: { label: 'Terms Ready', color: 'bg-indigo-100 text-indigo-800', dotColor: 'bg-indigo-500' },
             translating: { label: 'Translating via Gemini', color: 'bg-purple-100 text-purple-800', dotColor: 'bg-purple-500' },
             completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-800', dotColor: 'bg-emerald-500' },
+            awaiting_choice: { label: 'Awaiting Choice', color: 'bg-blue-100 text-blue-800', dotColor: 'bg-blue-500' },
             error: { label: 'Error', color: 'bg-rose-100 text-rose-800', dotColor: 'bg-rose-500' }
         };
 
@@ -708,7 +658,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 const tbody = document.getElementById('termsTable');
                 
                 if (!terms || terms.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-8 text-center text-slate-400 text-sm">No terms extracted yet.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">No terms extracted yet.</td></tr>';
                     return;
                 }
 
@@ -716,23 +666,23 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     // Clean translation: remove bracketed type prefix (e.g., "[Key Concept] ")
                     const cleanTranslation = (term.translated_term || '').replace(/^\\[.*?\\]\\s*/, '');
                     return `
-                    <tr class="hover:bg-slate-50 ${term.source === 'manual' ? 'bg-amber-50/50' : ''}">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-[#1A1A1E] ${term.source === 'manual' ? 'bg-amber-50/50 dark:bg-amber-900/20' : ''}">
                         <td class="px-3 py-2">
                             <div class="flex flex-wrap gap-1">
                                 <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-medium ${term.source === 'manual' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}">${escapeHtml(term.category || 'Term')}</span>
                                 ${term.source === 'manual' ? '<span class="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-amber-200 text-amber-800">Manual</span>' : ''}
                             </div>
                         </td>
-                        <td class="px-3 py-2 font-medium text-slate-900">${escapeHtml(term.original_term)}</td>
-                        <td class="px-3 py-2 text-slate-600 rtl-text">${escapeHtml(cleanTranslation)}</td>
+                        <td class="px-3 py-2 font-medium text-slate-900 dark:text-[#E2E2E8]">${escapeHtml(term.original_term)}</td>
+                        <td class="px-3 py-2 text-slate-600 dark:text-[#8A8F98] rtl-text">${escapeHtml(cleanTranslation)}</td>
                         <td class="px-3 py-2 text-center">
-                            <span class="inline-flex items-center justify-center min-w-[1.5rem] px-1.5 py-0.5 bg-slate-100 rounded-full text-xs font-medium text-slate-700">${term.frequency || 1}</span>
+                            <span class="inline-flex items-center justify-center min-w-[1.5rem] px-1.5 py-0.5 bg-slate-100 dark:bg-[#2A2A30] rounded-full text-xs font-medium text-slate-700 dark:text-[#E2E2E8]">${term.frequency || 1}</span>
                         </td>
                         <td class="px-3 py-2">
                             <div class="flex items-center gap-2">
                                 <input type="text" value="${escapeHtml(term.standardized_term || '')}" 
                                     onchange="updateTerm('${term.id}', this.value)"
-                                    class="flex-1 border-transparent bg-slate-50/50 hover:bg-slate-100/70 focus:bg-white focus:border-slate-300 focus:ring-1 focus:ring-slate-300 transition-all rounded px-2 py-1 text-xs">
+                                    class="flex-1 border-transparent bg-slate-50/50 dark:bg-[#0F0F12]/50 hover:bg-slate-100/70 dark:hover:bg-[#0F0F12]/70 focus:bg-white dark:focus:bg-[#0F0F12] focus:border-slate-300 dark:focus:border-[#2A2A30] focus:ring-1 focus:ring-slate-300 dark:focus:ring-[#2A2A30] transition-all rounded px-2 py-1 text-xs">
                             </div>
                         </td>
                     </tr>
@@ -754,18 +704,31 @@ HTML_INTERFACE = """<!DOCTYPE html>
             if (!grid) return;
             
             if (!segments || segments.length === 0) {
-                grid.innerHTML = '<div class="text-slate-400 text-center py-8">No subtitles available yet.</div>';
+                grid.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
                 return;
             }
             
             grid.innerHTML = segments.map((seg, idx) => `
-                <div class="bg-slate-50 rounded-lg p-3 border border-slate-100 hover:border-slate-200 transition-colors">
-                    <div class="flex items-center gap-2 mb-1.5 text-slate-400">
-                        <span class="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">#${seg.sequence_number || idx + 1}</span>
-                        <span class="text-[11px] font-mono">⏱ [${formatTimecode(seg.start_time)} → ${formatTimecode(seg.end_time)}]</span>
+                <div class="bg-slate-50 dark:bg-[#1A1A1E] rounded-lg p-3 border border-slate-100 dark:border-white/10 hover:border-slate-200 dark:hover:border-white/20 transition-colors group">
+                    <div class="flex items-center justify-between mb-1.5 text-slate-400 dark:text-[#6B7280]">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold bg-slate-200 dark:bg-[#2A2A30] text-slate-600 dark:text-[#8A8F98] px-1.5 py-0.5 rounded">#${seg.sequence_number || idx + 1}</span>
+                            <span class="text-[11px] font-mono">⏱ [${formatTimecode(seg.start_time)} → ${formatTimecode(seg.end_time)}]</span>
+                        </div>
+                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button data-split-segment="${seg.id || ''}" title="Split card" class="px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors">
+                                <i class="fa-solid fa-scissors mr-0.5"></i>Split
+                            </button>
+                            <button data-add-below="${seg.sequence_number || idx + 1}" title="Add card below" class="px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors">
+                                <i class="fa-solid fa-plus mr-0.5"></i>Add
+                            </button>
+                            <button data-remove-segment="${seg.id || ''}" title="Remove card" class="px-1.5 py-0.5 text-[10px] bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded transition-colors">
+                                <i class="fa-solid fa-trash mr-0.5"></i>Remove
+                            </button>
+                        </div>
                     </div>
                     <div contenteditable="true" data-segment-id="${seg.id || ''}"
-                        class="text-slate-800 leading-relaxed outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 rounded p-1 transition-all ${seg.translated_text ? '' : 'text-slate-400 italic'}"
+                        class="text-slate-800 dark:text-[#E2E2E8] leading-relaxed outline-none focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 rounded p-1 transition-all ${seg.translated_text ? '' : 'text-slate-400 dark:text-[#6B7280] italic'}"
                     >${escapeHtml(seg.translated_text || seg.original_text || '(empty)')}</div>
                 </div>
             `).join('');
@@ -804,6 +767,81 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 });
                 // Store original text for rollback on empty blur
                 el.dataset.originalText = el.textContent;
+            });
+            
+            // Attach Split Card listeners
+            grid.querySelectorAll('[data-split-segment]').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const segmentId = btn.getAttribute('data-split-segment');
+                    if (!segmentId || !currentVideoId) return;
+                    
+                    try {
+                        const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}/split`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        if (!response.ok) throw new Error('Server returned ' + response.status);
+                        const data = await response.json();
+                        log('Segment split successfully.', 'success');
+                        if (data.segments) renderSubtitleTimeline(data.segments);
+                    } catch (err) {
+                        console.error('Split failed:', err);
+                        log('Split failed: ' + err.message, 'error');
+                    }
+                });
+            });
+            
+            // Attach Add Card Below listeners
+            grid.querySelectorAll('[data-add-below]').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const targetSeq = parseInt(btn.getAttribute('data-add-below'), 10) + 1;
+                    if (!currentVideoId || isNaN(targetSeq)) return;
+                    
+                    try {
+                        const response = await fetch(`/videos/${currentVideoId}/segments/add`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                target_sequence: targetSeq,
+                                start_time: 0.0,
+                                end_time: 2.0,
+                                text: '',
+                                language_code: 'original'
+                            })
+                        });
+                        if (!response.ok) throw new Error('Server returned ' + response.status);
+                        const data = await response.json();
+                        log('New segment added.', 'success');
+                        if (data.segments) renderSubtitleTimeline(data.segments);
+                    } catch (err) {
+                        console.error('Add segment failed:', err);
+                        log('Add segment failed: ' + err.message, 'error');
+                    }
+                });
+            });
+            
+            // Attach Remove Card listeners
+            grid.querySelectorAll('[data-remove-segment]').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const segmentId = btn.getAttribute('data-remove-segment');
+                    if (!segmentId || !currentVideoId) return;
+                    
+                    try {
+                        const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}`, {
+                            method: 'DELETE'
+                        });
+                        if (!response.ok) throw new Error('Server returned ' + response.status);
+                        const data = await response.json();
+                        log('Segment removed.', 'success');
+                        if (data.segments) renderSubtitleTimeline(data.segments);
+                    } catch (err) {
+                        console.error('Remove segment failed:', err);
+                        log('Remove segment failed: ' + err.message, 'error');
+                    }
+                });
             });
         }
         
@@ -1083,6 +1121,10 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     updateButtonVisibility('transcribed');
                     break;
                     
+                case 'awaiting_choice':
+                    updateButtonVisibility('awaiting_choice');
+                    break;
+                    
                 case 'analyzing':
                     log('Director Agent: Analyzing content...');
                     break;
@@ -1155,22 +1197,54 @@ HTML_INTERFACE = """<!DOCTYPE html>
             // Configure primary action based on pipeline state
             switch (status) {
                 case 'uploaded':
-                    primaryBtn.textContent = currentFileType === 'text' ? '1. Parse Text' : '1. Transcribe Audio';
-                    primaryBtn.className = 'w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.textContent = currentFileType === 'text' ? 'Parse Text' : 'Transcribe Audio';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
                     primaryBtn.onclick = processFile;
                     break;
                     
                 case 'transcribed':
-                    primaryBtn.textContent = '2. Extract Terminology';
-                    primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.textContent = 'Extract Terminology';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
                     primaryBtn.onclick = analyzeVideo;
                     ghostLink?.classList.remove('hidden');
                     break;
                     
+                case 'awaiting_choice':
+                    primaryBtn?.classList.add('hidden');
+                    ghostLink?.classList.add('hidden');
+                    helperText?.classList.add('hidden');
+                    exportGrid?.classList.add('hidden');
+                    exportHeader?.classList.add('hidden');
+                    // Show two-choice helper
+                    const choiceContainer = document.createElement('div');
+                    choiceContainer.id = 'postTranscribeChoices';
+                    choiceContainer.className = 'grid grid-cols-1 gap-2';
+                    choiceContainer.innerHTML = `
+                        <button id="btnReviewTerms" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                            <i class="fa-solid fa-list-check mr-2"></i>Review Terminology
+                        </button>
+                        <button id="btnSkipTranslate" class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                            <i class="fa-solid fa-forward mr-2"></i>Skip & Translate Directly
+                        </button>
+                    `;
+                    // Only inject once
+                    if (!container.querySelector('#postTranscribeChoices')) {
+                        container.appendChild(choiceContainer);
+                        document.getElementById('btnReviewTerms').addEventListener('click', () => {
+                            choiceContainer.remove();
+                            analyzeVideo();
+                        });
+                        document.getElementById('btnSkipTranslate').addEventListener('click', () => {
+                            choiceContainer.remove();
+                            skipAndTranslate();
+                        });
+                    }
+                    break;
+                    
                 case 'terms_ready':
                     helperText?.classList.remove('hidden');
-                    primaryBtn.textContent = '3. Translate Subtitles';
-                    primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.textContent = 'Translate Subtitles';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
                     primaryBtn.onclick = translateVideo;
                     break;
                     
@@ -1296,7 +1370,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const subtitleReviewReset = document.getElementById('subtitleReviewPanel');
             if (subtitleReviewReset) subtitleReviewReset.classList.add('hidden');
             const timelineGridReset = document.getElementById('timelineCardGrid');
-            if (timelineGridReset) timelineGridReset.innerHTML = '<div class="text-slate-400 text-center py-8">No subtitles available yet.</div>';
+            if (timelineGridReset) timelineGridReset.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
             
             // Reset step & segment counters
             const segCountReset = document.getElementById('segmentCount');
@@ -1311,7 +1385,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const termsTableReset = document.getElementById('termsTable');
             if (termsTableReset) termsTableReset.innerHTML = `
                 <tr>
-                    <td colspan="5" class="px-3 py-8 text-center text-slate-400 text-sm">
+                    <td colspan="5" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
                         No terms extracted yet. Upload and process a video.
                     </td>
                 </tr>
@@ -1333,6 +1407,18 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const sourceLangSelect = document.getElementById('sourceLanguage');
             
             if (!fileInput.files || !fileInput.files[0]) {
+                return;
+            }
+            
+            // Client-side validation: target language is required
+            if (!targetLangSelect || !targetLangSelect.value) {
+                const warningEl = document.getElementById('languageWarning');
+                if (warningEl) warningEl.classList.remove('hidden');
+                if (targetLangSelect) {
+                    targetLangSelect.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                    targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                log('Upload blocked: target language is required.', 'warning');
                 return;
             }
 
@@ -1435,23 +1521,16 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const isTextFile = currentFileType === 'text';
             const actionName = isTextFile ? 'parsing text' : 'transcription';
             
-            const engine = document.getElementById('transcriptionEngine').value;
-            const engineLabel = engine === 'gemini' ? 'Gemini Cloud' : 'Local Whisper';
-            log(isTextFile ? 'Starting text parsing...' : `Starting ${engineLabel} transcription...`);
+            log(isTextFile ? 'Starting text parsing...' : 'Starting Gemini Cloud transcription...');
             
             try {
-                const engine = document.getElementById('transcriptionEngine').value;
                 const requestHeaders = {};
-                
-                // Forward Gemini API key when using Cloud Engine
-                if (engine === 'gemini') {
-                    const apiKey = localStorage.getItem('termsub_gemini_api_key') || document.getElementById('geminiApiKey').value || '';
-                    if (apiKey.trim()) {
-                        requestHeaders['X-Gemini-API-Key'] = apiKey.trim();
-                    }
+                const apiKey = localStorage.getItem('termsub_gemini_api_key') || document.getElementById('geminiApiKey').value || '';
+                if (apiKey.trim()) {
+                    requestHeaders['X-Gemini-API-Key'] = apiKey.trim();
                 }
                 
-                const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=${engine}`, {
+                const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=gemini`, {
                     method: 'POST',
                     headers: requestHeaders
                 });
@@ -1553,6 +1632,35 @@ HTML_INTERFACE = """<!DOCTYPE html>
             }
         }
 
+        async function skipAndTranslate() {
+            if (!currentVideoId) return;
+            
+            // Reset state for new job
+            currentJobId = `translate-${currentVideoId}-${Date.now()}`;
+            isJobRunning = true;
+            hasStartedProcessing = false;
+            
+            log('Skipping terminology review and starting translation...');
+            
+            try {
+                const response = await fetch(`/videos/${currentVideoId}/translate-direct`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Translation failed');
+                }
+                
+                // Update UI silently — completion will be logged via WebSocket
+                updateStatus({ status: 'translating' });
+                updateButtonVisibility('translating');
+                
+            } catch (err) {
+                log('Translation failed: ' + err.message, 'error');
+            }
+        }
+
         // Generic export handler
         async function exportFormat(format) {
             if (!currentVideoId) return;
@@ -1614,37 +1722,14 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', () => {
-            // --- Engine Selection Cards ---
-            const engineCards = document.querySelectorAll('.engine-card');
-            const engineInput = document.getElementById('transcriptionEngine');
-
-            function updateEngineSelection(selectedEngine) {
-                engineCards.forEach(card => {
-                    const isSelected = card.dataset.engine === selectedEngine;
-                    const radioRing = card.querySelector('.engine-radio');
-                    const radioDot = radioRing.querySelector('div');
-                    if (isSelected) {
-                        card.classList.add('border-blue-500', 'bg-blue-50');
-                        card.classList.remove('border-slate-200', 'hover:border-slate-300');
-                        radioRing.classList.add('border-blue-500');
-                        radioRing.classList.remove('border-slate-300');
-                        radioDot.classList.remove('hidden');
-                    } else {
-                        card.classList.remove('border-blue-500', 'bg-blue-50');
-                        card.classList.add('border-slate-200', 'hover:border-slate-300');
-                        radioRing.classList.remove('border-blue-500');
-                        radioRing.classList.add('border-slate-300');
-                        radioDot.classList.add('hidden');
-                    }
+            // Theme toggle handler
+            const themeToggleBtn = document.getElementById('themeToggleBtn');
+            if (themeToggleBtn) {
+                themeToggleBtn.addEventListener('click', () => {
+                    const isDark = document.documentElement.classList.toggle('dark');
+                    localStorage.setItem('termsub_theme', isDark ? 'dark' : 'light');
                 });
-                engineInput.value = selectedEngine;
             }
-
-            engineCards.forEach(card => {
-                card.addEventListener('click', () => {
-                    updateEngineSelection(card.dataset.engine);
-                });
-            });
 
             // --- Gemini API Key Vault (localStorage) ---
             const apiKeyInput = document.getElementById('geminiApiKey');

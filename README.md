@@ -2,7 +2,7 @@
 
 > **AI-Powered Video Translation & Terminology Management**
 
-TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **two transcription providers**, **WhisperX timestamp alignment**, a **built-in web UI with subtitle review**, and **real-time progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
+TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **Gemini-only transcription with WhisperX timestamp alignment**, a **built-in web UI with light/dark theme toggle**, and **real-time progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
 
 Built with a focus on **Persian (Farsi)** and other RTL languages, but supports any language pair Gemini can handle.
 
@@ -10,22 +10,18 @@ Built with a focus on **Persian (Farsi)** and other RTL languages, but supports 
 
 ## Features
 
-### Multi-Provider Transcription
-Choose the transcription engine that fits your needs:
-
-| Provider | Speed | Privacy | Best For |
-|----------|-------|---------|----------|
-| **Gemini Flash** | 🚀 Fast | ☁️ Cloud | High-accuracy cloud processing |
-| **Local (faster-whisper)** | 🐢 CPU-bound | 🔒 Offline | Privacy-sensitive content, no API keys |
-
-**Hybrid Alignment (Gemini + WhisperX)** — When using Gemini transcription, WhisperX performs word-level alignment on the CPU to refine segment timestamps for maximum accuracy.
+### Gemini-Only Transcription with WhisperX Alignment
+Audio is extracted via FFmpeg and transcribed by **Google Gemini Flash**. Coarse timestamps are then refined with **WhisperX** word-level alignment (CPU fallback) for maximum accuracy.
 
 ### Multi-Agent Translation Pipeline
 Translation is performed by three specialized AI agents working in sequence:
 
 1. **Director Agent** — Analyzes content context, tone, and domain to generate a style guide
 2. **Glossary Agent** — Extracts key terms (names, places, technical terms) for consistent translation
-3. **Translator Agent** — Performs sliding-window translation using the glossary as constraints
+3. **Translator Agent** — Performs sliding-window translation using the glossary and full-transcript context as constraints
+
+### Skip Terminology Mode
+After transcription, choose to **Review Terminology** (run Director + Glossary) or **Skip & Translate Directly** to bypass analysis and go straight to translation.
 
 ### Subtitle Review & Editing
 After translation, review and refine subtitles directly in the browser:
@@ -33,7 +29,9 @@ After translation, review and refine subtitles directly in the browser:
 - **Visual Timeline** — Card-based grid showing every segment with timecodes and sequence numbers
 - **Inline Editing** — Click any subtitle card to edit; changes auto-save on blur
 - **Global Find & Replace** — Batch-replace text across all segments instantly
+- **Segment Manipulation** — Split, add, and remove cards directly in the timeline
 - **Context Brief** — Displays the auto-detected main topic from the content analysis
+- **Light / Dark Theme** — Toggle between slate-based light mode and cinematic dark mode
 
 ### Terminology Management
 - **Auto-extracted terms** — Detected by the Glossary Agent during analysis
@@ -44,12 +42,12 @@ After translation, review and refine subtitles directly in the browser:
 A complete single-page interface served at `http://localhost:8000/` with:
 - Drag-and-drop file upload (video, audio, or text)
 - Source/target language selection
-- Transcription engine picker
 - Real-time activity log with WebSocket live updates and color-coded badges
 - Term review table with inline editing
-- **Subtitle review timeline** with editable cards and global find & replace
+- **Subtitle review timeline** with editable cards, split/add/remove, and global find & replace
 - Toast notifications for save/replace confirmations
 - One-click export buttons
+- Light / dark theme toggle with persistent preference
 
 ### Export Formats
 - **SRT** — SubRip subtitles with RTL punctuation fixes
@@ -64,6 +62,7 @@ A complete single-page interface served at `http://localhost:8000/` with:
 - **Background job queue** — SQLite-based worker with heartbeat, timeout recovery, and retry logic
 - **Processing logs** — Detailed per-step logging for debugging
 - **CORS enabled** — Ready for frontend integration
+- **Auto-cleanup** — Original video and temp `.wav` files are deleted after job completion or error
 
 ---
 
@@ -71,16 +70,16 @@ A complete single-page interface served at `http://localhost:8000/` with:
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────────┐
-│   Upload    │────▶│  FFmpeg Audio   │────▶│  Transcription      │
-│  (Video)    │     │   Extraction    │     │  (Gemini / Local)   │
+│   Upload    │────▶│  FFmpeg Audio   │────▶│  Gemini Flash       │
+│  (Video)    │     │   Extraction    │     │  Transcription      │
 └─────────────┘     └─────────────────┘     └─────────────────────┘
                                                      │
                               ┌──────────────────────┘
                               │
                               ▼
                      ┌─────────────────┐
-                     │ WhisperX Align  │  (Gemini path only)
-                     │  (CPU fallback) │
+                     │ WhisperX Align  │  (CPU fallback)
+                     │  (refine timestamps)
                      └─────────────────┘
                               │
 ┌─────────────────────────────┘
@@ -115,7 +114,7 @@ A complete single-page interface served at `http://localhost:8000/` with:
 │   │   ├── videos.py         # Upload, transcribe, analyze, translate, segments
 │   │   ├── terms.py          # Term CRUD
 │   │   ├── export.py         # SRT/VTT/TXT/JSON export
-│   │   └── progress.py       # Progress tracking + logs
+│   │   └── progress.py       # Progress tracking + logs + WebSocket sender
 │   ├── core/
 │   │   ├── config.py         # Pydantic settings (.env)
 │   │   └── sqlite_queue.py   # Background job worker
@@ -124,21 +123,22 @@ A complete single-page interface served at `http://localhost:8000/` with:
 │   │   ├── session.py        # Engine + session factory
 │   │   └── session_utils.py  # Session helpers
 │   ├── models/
-│   │   └── video.py          # Video, Segment, Term, JobQueue, ProcessingLog
+│   │   ├── video.py          # Video, Segment, Term, JobQueue, ProcessingLog
+│   │   └── job_queue.py      # JobQueue, JobStatus, JobType
 │   ├── schemas/              # Pydantic request/response models
 │   ├── services/
-│   │   ├── whisper_service.py      # Transcription (Gemini / Local)
+│   │   ├── whisper_service.py      # FFmpeg + Gemini transcription
 │   │   ├── transcription.py        # WhisperX alignment for hybrid pipeline
 │   │   ├── gemini_service.py       # Gemini translation + validation
-│   │   ├── translation_pipeline.py # Multi-agent pipeline
+│   │   ├── translation_pipeline.py # Multi-agent pipeline orchestration
 │   │   ├── context_analysis_service.py # Director + Glossary agents
 │   │   ├── progress_service.py     # Progress tracking
 │   │   ├── upload_service.py       # File upload handling
 │   │   └── text_parser.py          # Text file ingestion
 │   └── main.py               # FastAPI app + WebSocket + built-in UI
 ├── migrations/               # Database migration scripts
-├── uploads/                  # Uploaded files
-├── exports/                  # Generated subtitle files
+├── uploads/                  # Uploaded files (runtime)
+├── exports/                  # Generated subtitle files (runtime)
 ├── requirements.txt
 ├── setup_env.sh              # Environment setup script
 ├── .env.example
@@ -181,16 +181,23 @@ Edit `.env` and add your API keys:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GEMINI_API_KEY` | **Yes** | Google Gemini API key (transcription + translation + analysis) |
-| `TRANSCRIPTION_PROVIDER` | No | `gemini` (default) or `local` |
 | `DATABASE_URL` | No | SQLite default: `sqlite:///./termsub.db` |
 | `UPLOAD_DIR` | No | Upload folder (default: `uploads`) |
 | `EXPORT_DIR` | No | Export folder (default: `exports`) |
-| `LOCAL_WHISPER_DEVICE` | No | `cpu` or `cuda` (default: `cpu`) |
-| `LOCAL_WHISPER_COMPUTE_TYPE` | No | `int8`, `float16`, etc. (default: `int8`) |
 
+### 3. Database Migrations
 
+If you are running against an existing database that predates recent schema changes, apply migrations before starting the app:
 
-### 3. Run
+```bash
+# Add skip_glossary column (required for v1.5.0+)
+python migrations/add_skip_glossary_column.py
+
+# Add job_queue timeout/heartbeat fields
+python migrations/apply_migration.py
+```
+
+### 4. Run
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -215,16 +222,21 @@ POST /videos/upload
 ### 2. Transcribe
 Click **Transcribe** (or call the API). The background worker:
 - Extracts audio with FFmpeg (16kHz mono WAV)
-- Sends audio to your chosen transcription provider
-- (Gemini path) Runs WhisperX alignment to refine timestamps
+- Sends audio to Gemini Flash for structured JSON transcription
+- Runs WhisperX alignment to refine timestamps
 - Saves segments with timestamps to the database
 
 ```bash
-POST /videos/{id}/transcribe?provider=gemini
+POST /videos/{id}/transcribe
 ```
 
-### 3. Analyze (Multi-Agent)
-Click **Analyze Content**. Two agents run:
+### 3. Choose Next Step
+After transcription completes, the UI presents two options:
+- **Review Terminology** → runs Director + Glossary analysis
+- **Skip & Translate Directly** → bypasses analysis and queues translation immediately
+
+### 4. Analyze (Multi-Agent)
+Click **Review Terminology**. Two agents run:
 - **Director Agent** generates a style guide (tone, formality, domain)
 - **Glossary Agent** extracts key terms and proposes translations
 
@@ -232,24 +244,27 @@ Click **Analyze Content**. Two agents run:
 POST /videos/{id}/analyze
 ```
 
-### 4. Review Terms
+### 5. Review Terms
 The UI shows all extracted terms. You can:
 - Edit the **standardized translation** inline to lock in consistency
 
-### 5. Translate
-Click **Translate**. The Translator Agent uses the glossary to consistently translate all segments with a sliding-window approach.
+### 6. Translate
+Click **Translate**. The Translator Agent uses the glossary and full original transcript to consistently translate all segments with a sliding-window approach.
 
 ```bash
 POST /videos/{id}/translate
 ```
 
-### 6. Review & Edit Subtitles
+### 7. Review & Edit Subtitles
 Once translation completes, the **Subtitle Review Timeline** appears:
 - Browse all segments in a visual card grid with timecodes
 - Click any card to edit translated text inline — changes auto-save on blur
 - Use the **Global Find & Replace** bar to batch-replace text across all segments
+- **Split** a card into two at the time midpoint
+- **Add** a new empty card below any existing card
+- **Remove** a card to delete it and auto-renumber subsequent segments
 
-### 7. Export
+### 8. Export
 Download subtitles in your preferred format:
 ```bash
 GET /export/{id}/srt
@@ -261,27 +276,23 @@ GET /export/{id}/transcription   # Original (untranslated) SRT
 
 ---
 
-## Transcription Providers
+## API Endpoints
 
-### Gemini Flash (Default)
-Cloud-based transcription powered by Google Gemini. Delivers high-accuracy results with structured segment output.
-```env
-TRANSCRIPTION_PROVIDER=gemini
-```
-
-### Local (faster-whisper)
-Offline, privacy-first transcription that runs entirely on your own hardware. Uses CPU by default; CUDA can be configured for faster processing. The model is downloaded automatically on first run.
-```env
-TRANSCRIPTION_PROVIDER=local
-LOCAL_WHISPER_MODEL=large-v3
-LOCAL_WHISPER_DEVICE=cpu
-LOCAL_WHISPER_COMPUTE_TYPE=int8
-```
-
-You can switch between providers at any time via the UI dropdown or API:
-```bash
-POST /videos/{id}/transcribe?provider=gemini
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/videos/upload` | POST | Upload file. Requires `target_language`. |
+| `/videos/{id}/transcribe` | POST | Queue transcription job. |
+| `/videos/{id}/analyze` | POST | Queue Director + Glossary analysis. |
+| `/videos/{id}/translate` | POST | Queue Translator agent. |
+| `/videos/{id}/translate-direct` | POST | Set `skip_glossary=True` and queue translation. |
+| `/videos/{id}/segments/add` | POST | Insert new segment, shifts subsequent up by 1. |
+| `/videos/{id}/segments/{seg_id}/split` | POST | Split segment at time midpoint + nearest text boundary. |
+| `/videos/{id}/segments/{seg_id}` | DELETE | Delete segment and shift subsequent down by 1. |
+| `/videos/{id}/segments/{seg_id}` | PATCH | Update `translated_text` for a segment. |
+| `/videos/{id}/replace` | POST | Global find & replace across all translated segments. |
+| `/export/{id}/{format}` | GET | Download subtitles (`srt`, `vtt`, `txt`, `json`). |
+| `/export/{id}/transcription` | GET | Download original transcription as SRT. |
+| `/ws/videos/{id}` | WS | WebSocket for real-time progress updates. |
 
 ---
 
@@ -289,13 +300,25 @@ POST /videos/{id}/transcribe?provider=gemini
 
 | Model | Purpose |
 |-------|---------|
-| **Video** | Uploaded file, status, languages, style guide, context analysis |
+| **Video** | Uploaded file, status, languages, style guide, context analysis, `skip_glossary` |
 | **Segment** | Timed transcript chunk (`original_text` + `translated_text`) |
 | **Term** | Extracted key term, its translation, and standardized version |
 | **TermOccurrence** | Links a Term to specific Segment(s) where it appears |
 | **TranslationVariant** | Tracks different translations found for the same term |
 | **JobQueue** | Background job with heartbeat, timeout, and retry tracking |
 | **ProcessingLog** | Detailed per-step logs for debugging |
+
+### Video Status Pipeline
+
+```
+UPLOADED → QUEUED → EXTRACTING_AUDIO → TRANSCRIBING → TRANSCRIBED
+→ ANALYZING → CONTEXT_READY → GLOSSARY_EXTRACTING → TERMS_READY
+→ TRANSLATING → COMPLETED
+```
+
+When `skip_glossary=True`, the pipeline skips `ANALYZING` through `TERMS_READY` and goes directly from `TRANSCRIBED` to `TRANSLATING`.
+
+Errors land in `ERROR` status.
 
 ---
 
@@ -309,12 +332,8 @@ pytest
 ### Database Migrations
 If you need to apply migrations manually:
 ```bash
+python migrations/add_skip_glossary_column.py
 python migrations/apply_migration.py
-```
-
-### Checking Available Gemini Models
-```bash
-python check_models.py
 ```
 
 ### Environment Sync
@@ -328,10 +347,11 @@ If dependencies change:
 ## Tech Stack
 
 - **Backend**: FastAPI + SQLAlchemy + SQLite
-- **AI/ML**: Google Gemini (`google-genai`), faster-whisper, WhisperX, PyTorch
+- **AI/ML**: Google Gemini (`google-genai`), WhisperX, PyTorch
 - **Queue**: SQLite-backed background worker with WebSocket updates
-- **Frontend**: Built-in vanilla JS + Tailwind CSS (served from `main.py`)
+- **Frontend**: Built-in vanilla JS + Tailwind CSS with light/dark mode (served from `main.py`)
 - **Audio**: FFmpeg for extraction
+- **Testing**: pytest
 
 ---
 

@@ -1,11 +1,6 @@
 """Whisper transcription service - extracts audio and transcribes video with progress tracking.
 
-Supports multiple transcription providers:
-  - gemini : Google Gemini Flash (cloud, JSON-structured output, default)
-  - local  : Local faster-whisper (offline, high-accuracy mode)
-
-Provider is selected via TRANSCRIPTION_PROVIDER config variable or passed
-explicitly to transcribe_audio().
+Uses Google Gemini Flash (cloud, JSON-structured output) exclusively.
 """
 
 import json
@@ -105,81 +100,6 @@ def extract_audio(video_path: str, audio_path: str, progress_tracker=None, video
 # Provider: Local (faster-whisper)
 # ---------------------------------------------------------------------------
 
-_local_model_cache: Dict[str, Any] = {}
-
-
-def _get_local_model(model_size: str):
-    """Lazy-load and cache a local faster-whisper model."""
-    if model_size not in _local_model_cache:
-        try:
-            from faster_whisper import WhisperModel
-        except ImportError:
-            raise RuntimeError(
-                "faster-whisper not installed. "
-                "Install with: pip install faster-whisper"
-            )
-        _local_model_cache[model_size] = WhisperModel(
-            model_size,
-            device=settings.LOCAL_WHISPER_DEVICE,
-            compute_type=settings.LOCAL_WHISPER_COMPUTE_TYPE,
-        )
-    return _local_model_cache[model_size]
-
-
-def local_transcribe(
-    audio_path: str,
-    model_size: str = None,
-    language: str = None,
-    progress_tracker=None,
-    video_id: str = None,
-) -> tuple[List[_SegmentWrapper], _InfoWrapper]:
-    """Transcribe audio using a local faster-whisper model.
-
-    Args:
-        audio_path: Path to the audio file
-        model_size: faster-whisper model size (default: from config LOCAL_WHISPER_MODEL)
-        language: Optional language code (e.g., 'en', 'fa') to force detection
-        progress_tracker: Optional progress tracker for logging
-        video_id: Optional video ID (unused - kept for API compatibility)
-
-    Returns:
-        Tuple of (segments, info) where segments is a list of _SegmentWrapper objects
-    """
-    model = _get_local_model(model_size or settings.LOCAL_WHISPER_MODEL)
-
-    if progress_tracker:
-        progress_tracker.info("WHISPER", f"Starting local transcription", f"model={model_size or settings.LOCAL_WHISPER_MODEL}")
-
-    transcribe_start = time.time()
-
-    segments_iter, info_obj = model.transcribe(
-        audio_path,
-        language=language,
-        beam_size=5,
-        condition_on_previous_text=True,
-    )
-
-    segments: List[_SegmentWrapper] = []
-    for seg in segments_iter:
-        segments.append(_SegmentWrapper(
-            start=seg.start,
-            end=seg.end,
-            text=seg.text.strip(),
-        ))
-
-    transcribe_elapsed = time.time() - transcribe_start
-    detected_language = info_obj.language or language or "en"
-
-    if progress_tracker:
-        lang_info = f"Specified: {language}" if language else f"Detected: {detected_language}"
-        progress_tracker.info("WHISPER",
-                             f"Local transcription complete in {transcribe_elapsed:.2f}s ({len(segments)} segments)",
-                             lang_info)
-
-    info = _InfoWrapper(language=detected_language)
-    return segments, info
-
-
 # ---------------------------------------------------------------------------
 # Provider: Gemini (Google GenAI)
 # ---------------------------------------------------------------------------
@@ -231,6 +151,10 @@ def gemini_transcribe(
         f"{lang_hint}Transcribe this audio. Return the output as a JSON object with two keys: "
         f"'detected_language' (a standard ISO 2-letter code like 'en', 'de', or 'fa' based on the dominant spoken language) "
         f"and 'segments' (a list of objects, each with 'start' (float seconds), 'end' (float seconds), and 'text' (string)). "
+        f"CRITICAL SUBTITLE FORMATTING RULES: You must adhere to strict broadcast standards. "
+        f"1. Maximum 42 characters per line. "
+        f"2. Maximum 2 lines per subtitle card (Max 84 characters total). "
+        f"3. Never output a massive block of text. If a speaker talks continuously, break their speech into smaller, logical sentence fragments across multiple JSON segments. "
         f"Do not wrap the JSON in markdown code blocks."
     )
 
@@ -341,41 +265,30 @@ def transcribe_audio(
     language: str = None,
     progress_tracker=None,
     video_id: str = None,
-    provider: str = None,
     api_key: Optional[str] = None,
 ):
     """
-    Transcribe audio using the configured or explicitly specified transcription provider.
+    Transcribe audio using Google Gemini.
 
     Args:
         audio_path: Path to the audio file
-        model_size: Model identifier (provider-specific; falls back to config defaults)
+        model_size: Ignored (kept for API compatibility)
         language: Optional language code (e.g., 'en', 'fa') to force detection
         progress_tracker: Optional progress tracker for logging
         video_id: Optional video ID (unused - kept for API compatibility)
-        provider: Optional provider override ('gemini', 'local').
-                  If None, uses TRANSCRIPTION_PROVIDER from config.
-        api_key: Optional Gemini API key override (used only when provider='gemini').
+        api_key: Optional Gemini API key override.
 
     Returns:
         Tuple of (segments, info) where segments is a list of _SegmentWrapper objects
     """
-    active_provider = (provider or settings.TRANSCRIPTION_PROVIDER).lower()
-
-    if active_provider == "local":
-        return local_transcribe(audio_path, model_size, language, progress_tracker, video_id)
-    elif active_provider == "gemini":
-        return gemini_transcribe(audio_path, model_size, language, progress_tracker, video_id, api_key=api_key)
-    else:
-        raise RuntimeError(f"Unknown transcription provider: '{active_provider}'. "
-                           f"Use 'gemini' or 'local'.")
+    return gemini_transcribe(audio_path, model_size, language, progress_tracker, video_id, api_key=api_key)
 
 
 # ---------------------------------------------------------------------------
 # High-level video transcription orchestration (provider-agnostic)
 # ---------------------------------------------------------------------------
 
-def transcribe_video(video_id: str, model_size: str = None, language: str = None, provider: str = None, api_key: Optional[str] = None) -> Dict[str, Any]:
+def transcribe_video(video_id: str, model_size: str = None, language: str = None, api_key: Optional[str] = None) -> Dict[str, Any]:
     """
     Extract audio from video and transcribe using the configured provider.
     
@@ -434,9 +347,8 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
     
     audio_path = None
     try:
-        # Create temporary audio file
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_audio:
-            audio_path = tmp_audio.name
+        # Create deterministic temporary audio file path for worker cleanup
+        audio_path = os.path.join(tempfile.gettempdir(), f"termsub_{video_id}.wav")
         
         # Step 1: Extract audio (NO DATABASE SESSION during this long operation)
         progress_tracker.update_progress(
@@ -452,8 +364,7 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
         progress_tracker.end_step("Audio extraction complete")
         
         # Update status to transcribing with short session
-        engine_name = 'Gemini Cloud' if provider == 'gemini' else 'Local Whisper'
-        progress_tracker.start_step("TRANSCRIBING", f"Transcribing audio with {engine_name}")
+        progress_tracker.start_step("TRANSCRIBING", "Transcribing audio with Gemini Cloud")
         with SessionLocal() as session:
             video = session.query(Video).filter(Video.id == video_id).first()
             if video:
@@ -464,7 +375,7 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
         progress_tracker.update_progress(
             status=VideoStatus.TRANSCRIBING.value,
             percent=10,
-            current_step=f"Sending to {engine_name}",
+            current_step="Sending to Gemini",
             step_detail="Uploading audio to transcription service..."
         )
         
@@ -473,7 +384,7 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
         if language is None:
             language = source_language
         
-        segments, info = transcribe_audio(audio_path, model_size, language, progress_tracker, provider=provider, api_key=api_key)
+        segments, info = transcribe_audio(audio_path, model_size, language, progress_tracker, video_id=video_id, api_key=api_key)
         
         # Store source language (use detected or specified)
         detected_language = info.language if info and hasattr(info, 'language') else None
@@ -582,10 +493,8 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
         raise RuntimeError(f"Transcription failed: {error_msg}") from e
         
     finally:
-        # Clean up temporary audio file
-        if audio_path and Path(audio_path).exists():
-            Path(audio_path).unlink(missing_ok=True)
-            progress_tracker.info("TRANSCRIBE", "Cleaned up temporary audio file")
+        # NOTE: Audio file cleanup is handled by the background worker in sqlite_queue.py
+        pass
     
     # Return primitive data only - ZERO LEAK POLICY
     # Re-query in fresh session to get final status
@@ -597,6 +506,7 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
                 "status": video.status,
                 "total_segments": video.total_segments,
                 "source_language": video.source_language,
-                "success": video.status == VideoStatus.TRANSCRIBED.value
+                "success": video.status == VideoStatus.TRANSCRIBED.value,
+                "audio_path": audio_path
             }
-        return {"video_id": video_id, "status": "not_found", "success": False}
+        return {"video_id": video_id, "status": "not_found", "success": False, "audio_path": audio_path}

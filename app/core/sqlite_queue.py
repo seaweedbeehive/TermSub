@@ -5,6 +5,8 @@ asynchronously without HTTP timeouts.
 """
 
 import logging
+import os
+import tempfile
 import threading
 import time
 import traceback
@@ -12,6 +14,7 @@ import asyncio
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional, Dict, Any, Generator, Tuple
 
 from sqlalchemy import func
@@ -394,9 +397,12 @@ class SQLiteQueueWorker(threading.Thread):
             
             self._current_job_id = job_id
             self._current_job_start_time = datetime.utcnow()
+            job_result = None
             try:
-                self._process_job(job_id, video_id, job_type)
+                job_result = self._process_job(job_id, video_id, job_type)
             finally:
+                audio_path = job_result.get('audio_path') if isinstance(job_result, dict) else None
+                self._cleanup_files(video_id, audio_path)
                 self._current_job_id = None
                 self._current_job_start_time = None
     
@@ -446,8 +452,34 @@ class SQLiteQueueWorker(threading.Thread):
         if len(message) <= max_length:
             return message
         return message[:max_length - 3] + "..."
+
+    def _cleanup_files(self, video_id: str, audio_path: Optional[str] = None) -> None:
+        """Permanently delete uploaded video and temporary audio files.
+        
+        Args:
+            video_id: ID of the video whose files should be cleaned up
+            audio_path: Optional path to the temporary .wav file
+        """
+        try:
+            # Delete original uploaded video file
+            with get_db_session() as db:
+                video_record = db.query(Video).filter(Video.id == video_id).first()
+                if video_record and video_record.file_path:
+                    Path(video_record.file_path).unlink(missing_ok=True)
+                    logger.info(f"[QueueWorker] Deleted uploaded file for video {video_id}")
+        except Exception as e:
+            logger.warning(f"[QueueWorker] Failed to delete uploaded file: {e}")
+        
+        # Delete temporary audio file (deterministic path used by whisper_service)
+        temp_audio = audio_path or os.path.join(tempfile.gettempdir(), f"termsub_{video_id}.wav")
+        try:
+            if temp_audio:
+                Path(temp_audio).unlink(missing_ok=True)
+                logger.info(f"[QueueWorker] Deleted temp audio file for video {video_id}")
+        except Exception as e:
+            logger.warning(f"[QueueWorker] Failed to delete temp audio file: {e}")
     
-    def _process_job(self, job_id: int, video_id: str, job_type: str) -> None:
+    def _process_job(self, job_id: int, video_id: str, job_type: str) -> Optional[Dict[str, Any]]:
         """Process a single job - CLEAN SLATE PATTERN.
         
         CRITICAL: This method NEVER stores Video objects long-term.
@@ -543,6 +575,8 @@ class SQLiteQueueWorker(threading.Thread):
                 'result': result
             })
             
+            return result
+            
         except Exception as e:
             error_msg = str(e)
             error_trace = traceback.format_exc()
@@ -597,9 +631,11 @@ class SQLiteQueueWorker(threading.Thread):
                     # Job not found - this is a serious error
                     raise RuntimeError(f"Job {job_id} not found during error handling") from e
                 # Session commits automatically on exit
+            
+            return None
     
     def _do_transcription(self, video_id: str) -> Dict[str, Any]:
-        """Execute transcription job using the configured engine (Local Whisper or Gemini Cloud).
+        """Execute transcription job using Gemini Cloud.
         
         This method does NOT hold a database session during the long-running
         transcription work. It passes only video_id to whisper_service which
@@ -631,22 +667,16 @@ class SQLiteQueueWorker(threading.Thread):
             source_language = video.source_language
             logger.debug(f"Video {video_id} source_language: {source_language}")
         
-        # Check for a per-request provider override
-        provider_override = get_transcription_provider(video_id)
-        if provider_override:
-            logger.info(f"Using per-request transcription provider: {provider_override}")
-        
         # Check for a per-request Gemini API key override
         api_key_override = get_gemini_api_key(video_id)
         if api_key_override:
             logger.info("Using per-request Gemini API key")
         
         # Send initial progress
-        engine_label = 'Gemini Cloud' if provider_override == 'gemini' else 'Local Whisper'
         self._send_ws_sync(video_id, {
             'status': 'transcribing',
             'progress': 10,
-            'message': f'Starting {engine_label} transcription...'
+            'message': 'Starting Gemini Cloud transcription...'
         })
         
         # Execute transcription (NO db session - whisper_service manages its own sessions)
@@ -654,10 +684,10 @@ class SQLiteQueueWorker(threading.Thread):
         transcribe_result = None
         if source_language:
             logger.debug(f"Using specified language: {source_language}")
-            transcribe_result = transcribe_video(video_id, language=source_language, provider=provider_override, api_key=api_key_override)
+            transcribe_result = transcribe_video(video_id, language=source_language, api_key=api_key_override)
         else:
             logger.debug("Using auto-detect")
-            transcribe_result = transcribe_video(video_id, provider=provider_override, api_key=api_key_override)
+            transcribe_result = transcribe_video(video_id, api_key=api_key_override)
         
         # Check result - transcribe_video now returns a Dict with success flag
         if transcribe_result and not transcribe_result.get("success", True):
@@ -697,9 +727,17 @@ class SQLiteQueueWorker(threading.Thread):
             'total_segments': segment_count
         })
         
+        # Prompt user to choose next step
+        self._send_ws_sync(video_id, {
+            'status': 'awaiting_choice',
+            'message': 'Transcription complete. Choose your next step.',
+            'total_segments': segment_count
+        })
+        
         return {
             'total_segments': segment_count,
-            'video_status': video_status
+            'video_status': video_status,
+            'audio_path': transcribe_result.get('audio_path') if transcribe_result else None
         }
     
     def _do_analysis(self, video_id: str) -> Dict[str, Any]:
@@ -720,6 +758,7 @@ class SQLiteQueueWorker(threading.Thread):
         logger.info(f"Starting analysis for {video_id}")
         
         # Check video exists and is not in ERROR - short session
+        skip_glossary = False
         with get_db_session() as db:
             video_record = db.query(Video).filter(Video.id == video_id).first()
             if not video_record:
@@ -728,6 +767,23 @@ class SQLiteQueueWorker(threading.Thread):
             # Check if video is in ERROR status - abort early
             if video_record.status == VideoStatus.ERROR.value:
                 raise RuntimeError(f"Video {video_id} is in ERROR status, aborting analysis")
+            
+            skip_glossary = video_record.skip_glossary
+        
+        # Routing: skip analysis and glossary extraction entirely if flag is set
+        if skip_glossary:
+            logger.info(f"Analysis for {video_id} skipped (skip_glossary=True)")
+            self._send_ws_sync(video_id, {
+                'status': 'terms_ready',
+                'progress': 100,
+                'message': 'Terminology extraction skipped — proceeding to translation',
+                'terms_count': 0
+            })
+            return {
+                'terms_extracted': 0,
+                'video_status': 'terms_ready',
+                'skipped': True
+            }
         
         self._send_ws_sync(video_id, {
             'status': 'analyzing',

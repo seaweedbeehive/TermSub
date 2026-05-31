@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.models.video import Video, VideoStatus, Segment
 from app.schemas.video import VideoOut
 from app.core.config import settings
-from app.core.sqlite_queue import enqueue_job, get_job_status, set_transcription_provider, set_gemini_api_key
+from app.core.sqlite_queue import enqueue_job, get_job_status, set_gemini_api_key
 from app.services.upload_service import save_uploaded_file
 from app.services.text_parser import parse_text_file
 from app.services.gemini_service import translate_video_sliding_window
@@ -44,6 +44,13 @@ async def upload_video(
     db: Session = Depends(get_db),
 ):
     """Upload a video or text file."""
+    # Server-side validation: target language is required
+    if not target_language or not target_language.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Target language is required. Please select a target language."
+        )
+    
     try:
         print(f"[API Upload] Starting: {file.filename}, target={target_language}, source={source_language}")
         video = await save_uploaded_file(file, target_language, source_language, db)
@@ -71,11 +78,10 @@ def transcribe_video_endpoint(
     video_id: str,
     request: Request,
     method: str = Query("whisper", description="Transcription method: 'whisper' only"),
-    provider: str = Query(None, description="Transcription provider: 'groq', 'local', or 'gemini'"),
     db: Session = Depends(get_db)
 ):
-    """Queue transcription job for video using Whisper, or parse text files."""
-    print(f"[API Transcribe] Request for video {video_id}, provider={provider}")
+    """Queue transcription job for video using Gemini, or parse text files."""
+    print(f"[API Transcribe] Request for video {video_id}")
     
     # Extract Gemini API key manually from raw headers to bypass Pydantic annotation quirks
     gemini_api_key = request.headers.get("X-Gemini-API-Key")
@@ -103,21 +109,13 @@ def transcribe_video_endpoint(
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Parsing failed: {str(e)}")
         
-        # Determine effective provider for validation
-        effective_provider = (provider or settings.TRANSCRIPTION_PROVIDER).lower()
-        
-        # Validation: Cloud engine requires a Gemini API key
-        if effective_provider == "gemini":
-            if not gemini_api_key or not gemini_api_key.strip():
-                raise HTTPException(
-                    status_code=400,
-                    detail="Gemini API Key is required for Cloud Engine processing."
-                )
-            set_gemini_api_key(video_id, gemini_api_key.strip())
-        
-        # Store per-request provider override (if any) before enqueueing
-        if provider:
-            set_transcription_provider(video_id, provider)
+        # Validation: Gemini API key is required
+        if not gemini_api_key or not gemini_api_key.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Gemini API Key is required for transcription."
+            )
+        set_gemini_api_key(video_id, gemini_api_key.strip())
         
         # Queue transcription job
         try:
@@ -173,6 +171,41 @@ def analyze_video_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/{video_id}/translate-direct")
+def translate_direct_endpoint(
+    video_id: str,
+    db: Session = Depends(get_db)
+):
+    """Skip terminology analysis and queue translation directly."""
+    print(f"[API TranslateDirect] Request for video {video_id}")
+    
+    try:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+        
+        # Set skip_glossary flag
+        video.skip_glossary = True
+        db.commit()
+        
+        job_id = enqueue_job('translate', video_id)
+        print(f"[API TranslateDirect] Job {job_id} queued")
+        
+        return {
+            "status": "queued",
+            "job_id": job_id,
+            "video_id": video_id,
+            "job_type": "translate",
+            "message": "Translation queued (terminology skipped)"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API TranslateDirect] Error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/{video_id}/translate")
 def translate_video_endpoint(
     video_id: str, 
@@ -192,7 +225,8 @@ def translate_video_endpoint(
             VideoStatus.TRANSLATING.value,
             VideoStatus.QUEUED.value,
             VideoStatus.TRANSCRIBING.value,
-            VideoStatus.UPLOADED.value
+            VideoStatus.UPLOADED.value,
+            VideoStatus.TRANSCRIBED.value,
         ]
         
         if video.status not in valid_statuses:
@@ -365,3 +399,220 @@ def batch_replace_segments(
             for s in updated_segments
         ]
     }
+
+
+@router.post("/{video_id}/segments/add")
+def add_segment(
+    video_id: str,
+    body: dict,
+    db: Session = Depends(get_db)
+):
+    """Add a new segment at a specific position, shifting subsequent segments up."""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    target_sequence = body.get("target_sequence")
+    if target_sequence is None or not isinstance(target_sequence, int):
+        raise HTTPException(status_code=400, detail="target_sequence is required and must be an integer")
+    
+    # Shift all segments at or after target_sequence up by 1
+    db.execute(
+        text("""
+            UPDATE segments
+            SET sequence_number = sequence_number + 1
+            WHERE video_id = :video_id AND sequence_number >= :target_sequence
+        """),
+        {"video_id": video_id, "target_sequence": target_sequence}
+    )
+    db.commit()
+    
+    # Insert the new segment
+    new_segment = Segment(
+        video_id=video_id,
+        sequence_number=target_sequence,
+        start_time=body.get("start_time", 0.0),
+        end_time=body.get("end_time", 2.0),
+        original_text=body.get("text", ""),
+        translated_text=body.get("text", ""),
+        language_code=body.get("language_code", "original"),
+    )
+    db.add(new_segment)
+    db.commit()
+    db.refresh(new_segment)
+    
+    # Return updated segment list
+    updated_segments = db.query(Segment).filter(
+        Segment.video_id == video_id
+    ).order_by(Segment.sequence_number).all()
+    
+    return {
+        "status": "success",
+        "new_segment_id": new_segment.id,
+        "segments": [
+            {
+                "id": s.id,
+                "sequence_number": s.sequence_number,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "original_text": s.original_text,
+                "translated_text": s.translated_text,
+            }
+            for s in updated_segments
+        ]
+    }
+
+
+@router.delete("/{video_id}/segments/{segment_id}")
+def delete_segment(
+    video_id: str,
+    segment_id: str,
+    db: Session = Depends(get_db)
+):
+    """Delete a segment and shift subsequent sequence numbers down."""
+    segment = db.query(Segment).filter(
+        Segment.id == segment_id,
+        Segment.video_id == video_id
+    ).first()
+    
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+    
+    deleted_sequence = segment.sequence_number
+    
+    # Delete the segment
+    db.delete(segment)
+    db.commit()
+    
+    # Shift all subsequent segments down by 1
+    db.execute(
+        text("""
+            UPDATE segments
+            SET sequence_number = sequence_number - 1
+            WHERE video_id = :video_id AND sequence_number > :deleted_sequence
+        """),
+        {"video_id": video_id, "deleted_sequence": deleted_sequence}
+    )
+    db.commit()
+    
+    # Return updated segment list
+    updated_segments = db.query(Segment).filter(
+        Segment.video_id == video_id
+    ).order_by(Segment.sequence_number).all()
+    
+    return {
+        "status": "success",
+        "segments": [
+            {
+                "id": s.id,
+                "sequence_number": s.sequence_number,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "original_text": s.original_text,
+                "translated_text": s.translated_text,
+            }
+            for s in updated_segments
+        ]
+    }
+
+
+@router.post("/{video_id}/segments/{segment_id}/split")
+def split_segment(
+    video_id: str,
+    segment_id: str,
+    db: Session = Depends(get_db)
+):
+    """Split a segment into two at the timecode midpoint and nearest text boundary."""
+    segment = db.query(Segment).filter(
+        Segment.id == segment_id,
+        Segment.video_id == video_id
+    ).first()
+    
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+    
+    original_text = segment.original_text or ""
+    mid_time = (segment.start_time + segment.end_time) / 2.0
+    
+    # Split text at nearest space to the middle
+    if len(original_text) <= 1:
+        first_half = original_text
+        second_half = ""
+    else:
+        mid_idx = len(original_text) // 2
+        # Find nearest space
+        left_space = original_text.rfind(" ", 0, mid_idx)
+        right_space = original_text.find(" ", mid_idx)
+        
+        if left_space != -1 and right_space != -1:
+            # Choose the closer space
+            if (mid_idx - left_space) <= (right_space - mid_idx):
+                split_idx = left_space
+            else:
+                split_idx = right_space
+        elif left_space != -1:
+            split_idx = left_space
+        elif right_space != -1:
+            split_idx = right_space
+        else:
+            split_idx = mid_idx
+        
+        first_half = original_text[:split_idx].strip()
+        second_half = original_text[split_idx:].strip()
+    
+    # Shift subsequent segments up by 1
+    db.execute(
+        text("""
+            UPDATE segments
+            SET sequence_number = sequence_number + 1
+            WHERE video_id = :video_id AND sequence_number > :current_sequence
+        """),
+        {"video_id": video_id, "current_sequence": segment.sequence_number}
+    )
+    db.commit()
+    
+    # Capture original end_time before mutating
+    original_end_time = segment.end_time
+    
+    # Update original segment with first half and new end_time
+    segment.original_text = first_half
+    segment.translated_text = first_half
+    segment.end_time = mid_time
+    db.commit()
+    db.refresh(segment)
+    
+    # Insert new segment with second half
+    new_segment = Segment(
+        video_id=video_id,
+        sequence_number=segment.sequence_number + 1,
+        start_time=mid_time,
+        end_time=original_end_time,
+        original_text=second_half,
+        translated_text=second_half,
+        language_code=segment.language_code,
+    )
+    db.add(new_segment)
+    db.commit()
+    db.refresh(new_segment)
+    
+    # Return updated segment list
+    updated_segments = db.query(Segment).filter(
+        Segment.video_id == video_id
+    ).order_by(Segment.sequence_number).all()
+    
+    return {
+        "status": "success",
+        "new_segment_id": new_segment.id,
+        "segments": [
+            {
+                "id": s.id,
+                "sequence_number": s.sequence_number,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "original_text": s.original_text,
+                "translated_text": s.translated_text,
+            }
+            for s in updated_segments
+        ]
+    }
+

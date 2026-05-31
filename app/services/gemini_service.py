@@ -193,12 +193,14 @@ class TranslationBatch:
         context_before: Translated text from previous batch (for continuity)
         context_after: Original text from next batch (for preview)
         glossary: Domain-specific glossary to enforce term consistency
+        full_transcript_text: Complete original transcript of the entire video
     """
     batch_index: int
     segments: List[Dict[str, Any]]  # Dicts with id, sequence_number, original_text
     context_before: str = ""
     context_after: str = ""
     glossary: Dict[str, str] = field(default_factory=dict)
+    full_transcript_text: str = ""
     
     def to_dict(self) -> dict:
         """Convert batch to dictionary for serialization."""
@@ -282,6 +284,7 @@ def create_sliding_windows(
     window_size: int = DEFAULT_WINDOW_SIZE,
     overlap: int = DEFAULT_OVERLAP,
     glossary: Optional[Dict[str, str]] = None,
+    full_transcript_text: str = "",
 ) -> List[TranslationBatch]:
     """Create overlapping sliding window batches from segments.
     
@@ -339,15 +342,28 @@ def create_sliding_windows(
             context_before=context_before,
             context_after=context_after,
             glossary=glossary or {},
+            full_transcript_text=full_transcript_text,
         )
         batches.append(batch)
     
     return batches
 
 
-def build_system_instruction(batch: TranslationBatch) -> str:
+def build_system_instruction(batch: TranslationBatch, target_language: str = "") -> str:
     """Build the system instruction containing mandatory glossary rules."""
-    lines = ["You are a professional subtitle translator."]
+    lang_names = {
+        "fa": "Persian (Farsi)", "en": "English", "de": "German", "fr": "French",
+        "es": "Spanish", "it": "Italian", "ja": "Japanese", "ko": "Korean",
+        "zh": "Chinese", "ar": "Arabic", "ru": "Russian", "tr": "Turkish",
+    }
+    target_lang_name = lang_names.get(target_language, target_language)
+    
+    lines = [
+        "You are a professional subtitle translator.",
+        f"CRITICAL TARGET LANGUAGE RULE: Your output must be 100% in {target_lang_name}. "
+        f"Do not output any words, phrases, numbers, or punctuation in the source language or English. "
+        f"The entire response must be strictly and exclusively {target_lang_name}.",
+    ]
     if batch.glossary:
         lines.append("You are bound by the following MANDATORY glossary rules. These terms are NON-NEGOTIABLE:")
         lines.append("")
@@ -398,6 +414,15 @@ FUTURE PREVIEW (next segments for context):
 {batch.context_after}
 """
     
+    # Build full transcript context section
+    full_context_section = ""
+    if batch.full_transcript_text:
+        full_context_section = f"""
+CRITICAL CONTEXT: Here is the complete transcript of the entire video. Read this to understand the overarching narrative, tone, and subject matter before translating the segments below:
+
+{batch.full_transcript_text}
+"""
+    
     # Build segments to translate
     segments_text = "\n".join([
         f"[{s['sequence_number']}] {s['original_text']}"
@@ -410,7 +435,7 @@ STYLE GUIDE:
 """ if style_guide else ""
     
     prompt = f"""Translate the following {source_language} subtitles to {target_lang_name}.
-{context_before_section}
+{full_context_section}{context_before_section}
 TRANSLATE THESE SEGMENTS:
 {segments_text}
 {context_after_section}{style_section}
@@ -422,6 +447,8 @@ INSTRUCTIONS:
 5. MANDATORY: You must use the provided glossary for translation. If a term is in the glossary, YOU MUST use that exact translation. This is a strict requirement.
 6. Use previous context to maintain narrative flow and character voice
 7. Return translations for ALL segments provided
+8. CRITICAL SUBTITLE FORMATTING RULES: You must adhere to strict broadcast standards. Maximum 42 characters per line. Maximum 2 lines per subtitle card (Max 84 characters total). Never output a massive block of text. If a speaker talks continuously, break their speech into smaller, logical sentence fragments across multiple JSON segments.
+9. ABSOLUTE TARGET LANGUAGE ENFORCEMENT: You must translate ALL content into {target_lang_name} only. Do not output any words, phrases, numbers, or punctuation in the source language or English. The entire response must be 100% {target_lang_name}. No exceptions.
 
 Return STRICTLY as JSON with this exact format:
 {{
@@ -469,8 +496,12 @@ async def translate_single_batch(
     Returns:
         BatchResult with translations or error
     """
+    # Validate target language before any API call
+    if not target_language or not str(target_language).strip():
+        raise ValueError("Target language is missing or empty. Cannot translate without a target language.")
+    
     prompt = build_translation_prompt(batch, source_language, target_language)
-    system_instruction = build_system_instruction(batch)
+    system_instruction = build_system_instruction(batch, target_language)
     
     print(f"\n🚀 DEBUG: Final Glossary being sent to LLM: {batch.glossary}\n")
     
@@ -1068,7 +1099,10 @@ async def translate_video_sliding_window_async(
         
         # Step 2: Create sliding window batches (NO session)
         progress_tracker.info("TRANSLATING", "Creating sliding window batches...")
-        batches = create_sliding_windows(all_segment_dicts, window_size, overlap, glossary)
+        # Build full transcript for context injection
+        full_transcript_text = "\n".join([seg["original_text"] for seg in all_segment_dicts])
+        
+        batches = create_sliding_windows(all_segment_dicts, window_size, overlap, glossary, full_transcript_text)
         
         progress_tracker.info(
             "TRANSLATING",
