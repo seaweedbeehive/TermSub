@@ -36,8 +36,6 @@ env/
 uploads/
 exports/
 
-# Model downloads (local Whisper)
-models/
 
 # Test artifacts
 .pytest_cache/
