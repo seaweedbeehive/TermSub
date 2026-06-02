@@ -1155,7 +1155,6 @@ async def translate_video_sliding_window_async(
         )
         
         # Save extracted terms (simplified - just store as-is for now)
-        # TODO: Implement proper term extraction and deduplication
         
         # Step 6: Finalize with short session
         with SessionLocal() as db:

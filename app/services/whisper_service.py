@@ -97,16 +97,11 @@ def extract_audio(video_path: str, audio_path: str, progress_tracker=None, video
 
 
 # ---------------------------------------------------------------------------
-# Provider: Local (faster-whisper)
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Provider: Gemini (Google GenAI)
+# Gemini Transcription
 # ---------------------------------------------------------------------------
 
 def gemini_transcribe(
     audio_path: str,
-    model_size: str = None,
     language: str = None,
     progress_tracker=None,
     video_id: str = None,
@@ -116,7 +111,6 @@ def gemini_transcribe(
 
     Args:
         audio_path: Path to the audio file
-        model_size: Ignored (Gemini model is fixed)
         language: Optional language code (e.g., 'en', 'fa') to force detection
         progress_tracker: Optional progress tracker for logging
         video_id: Optional video ID (unused - kept for API compatibility)
@@ -256,12 +250,11 @@ def gemini_transcribe(
 
 
 # ---------------------------------------------------------------------------
-# Router — delegates to the configured provider
+# Transcription entrypoint
 # ---------------------------------------------------------------------------
 
 def transcribe_audio(
     audio_path: str,
-    model_size: str = None,
     language: str = None,
     progress_tracker=None,
     video_id: str = None,
@@ -272,7 +265,6 @@ def transcribe_audio(
 
     Args:
         audio_path: Path to the audio file
-        model_size: Ignored (kept for API compatibility)
         language: Optional language code (e.g., 'en', 'fa') to force detection
         progress_tracker: Optional progress tracker for logging
         video_id: Optional video ID (unused - kept for API compatibility)
@@ -281,23 +273,22 @@ def transcribe_audio(
     Returns:
         Tuple of (segments, info) where segments is a list of _SegmentWrapper objects
     """
-    return gemini_transcribe(audio_path, model_size, language, progress_tracker, video_id, api_key=api_key)
+    return gemini_transcribe(audio_path, language, progress_tracker, video_id, api_key=api_key)
 
 
 # ---------------------------------------------------------------------------
-# High-level video transcription orchestration (provider-agnostic)
+# High-level video transcription orchestration
 # ---------------------------------------------------------------------------
 
-def transcribe_video(video_id: str, model_size: str = None, language: str = None, api_key: Optional[str] = None) -> Dict[str, Any]:
+def transcribe_video(video_id: str, language: str = None, api_key: Optional[str] = None) -> Dict[str, Any]:
     """
-    Extract audio from video and transcribe using the configured provider.
+    Extract audio from video and transcribe using Gemini.
     
     This function uses short-lived database sessions to avoid holding locks
     during long-running operations (audio extraction, transcription).
     
     Args:
         video_id: ID of the video to transcribe
-        model_size: Whisper model identifier (provider-specific; None = use config default)
         language: Optional language code (e.g., 'en', 'fa') to force detection, None for auto-detect
     
     Returns:
@@ -384,7 +375,7 @@ def transcribe_video(video_id: str, model_size: str = None, language: str = None
         if language is None:
             language = source_language
         
-        segments, info = transcribe_audio(audio_path, model_size, language, progress_tracker, video_id=video_id, api_key=api_key)
+        segments, info = transcribe_audio(audio_path, language, progress_tracker, video_id=video_id, api_key=api_key)
         
         # Store source language (use detected or specified)
         detected_language = info.language if info and hasattr(info, 'language') else None

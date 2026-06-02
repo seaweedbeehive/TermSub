@@ -807,8 +807,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                                 target_sequence: targetSeq,
                                 start_time: 0.0,
                                 end_time: 2.0,
-                                text: '',
-                                language_code: 'original'
+                                text: ''
                             })
                         });
                         if (!response.ok) throw new Error('Server returned ' + response.status);

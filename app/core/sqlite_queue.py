@@ -38,37 +38,10 @@ VALID_JOB_TYPES = {JobType.TRANSCRIBE.value, JobType.ANALYZE.value, JobType.TRAN
 _worker_instance: Optional['SQLiteQueueWorker'] = None
 _worker_lock = threading.Lock()
 
-# In-memory store for per-request transcription provider overrides.
-# Key: video_id, Value: provider name ('groq', 'local', 'gemini')
-# Populated by the API endpoint before enqueue, consumed by the worker.
-_transcription_providers: Dict[str, str] = {}
-
 # In-memory store for per-request Gemini API keys.
 # Key: video_id, Value: API key string
 # Populated by the API endpoint before enqueue, consumed by the worker.
 _gemini_api_keys: Dict[str, str] = {}
-
-
-def set_transcription_provider(video_id: str, provider: str) -> None:
-    """Store the transcription provider choice for a video before enqueueing.
-    
-    Args:
-        video_id: The video ID
-        provider: Provider name ('groq', 'local', 'gemini')
-    """
-    _transcription_providers[video_id] = provider
-
-
-def get_transcription_provider(video_id: str) -> Optional[str]:
-    """Retrieve and clear the stored transcription provider for a video.
-    
-    Args:
-        video_id: The video ID
-        
-    Returns:
-        Provider name if set, None otherwise
-    """
-    return _transcription_providers.pop(video_id, None)
 
 
 def set_gemini_api_key(video_id: str, api_key: str) -> None:

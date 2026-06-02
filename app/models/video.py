@@ -145,9 +145,9 @@ class Video(Base):
 class Segment(Base):
     __tablename__ = "segments"
     
-    # Composite index for faster bulk operations by video_id + sequence_number + language
+    # Composite index for faster bulk operations by video_id + sequence_number
     __table_args__ = (
-        Index('idx_segments_video_seq_lang', 'video_id', 'sequence_number', 'language_code'),
+        Index('idx_segments_video_seq', 'video_id', 'sequence_number'),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
@@ -157,7 +157,6 @@ class Segment(Base):
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     original_text: Mapped[str] = mapped_column(Text, nullable=False)
     translated_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    language_code: Mapped[str] = mapped_column(String(10), default="original", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     video: Mapped["Video"] = relationship("Video", back_populates="segments")

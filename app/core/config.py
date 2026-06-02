@@ -10,14 +10,6 @@ class Settings(BaseSettings):
     EXPORT_DIR: Path = Path("exports")
     GEMINI_API_KEY: str
 
-    # Transcription provider: "gemini" | "local"
-    TRANSCRIPTION_PROVIDER: str = "gemini"
-    LOCAL_WHISPER_MODEL: str = "large-v3"
-
-    # Local hardware settings
-    LOCAL_WHISPER_DEVICE: str = "cpu"
-    LOCAL_WHISPER_COMPUTE_TYPE: str = "int8"
-
     class Config:
         env_file = ".env"
         extra = "ignore"

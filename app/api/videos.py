@@ -435,7 +435,6 @@ def add_segment(
         end_time=body.get("end_time", 2.0),
         original_text=body.get("text", ""),
         translated_text=body.get("text", ""),
-        language_code=body.get("language_code", "original"),
     )
     db.add(new_segment)
     db.commit()
@@ -589,7 +588,6 @@ def split_segment(
         end_time=original_end_time,
         original_text=second_half,
         translated_text=second_half,
-        language_code=segment.language_code,
     )
     db.add(new_segment)
     db.commit()
