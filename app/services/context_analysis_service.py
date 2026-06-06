@@ -125,6 +125,9 @@ Respond in JSON format:
   "translation_notes": "Any special notes about translation approach for this content"
 }}
 
+CRITICAL TARGET LANGUAGE RULE:
+You MUST write the Director's Context Brief (main_topic, sub_topics, and translation_notes) entirely in {target_language}. Do not write the brief in English unless English is the target language. All narrative and explanatory text in your response must be strictly in {target_language}.
+
 Guidelines:
 - Extract 10-20 key terms maximum - focus on the most important
 - For each term, provide the SINGLE best standard {target_language} translation

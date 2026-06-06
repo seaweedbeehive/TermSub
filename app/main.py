@@ -308,7 +308,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             <label for="fileInput" id="dropZone"
                                 class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 dark:border-[#2A2A30] rounded-lg bg-slate-50 dark:bg-[#0F0F12] hover:bg-slate-100 dark:hover:bg-[#0F0F12] cursor-pointer transition-colors dark:hover:border-[#00F0FF]">
                                 <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-400 dark:text-[#6B7280] mb-2"></i>
-                                <p class="text-sm text-slate-600 dark:text-[#8A8F98] font-medium" id="fileLabel">Click to select file</p>
+                                <p class="text-sm text-slate-600 dark:text-[#8A8F98] font-medium" id="fileLabel">Click or drag &amp; drop a file</p>
                                 <p class="text-xs text-slate-400 dark:text-[#6B7280] mt-1">MP4, MOV, AVI, MP3, TXT</p>
                             </label>
                         </div>
@@ -354,7 +354,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1" for="geminiApiKey">Gemini API Key</label>
                             <input type="password" id="geminiApiKey" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]" placeholder="Paste your Gemini API key here">
                             <p class="text-[10px] text-slate-500 dark:text-[#8A8F98] mt-1">
-                                <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 underline">Get a free API key at Google AI Studio</a>
+                                <button id="apiKeyHelpBtn" type="button" class="text-cyan-400 hover:text-cyan-300 hover:underline font-medium cursor-pointer bg-transparent border-none p-0">
+                                    Get a free API key at Google AI Studio
+                                </button>
                             </p>
                         </div>
 
@@ -466,13 +468,12 @@ HTML_INTERFACE = """<!DOCTYPE html>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Type</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Original</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Translation</th>
-                                    <th class="px-3 py-2 text-center text-xs font-medium">Freq</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Standard</th>
                                 </tr>
                             </thead>
                             <tbody id="termsTable" class="divide-y divide-slate-100 dark:divide-white/10">
                                 <tr>
-                                    <td colspan="5" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                                    <td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
                                         No terms extracted yet. Upload and process a video.
                                     </td>
                                 </tr>
@@ -483,7 +484,12 @@ HTML_INTERFACE = """<!DOCTYPE html>
 
                 <!-- Subtitle Review Timeline -->
                 <div id="subtitleReviewPanel" class="hidden h-full flex flex-col bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
-                    <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-4">Translated Subtitle Timeline</h2>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Translated Subtitle Timeline</h2>
+                        <button id="undoTimelineBtn" class="px-2 py-1 text-xs bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors opacity-50 cursor-not-allowed" disabled title="Undo last change (Ctrl+Z)">
+                            <i class="fa-solid fa-rotate-left mr-1"></i>Undo
+                        </button>
+                    </div>
                     
                     <!-- Global Find & Replace Bar -->
                     <div class="flex items-center gap-2 mb-3">
@@ -508,6 +514,24 @@ HTML_INTERFACE = """<!DOCTYPE html>
         </div>
     </div>
 
+    <!-- API Key Help Modal -->
+    <div id="apiKeyModal" class="hidden fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm" aria-hidden="true">
+        <div class="bg-[#1A1A1E] border border-[#2A2A30] rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 relative">
+            <button id="apiKeyModalClose" type="button" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors" aria-label="Close modal">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <h3 class="text-lg font-semibold text-white mb-2">How to get a Free Gemini API Key</h3>
+            <p class="text-sm text-gray-300 mb-4">You can get a Gemini API key for free through Google AI Studio. No credit card is required, making it perfect for prototyping and personal projects.</p>
+            <ol class="list-decimal list-inside text-sm text-gray-300 space-y-2 mb-4">
+                <li>Navigate to <a href="https://aistudio.google.com/" target="_blank" class="text-cyan-400 hover:underline font-medium">Google AI Studio</a> and sign in with your Google account.</li>
+                <li>Accept the terms of service.</li>
+                <li>Click <strong>"Get API key"</strong> in the left-hand navigation menu.</li>
+                <li>Select <strong>"Create API key"</strong> (you can generate one inside a new or existing project environment).</li>
+            </ol>
+            <p class="text-xs text-gray-400 italic">Note: The free tier allows you to deploy powerful models (including Gemini 1.5 Pro, 2.0 Flash, and 2.5 Flash) with generous rate limits, though it remains subject to standard usage caps and is designed for prototyping rather than commercial production.</p>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
@@ -521,6 +545,9 @@ HTML_INTERFACE = """<!DOCTYPE html>
         let isJobRunning = false; // Silver bullet: prevents stale completion logs
         let hasStartedProcessing = false; // Status Transition Guard: ignore COMPLETED until processing starts
         let isSavingSegment = false; // Prevents concurrent blur / replace-all race conditions
+        let timelineHistory = [];    // Stack of segment snapshots for undo
+        let currentTimelineSegments = []; // Last rendered segment state
+        const MAX_TIMELINE_HISTORY = 20;
 
         // Status config with colors
         const statusConfig = {
@@ -658,7 +685,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 const tbody = document.getElementById('termsTable');
                 
                 if (!terms || terms.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">No terms extracted yet.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">No terms extracted yet.</td></tr>';
                     return;
                 }
 
@@ -675,14 +702,11 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         </td>
                         <td class="px-3 py-2 font-medium text-slate-900 dark:text-[#E2E2E8]">${escapeHtml(term.original_term)}</td>
                         <td class="px-3 py-2 text-slate-600 dark:text-[#8A8F98] rtl-text">${escapeHtml(cleanTranslation)}</td>
-                        <td class="px-3 py-2 text-center">
-                            <span class="inline-flex items-center justify-center min-w-[1.5rem] px-1.5 py-0.5 bg-slate-100 dark:bg-[#2A2A30] rounded-full text-xs font-medium text-slate-700 dark:text-[#E2E2E8]">${term.frequency || 1}</span>
-                        </td>
                         <td class="px-3 py-2">
                             <div class="flex items-center gap-2">
                                 <input type="text" value="${escapeHtml(term.standardized_term || '')}" 
                                     onchange="updateTerm('${term.id}', this.value)"
-                                    class="flex-1 border-transparent bg-slate-50/50 dark:bg-[#0F0F12]/50 hover:bg-slate-100/70 dark:hover:bg-[#0F0F12]/70 focus:bg-white dark:focus:bg-[#0F0F12] focus:border-slate-300 dark:focus:border-[#2A2A30] focus:ring-1 focus:ring-slate-300 dark:focus:ring-[#2A2A30] transition-all rounded px-2 py-1 text-xs">
+                                    class="flex-1 border-transparent bg-slate-50/50 dark:bg-[#2A2A30]/70 hover:bg-slate-100/70 dark:hover:bg-[#2A2A30] focus:bg-white dark:focus:bg-[#1A1A1E] focus:border-slate-300 dark:focus:border-[#3A3A42] focus:ring-1 focus:ring-slate-300 dark:focus:ring-[#3A3A42] text-slate-900 dark:text-[#E2E2E8] placeholder-slate-400 dark:placeholder-[#6B7280] transition-all rounded px-2 py-1 text-xs">
                             </div>
                         </td>
                     </tr>
@@ -702,7 +726,11 @@ HTML_INTERFACE = """<!DOCTYPE html>
         function renderSubtitleTimeline(segments) {
             const grid = document.getElementById('timelineCardGrid');
             if (!grid) return;
-            
+
+            // Track the latest rendered state for history snapshots
+            currentTimelineSegments = JSON.parse(JSON.stringify(segments || []));
+            _updateUndoButton();
+
             if (!segments || segments.length === 0) {
                 grid.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
                 return;
@@ -728,8 +756,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         </div>
                     </div>
                     <div contenteditable="true" data-segment-id="${seg.id || ''}"
-                        class="text-slate-800 dark:text-[#E2E2E8] leading-relaxed outline-none focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 rounded p-1 transition-all ${seg.translated_text ? '' : 'text-slate-400 dark:text-[#6B7280] italic'}"
-                    >${escapeHtml(seg.translated_text || seg.original_text || '(empty)')}</div>
+                        class="text-slate-800 dark:text-[#E2E2E8] leading-relaxed outline-none focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 rounded p-1 transition-all ${seg.translated_text != null ? '' : 'text-slate-400 dark:text-[#6B7280] italic'}"
+                    >${escapeHtml(seg.translated_text != null ? seg.translated_text : seg.original_text || '(empty)')}</div>
                 </div>
             `).join('');
             
@@ -737,6 +765,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             grid.querySelectorAll('[data-segment-id]').forEach(el => {
                 el.addEventListener('blur', async (e) => {
                     if (isSavingSegment) return;
+                    pushTimelineHistory();
                     const segmentId = e.target.getAttribute('data-segment-id');
                     const newText = e.target.innerText.trim();
                     if (!segmentId || !currentVideoId) return;
@@ -775,6 +804,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     e.preventDefault();
                     const segmentId = btn.getAttribute('data-split-segment');
                     if (!segmentId || !currentVideoId) return;
+                    pushTimelineHistory();
                     
                     try {
                         const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}/split`, {
@@ -798,6 +828,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     e.preventDefault();
                     const targetSeq = parseInt(btn.getAttribute('data-add-below'), 10) + 1;
                     if (!currentVideoId || isNaN(targetSeq)) return;
+                    pushTimelineHistory();
                     
                     try {
                         const response = await fetch(`/videos/${currentVideoId}/segments/add`, {
@@ -827,6 +858,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     e.preventDefault();
                     const segmentId = btn.getAttribute('data-remove-segment');
                     if (!segmentId || !currentVideoId) return;
+                    pushTimelineHistory();
                     
                     try {
                         const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}`, {
@@ -843,7 +875,54 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 });
             });
         }
-        
+
+        // ------------------------------------------------------------------
+        // Timeline Undo System
+        // ------------------------------------------------------------------
+        function pushTimelineHistory() {
+            // Save a snapshot of the current timeline before a mutating operation.
+            if (!currentTimelineSegments || currentTimelineSegments.length === 0) return;
+            timelineHistory.push(JSON.parse(JSON.stringify(currentTimelineSegments)));
+            if (timelineHistory.length > MAX_TIMELINE_HISTORY) {
+                timelineHistory.shift();
+            }
+            _updateUndoButton();
+        }
+
+        function _updateUndoButton() {
+            const btn = document.getElementById('undoTimelineBtn');
+            if (!btn) return;
+            const hasHistory = timelineHistory.length > 0;
+            btn.disabled = !hasHistory;
+            btn.classList.toggle('opacity-50', !hasHistory);
+            btn.classList.toggle('cursor-not-allowed', !hasHistory);
+            btn.classList.toggle('hover:bg-slate-300', hasHistory);
+            btn.classList.toggle('dark:hover:bg-[#3A3A40]', hasHistory);
+        }
+
+        async function undoTimeline() {
+            if (timelineHistory.length === 0 || !currentVideoId) return;
+            const restoredSegments = timelineHistory.pop();
+
+            try {
+                const response = await fetch(`/videos/${currentVideoId}/segments/restore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ segments: restoredSegments })
+                });
+                if (!response.ok) throw new Error('Server returned ' + response.status);
+                const data = await response.json();
+                log('Undo successful.', 'success');
+                if (data.segments) renderSubtitleTimeline(data.segments);
+            } catch (err) {
+                console.error('Undo failed:', err);
+                log('Undo failed: ' + err.message, 'error');
+                // Push the snapshot back so the user can retry
+                timelineHistory.push(restoredSegments);
+                _updateUndoButton();
+            }
+        }
+
         async function updateTerm(termId, value) {
             try {
                 await fetch(`/terms/${termId}`, {
@@ -1340,6 +1419,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
         function resetApp() {
             currentVideoId = null;
             currentFileType = 'video';
+            timelineHistory = [];
+            currentTimelineSegments = [];
             currentJobId = null;
             isJobRunning = false;
             hasStartedProcessing = false;
@@ -1384,7 +1465,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const termsTableReset = document.getElementById('termsTable');
             if (termsTableReset) termsTableReset.innerHTML = `
                 <tr>
-                    <td colspan="5" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                    <td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
                         No terms extracted yet. Upload and process a video.
                     </td>
                 </tr>
@@ -1660,6 +1741,14 @@ HTML_INTERFACE = """<!DOCTYPE html>
             }
         }
 
+        // Helper: extract filename from Content-Disposition header
+        function getFilenameFromHeader(response, fallback) {
+            const header = response.headers.get('Content-Disposition');
+            if (!header) return fallback;
+            const match = header.match(/filename="?([^"]+)"?/);
+            return match ? match[1] : fallback;
+        }
+
         // Generic export handler
         async function exportFormat(format) {
             if (!currentVideoId) return;
@@ -1680,7 +1769,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `translation_${currentVideoId.substring(0, 8)}.${format}`;
+                const fallback = `translation_${currentVideoId.substring(0, 8)}.${format}`;
+                a.download = getFilenameFromHeader(response, fallback);
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
@@ -1706,7 +1796,8 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `transcription_${currentVideoId.substring(0, 8)}.srt`;
+                const fallback = `transcription_${currentVideoId.substring(0, 8)}.srt`;
+                a.download = getFilenameFromHeader(response, fallback);
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
@@ -1740,6 +1831,38 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 localStorage.setItem('termsub_gemini_api_key', apiKeyInput.value);
             });
 
+            // --- API Key Help Modal ---
+            const apiKeyModal = document.getElementById('apiKeyModal');
+            const apiKeyHelpBtn = document.getElementById('apiKeyHelpBtn');
+            const apiKeyModalClose = document.getElementById('apiKeyModalClose');
+
+            function openApiKeyModal() {
+                if (apiKeyModal) {
+                    apiKeyModal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function closeApiKeyModal() {
+                if (apiKeyModal) {
+                    apiKeyModal.classList.add('hidden');
+                    document.body.style.overflow = '';
+                }
+            }
+
+            if (apiKeyHelpBtn) apiKeyHelpBtn.addEventListener('click', openApiKeyModal);
+            if (apiKeyModalClose) apiKeyModalClose.addEventListener('click', closeApiKeyModal);
+            if (apiKeyModal) {
+                apiKeyModal.addEventListener('click', (e) => {
+                    if (e.target === apiKeyModal) closeApiKeyModal();
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && !apiKeyModal.classList.contains('hidden')) {
+                        closeApiKeyModal();
+                    }
+                });
+            }
+
             // File input
             const fileInput = document.getElementById('fileInput');
             const fileLabel = document.getElementById('fileLabel');
@@ -1756,6 +1879,39 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 }
             });
             
+            // Drag & Drop handlers
+            const dropZone = document.getElementById('dropZone');
+            if (dropZone) {
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }, false);
+                });
+                
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, () => {
+                        dropZone.classList.add('border-blue-400', 'bg-blue-50', 'dark:bg-blue-900/20');
+                    }, false);
+                });
+                
+                ['dragleave', 'drop'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, () => {
+                        dropZone.classList.remove('border-blue-400', 'bg-blue-50', 'dark:bg-blue-900/20');
+                    }, false);
+                });
+                
+                dropZone.addEventListener('drop', (e) => {
+                    const files = e.dataTransfer.files;
+                    if (files && files.length > 0) {
+                        const dt = new DataTransfer();
+                        dt.items.add(files[0]);
+                        fileInput.files = dt.files;
+                        fileInput.dispatchEvent(new Event('change'));
+                    }
+                }, false);
+            }
+            
             // Target language change: clear validation warning
             const targetLangSelect = document.getElementById('targetLanguage');
             if (targetLangSelect) {
@@ -1771,10 +1927,23 @@ HTML_INTERFACE = """<!DOCTYPE html>
             // Buttons
             document.getElementById('uploadBtn').addEventListener('click', uploadFile);
             document.getElementById('startNewProjectBtn').addEventListener('click', resetApp);
+
+            // Undo button click
+            const undoBtn = document.getElementById('undoTimelineBtn');
+            if (undoBtn) undoBtn.addEventListener('click', undoTimeline);
+
+            // Keyboard shortcut: Ctrl+Z / Cmd+Z for undo
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    undoTimeline();
+                }
+            });
             
             // Global Find & Replace handler
             document.getElementById('replaceAllBtn').addEventListener('click', async () => {
                 if (!currentVideoId || isSavingSegment) return;
+                pushTimelineHistory();
                 const findInput = document.getElementById('findInput');
                 const replaceInput = document.getElementById('replaceInput');
                 const replaceBtn = document.getElementById('replaceAllBtn');

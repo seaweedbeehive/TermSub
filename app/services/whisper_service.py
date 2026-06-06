@@ -15,7 +15,7 @@ from typing import Optional, Dict, Any, List
 from app.core.config import settings
 from app.models.video import Video, VideoStatus, Segment
 from app.services.progress_service import get_progress_tracker
-from app.services.transcription import align_transcript_with_whisperx
+from app.services.transcription import align_transcript_with_whisperx, AlignmentError
 
 
 # ---------------------------------------------------------------------------
@@ -230,9 +230,14 @@ def gemini_transcribe(
                 "WhisperX alignment applied",
                 f"{len(segments)} segments aligned",
             )
+    except AlignmentError:
+        # HARD FAILURE: the transcript and audio are fundamentally mismatched.
+        # Re-raise so the background worker marks the job as ERROR and the
+        # UI receives a clear job_error WebSocket message.
+        raise
     except Exception as exc:
-        # Any unexpected error in the alignment layer must not break
-        # the transcription flow — we keep Gemini's original timestamps.
+        # Soft failure (unexpected runtime issue): log and keep Gemini's
+        # coarse timestamps so transcription is not blocked by minor issues.
         if progress_tracker:
             progress_tracker.warning(
                 "WHISPER",

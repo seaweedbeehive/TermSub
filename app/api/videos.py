@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 import json
 import asyncio
 import traceback
+import uuid
 
 from app.db.session import get_db
 from app.models.video import Video, VideoStatus, Segment
@@ -530,35 +531,32 @@ def split_segment(
     if not segment:
         raise HTTPException(status_code=404, detail="Segment not found")
     
-    original_text = segment.original_text or ""
-    mid_time = (segment.start_time + segment.end_time) / 2.0
-    
-    # Split text at nearest space to the middle
-    if len(original_text) <= 1:
-        first_half = original_text
-        second_half = ""
-    else:
-        mid_idx = len(original_text) // 2
-        # Find nearest space
-        left_space = original_text.rfind(" ", 0, mid_idx)
-        right_space = original_text.find(" ", mid_idx)
-        
+    def _split_at_nearest_space(text: str) -> tuple[str, str]:
+        """Split text into two halves at the space nearest to the middle."""
+        if not text or len(text) <= 1:
+            return text or "", ""
+        mid_idx = len(text) // 2
+        left_space = text.rfind(" ", 0, mid_idx)
+        right_space = text.find(" ", mid_idx)
+
         if left_space != -1 and right_space != -1:
-            # Choose the closer space
-            if (mid_idx - left_space) <= (right_space - mid_idx):
-                split_idx = left_space
-            else:
-                split_idx = right_space
+            split_idx = left_space if (mid_idx - left_space) <= (right_space - mid_idx) else right_space
         elif left_space != -1:
             split_idx = left_space
         elif right_space != -1:
             split_idx = right_space
         else:
             split_idx = mid_idx
-        
-        first_half = original_text[:split_idx].strip()
-        second_half = original_text[split_idx:].strip()
-    
+
+        return text[:split_idx].strip(), text[split_idx:].strip()
+
+    mid_time = (segment.start_time + segment.end_time) / 2.0
+
+    # Split both fields independently so translations are never overwritten
+    # by source-language text.
+    orig_first, orig_second = _split_at_nearest_space(segment.original_text or "")
+    trans_first, trans_second = _split_at_nearest_space(segment.translated_text or "")
+
     # Shift subsequent segments up by 1
     db.execute(
         text("""
@@ -569,25 +567,27 @@ def split_segment(
         {"video_id": video_id, "current_sequence": segment.sequence_number}
     )
     db.commit()
-    
+
     # Capture original end_time before mutating
     original_end_time = segment.end_time
-    
-    # Update original segment with first half and new end_time
-    segment.original_text = first_half
-    segment.translated_text = first_half
+
+    # Update original segment with first halves
+    segment.original_text = orig_first
+    # If a translation exists, preserve its split; otherwise copy the split
+    # original so the user sees editable text instead of falling back.
+    segment.translated_text = trans_first if segment.translated_text else orig_first
     segment.end_time = mid_time
     db.commit()
     db.refresh(segment)
-    
-    # Insert new segment with second half
+
+    # Insert new segment with second halves
     new_segment = Segment(
         video_id=video_id,
         sequence_number=segment.sequence_number + 1,
         start_time=mid_time,
         end_time=original_end_time,
-        original_text=second_half,
-        translated_text=second_half,
+        original_text=orig_second,
+        translated_text=trans_second if segment.translated_text else orig_second,
     )
     db.add(new_segment)
     db.commit()
@@ -612,5 +612,69 @@ def split_segment(
             }
             for s in updated_segments
         ]
+    }
+
+@router.post("/{video_id}/segments/restore")
+def restore_segments(
+    video_id: str,
+    body: dict,
+    db: Session = Depends(get_db)
+):
+    """Bulk-replace all segments for a video with a restored state (undo support).
+
+    Deletes all existing segments and re-inserts the provided list.
+    Preserves IDs from the snapshot when available to avoid breaking
+    frontend references.
+    """
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    segments_data = body.get("segments", [])
+
+    # Delete all existing segments for this video
+    db.query(Segment).filter(Segment.video_id == video_id).delete(
+        synchronize_session=False
+    )
+    db.commit()
+
+    # Re-insert restored segments
+    restored_ids = []
+    for seg_data in segments_data:
+        new_seg = Segment(
+            id=seg_data.get("id") or str(uuid.uuid4()),
+            video_id=video_id,
+            sequence_number=int(seg_data.get("sequence_number", 0)),
+            start_time=float(seg_data.get("start_time", 0.0)),
+            end_time=float(seg_data.get("end_time", 0.0)),
+            original_text=str(seg_data.get("original_text", "")),
+            translated_text=seg_data.get("translated_text"),
+        )
+        db.add(new_seg)
+        restored_ids.append(new_seg.id)
+
+    db.commit()
+
+    # Refresh and return ordered list
+    updated_segments = (
+        db.query(Segment)
+        .filter(Segment.id.in_(restored_ids))
+        .order_by(Segment.sequence_number)
+        .all()
+    )
+
+    return {
+        "status": "success",
+        "segments": [
+            {
+                "id": s.id,
+                "sequence_number": s.sequence_number,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "original_text": s.original_text,
+                "translated_text": s.translated_text,
+            }
+            for s in updated_segments
+        ],
     }
 

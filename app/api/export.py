@@ -160,10 +160,10 @@ def export_srt(video_id: str, db: Session = Depends(get_db)):
     # Generate SRT content
     srt_content = generate_srt(segments)
     
-    # Return with appropriate headers for download
-    # Use ASCII-only filename for Content-Disposition to avoid encoding issues
+    # Derive download filename from original video name (strip extension)
+    download_name = sanitize_filename(video.filename) + ".srt"
     headers = {
-        "Content-Disposition": 'attachment; filename="subtitles.srt"',
+        "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "text/plain; charset=utf-8"
     }
     
@@ -181,9 +181,10 @@ def export_vtt(video_id: str, db: Session = Depends(get_db)):
     # Generate VTT content
     vtt_content = generate_vtt(segments)
     
-    # Return with appropriate headers for download
+    # Derive download filename from original video name (strip extension)
+    download_name = sanitize_filename(video.filename) + ".vtt"
     headers = {
-        "Content-Disposition": 'attachment; filename="subtitles.vtt"',
+        "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "text/vtt; charset=utf-8"
     }
     
@@ -201,9 +202,10 @@ def export_txt(video_id: str, db: Session = Depends(get_db)):
     # Generate TXT content
     txt_content = generate_txt(segments)
     
-    # Return with appropriate headers for download
+    # Derive download filename from original video name (strip extension)
+    download_name = sanitize_filename(video.filename) + ".txt"
     headers = {
-        "Content-Disposition": 'attachment; filename="translation.txt"',
+        "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "text/plain; charset=utf-8"
     }
     
@@ -221,9 +223,10 @@ def export_json(video_id: str, db: Session = Depends(get_db)):
     # Generate JSON content
     json_data = generate_json(video, segments)
     
-    # Return as downloadable JSON file
+    # Derive download filename from original video name (strip extension)
+    download_name = sanitize_filename(video.filename) + ".json"
     headers = {
-        "Content-Disposition": 'attachment; filename="translation.json"',
+        "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "application/json; charset=utf-8"
     }
     
@@ -272,9 +275,10 @@ def export_original_transcription(video_id: str, db: Session = Depends(get_db)):
     # Generate SRT from original text
     srt_content = generate_original_srt(segments)
     
-    # Return with appropriate headers for download
+    # Derive download filename from original video name (strip extension)
+    download_name = sanitize_filename(video.filename) + "_transcription.srt"
     headers = {
-        "Content-Disposition": 'attachment; filename="transcription.srt"',
+        "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "text/plain; charset=utf-8"
     }
     

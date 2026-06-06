@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./termsub.db"
     UPLOAD_DIR: Path = Path("uploads")
     EXPORT_DIR: Path = Path("exports")
-    GEMINI_API_KEY: str
+    GEMINI_API_KEY: str | None = None
 
     class Config:
         env_file = ".env"

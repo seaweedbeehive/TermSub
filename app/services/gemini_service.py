@@ -238,15 +238,20 @@ class BatchResult:
 # Gemini API Functions
 # ============================================================================
 
-def test_gemini_connection() -> tuple[bool, str]:
-    """Test if Gemini API is configured and working."""
+def test_gemini_connection(api_key: str | None = None) -> tuple[bool, str]:
+    """Test if Gemini API is configured and working.
+    
+    Args:
+        api_key: Optional API key to test. Falls back to settings.GEMINI_API_KEY.
+    """
     try:
         from google import genai
         
-        if not settings.GEMINI_API_KEY:
-            return False, "GEMINI_API_KEY not configured in .env file"
+        effective_key = api_key or settings.GEMINI_API_KEY
+        if not effective_key:
+            return False, "GEMINI_API_KEY not configured. Please enter your API key in the UI."
         
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        client = genai.Client(api_key=effective_key)
         
         response = client.models.generate_content(
             model='gemini-2.5-flash',
@@ -262,17 +267,32 @@ def test_gemini_connection() -> tuple[bool, str]:
         return False, f"API error: {str(e)}"
 
 
-def get_gemini_client() -> Any:
-    """Initialize and return Gemini client."""
+def get_gemini_client(api_key: str | None = None) -> Any:
+    """Initialize and return Gemini client.
+    
+    Args:
+        api_key: Optional per-request API key (e.g. from frontend payload).
+            If provided, it takes priority over the system environment variable.
+    
+    Raises:
+        HTTPException: 400 Bad Request if no API key is available.
+        RuntimeError: If the google-genai package is not installed.
+    """
+    from fastapi import HTTPException
+    
     try:
         from google import genai
     except ImportError:
         raise RuntimeError("google-genai not installed. Install with: pip install google-genai>=1.0.0")
     
-    if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY not configured")
+    effective_key = api_key or settings.GEMINI_API_KEY
+    if not effective_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Gemini API Key is required. Please enter your API key in the UI before proceeding."
+        )
     
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
+    return genai.Client(api_key=effective_key)
 
 
 # ============================================================================
@@ -434,21 +454,23 @@ STYLE GUIDE:
 {style_guide}
 """ if style_guide else ""
     
-    prompt = f"""Translate the following {source_language} subtitles to {target_lang_name}.
-{full_context_section}{context_before_section}
-TRANSLATE THESE SEGMENTS:
+    prompt = f"""You are executing a professional subtitle translation pass from {source_language} to {target_lang_name}.
+
+{style_section}
+{full_context_section}
+{context_before_section}
+
+TRANSLATE THESE SPECIFIC TIMELINE SEGMENTS:
 {segments_text}
-{context_after_section}{style_section}
-INSTRUCTIONS:
-1. Maintain consistent terminology across all segments
-2. Preserve the meaning, tone, and timing context
-3. Use natural, conversational language suitable for subtitles
-4. OBEY THE MANDATORY GLOSSARY IN YOUR SYSTEM INSTRUCTIONS — use the exact specified translations whenever the source terms appear
-5. MANDATORY: You must use the provided glossary for translation. If a term is in the glossary, YOU MUST use that exact translation. This is a strict requirement.
-6. Use previous context to maintain narrative flow and character voice
-7. Return translations for ALL segments provided
-8. CRITICAL SUBTITLE FORMATTING RULES: You must adhere to strict broadcast standards. Maximum 42 characters per line. Maximum 2 lines per subtitle card (Max 84 characters total). Never output a massive block of text. If a speaker talks continuously, break their speech into smaller, logical sentence fragments across multiple JSON segments.
-9. ABSOLUTE TARGET LANGUAGE ENFORCEMENT: You must translate ALL content into {target_lang_name} only. Do not output any words, phrases, numbers, or punctuation in the source language or English. The entire response must be 100% {target_lang_name}. No exceptions.
+
+{context_after_section}
+
+CRITICAL EDITORIAL & FORMATTING INSTRUCTIONS:
+1. NARRATIVE CONTINUITY: You must use the Full Transcript to understand the overarching story, but rely on the PREVIOUS and FUTURE context to nail the immediate pacing, conversational subtext, and character voice for this specific batch.
+2. STRICT BROADCAST STANDARDS: Maximum 42 characters per line. Maximum 2 lines per subtitle card. If a speaker talks continuously, break their speech logically at natural breath pauses, conjunctions, or punctuation to match the rhythm of an edit. Never output a single massive block of text.
+3. MANDATORY GLOSSARY: You are strictly bound by the glossary rules defined in your system instructions. If a term appears, the required translation is non-negotiable.
+4. ABSOLUTE TARGET LANGUAGE: You must translate ALL content into {target_lang_name} only. No source language remnants, numbers, or punctuation are allowed.
+5. 1:1 SEGMENT MATCH: You must return a translated node for every single sequence number provided in the batch. Do not merge or drop segments.
 
 Return STRICTLY as JSON with this exact format:
 {{

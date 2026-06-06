@@ -113,6 +113,11 @@ all_ok &= check_import("dotenv", "python-dotenv")
 all_ok &= check_import("httpx")
 all_ok &= check_import("multipart", "python-multipart")
 
+# Hybrid alignment dependencies (WhisperX + torch)
+all_ok &= check_import("torch")
+all_ok &= check_import("torchaudio")
+all_ok &= check_import("whisperx")
+
 sys.exit(0 if all_ok else 1)
 EOF
 
