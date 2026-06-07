@@ -2,16 +2,16 @@
 
 > **AI-Powered Video Translation & Terminology Management**
 
-TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **Gemini-only transcription with WhisperX timestamp alignment**, a **built-in web UI with light/dark theme toggle**, and **real-time progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
+TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **OpenAI cloud-native transcription and translation**, a **built-in web UI with light/dark theme toggle**, and **real-time progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
 
-Built with a focus on **Persian (Farsi)** and other RTL languages, but supports any language pair Gemini can handle.
+Built with a focus on **Persian (Farsi)** and other RTL languages, but supports any language pair OpenAI models can handle.
 
 ---
 
 ## Features
 
-### Gemini-Only Transcription with WhisperX Alignment
-Audio is extracted via FFmpeg and transcribed by **Google Gemini Flash**. Coarse timestamps are then refined with **WhisperX** word-level alignment (CPU fallback) for maximum accuracy.
+### OpenAI Cloud-Native Transcription
+Audio is extracted via FFmpeg and transcribed by **OpenAI whisper-1**. Segment-level timestamps are returned directly from the cloud — no local alignment models required.
 
 ### Multi-Agent Translation Pipeline
 Translation is performed by three specialized AI agents working in sequence:
@@ -70,7 +70,7 @@ A complete single-page interface served at `http://localhost:8000/` with:
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────────┐
-│   Upload    │────▶│  FFmpeg Audio   │────▶│  Gemini Flash       │
+│   Upload    │────▶│  FFmpeg Audio   │────▶│  OpenAI whisper-1   │
 │  (Video)    │     │   Extraction    │     │  Transcription      │
 └─────────────┘     └─────────────────┘     └─────────────────────┘
                                                      │
@@ -78,8 +78,7 @@ A complete single-page interface served at `http://localhost:8000/` with:
                               │
                               ▼
                      ┌─────────────────┐
-                     │ WhisperX Align  │  (CPU fallback)
-                     │  (refine timestamps)
+                     │ Segment Timestamps │  (born from cloud)
                      └─────────────────┘
                               │
 ┌─────────────────────────────┘
@@ -127,9 +126,9 @@ A complete single-page interface served at `http://localhost:8000/` with:
 │   │   └── job_queue.py      # JobQueue, JobStatus, JobType
 │   ├── schemas/              # Pydantic request/response models
 │   ├── services/
-│   │   ├── whisper_service.py      # FFmpeg + Gemini transcription
-│   │   ├── transcription.py        # WhisperX alignment for hybrid pipeline
-│   │   ├── gemini_service.py       # Gemini translation + validation
+│   │   ├── whisper_service.py      # FFmpeg + OpenAI transcription
+│   │   ├── transcription.py        # OpenAI whisper-1 transcription
+│   │   ├── gemini_service.py       # OpenAI translation + validation
 │   │   ├── translation_pipeline.py # Multi-agent pipeline orchestration
 │   │   ├── context_analysis_service.py # Director + Glossary agents
 │   │   ├── progress_service.py     # Progress tracking
@@ -180,7 +179,7 @@ Edit `.env` and add your API keys:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GEMINI_API_KEY` | **Yes** | Google Gemini API key (transcription + translation + analysis) |
+| `OPENAI_API_KEY` | **Yes** | OpenAI API key (transcription + translation + analysis) |
 | `DATABASE_URL` | No | SQLite default: `sqlite:///./termsub.db` |
 | `UPLOAD_DIR` | No | Upload folder (default: `uploads`) |
 | `EXPORT_DIR` | No | Export folder (default: `exports`) |
@@ -222,8 +221,8 @@ POST /videos/upload
 ### 2. Transcribe
 Click **Transcribe** (or call the API). The background worker:
 - Extracts audio with FFmpeg (16kHz mono WAV)
-- Sends audio to Gemini Flash for structured JSON transcription
-- Runs WhisperX alignment to refine timestamps
+- Sends audio to OpenAI whisper-1 for segment-level transcription
+- Timestamps are born together with text from the cloud
 - Saves segments with timestamps to the database
 
 ```bash
@@ -347,7 +346,7 @@ If dependencies change:
 ## Tech Stack
 
 - **Backend**: FastAPI + SQLAlchemy + SQLite
-- **AI/ML**: Google Gemini (`google-genai`), WhisperX, PyTorch
+- **AI/ML**: OpenAI (`openai`) — whisper-1 for transcription, gpt-5.4-mini for translation
 - **Queue**: SQLite-backed background worker with WebSocket updates
 - **Frontend**: Built-in vanilla JS + Tailwind CSS with light/dark mode (served from `main.py`)
 - **Audio**: FFmpeg for extraction

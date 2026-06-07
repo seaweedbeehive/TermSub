@@ -38,24 +38,24 @@ VALID_JOB_TYPES = {JobType.TRANSCRIBE.value, JobType.ANALYZE.value, JobType.TRAN
 _worker_instance: Optional['SQLiteQueueWorker'] = None
 _worker_lock = threading.Lock()
 
-# In-memory store for per-request Gemini API keys.
+# In-memory store for per-request OpenAI API keys.
 # Key: video_id, Value: API key string
 # Populated by the API endpoint before enqueue, consumed by the worker.
-_gemini_api_keys: Dict[str, str] = {}
+_openai_api_keys: Dict[str, str] = {}
 
 
-def set_gemini_api_key(video_id: str, api_key: str) -> None:
-    """Store the Gemini API key for a video before enqueueing.
+def set_openai_api_key(video_id: str, api_key: str) -> None:
+    """Store the OpenAI API key for a video before enqueueing.
     
     Args:
         video_id: The video ID
-        api_key: Gemini API key
+        api_key: OpenAI API key
     """
-    _gemini_api_keys[video_id] = api_key
+    _openai_api_keys[video_id] = api_key
 
 
-def get_gemini_api_key(video_id: str) -> Optional[str]:
-    """Retrieve and clear the stored Gemini API key for a video.
+def get_openai_api_key(video_id: str) -> Optional[str]:
+    """Retrieve and clear the stored OpenAI API key for a video.
     
     Args:
         video_id: The video ID
@@ -63,7 +63,12 @@ def get_gemini_api_key(video_id: str) -> Optional[str]:
     Returns:
         API key if set, None otherwise
     """
-    return _gemini_api_keys.pop(video_id, None)
+    return _openai_api_keys.pop(video_id, None)
+
+
+# Backward-compatible aliases
+set_gemini_api_key = set_openai_api_key
+get_gemini_api_key = get_openai_api_key
 
 # Default timeout for job processing (in minutes)
 DEFAULT_JOB_TIMEOUT_MINUTES = 30
@@ -640,16 +645,16 @@ class SQLiteQueueWorker(threading.Thread):
             source_language = video.source_language
             logger.debug(f"Video {video_id} source_language: {source_language}")
         
-        # Check for a per-request Gemini API key override
-        api_key_override = get_gemini_api_key(video_id)
+        # Check for a per-request OpenAI API key override
+        api_key_override = get_openai_api_key(video_id)
         if api_key_override:
-            logger.info("Using per-request Gemini API key")
+            logger.info("Using per-request OpenAI API key")
         
         # Send initial progress
         self._send_ws_sync(video_id, {
             'status': 'transcribing',
             'progress': 10,
-            'message': 'Starting Gemini Cloud transcription...'
+            'message': 'Starting OpenAI Cloud transcription...'
         })
         
         # Execute transcription (NO db session - whisper_service manages its own sessions)

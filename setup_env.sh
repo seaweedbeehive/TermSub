@@ -107,16 +107,11 @@ all_ok &= check_import("uvicorn")
 all_ok &= check_import("sqlalchemy")
 all_ok &= check_import("pydantic")
 all_ok &= check_import("pydantic_settings", "pydantic-settings")
-all_ok &= check_import("google.genai", "google-genai")
+all_ok &= check_import("openai")
 all_ok &= check_import("jinja2")
 all_ok &= check_import("dotenv", "python-dotenv")
 all_ok &= check_import("httpx")
 all_ok &= check_import("multipart", "python-multipart")
-
-# Hybrid alignment dependencies (WhisperX + torch)
-all_ok &= check_import("torch")
-all_ok &= check_import("torchaudio")
-all_ok &= check_import("whisperx")
 
 sys.exit(0 if all_ok else 1)
 EOF

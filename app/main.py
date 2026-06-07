@@ -348,14 +348,14 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
                         </div>
 
-                        <!-- Gemini API Key Vault -->
-                        <!-- Gemini API Key Vault -->
+                        <!-- OpenAI API Key Vault -->
+                        <!-- OpenAI API Key Vault -->
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1" for="geminiApiKey">Gemini API Key</label>
-                            <input type="password" id="geminiApiKey" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]" placeholder="Paste your Gemini API key here">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1" for="openaiApiKey">OpenAI API Key</label>
+                            <input type="password" id="openaiApiKey" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]" placeholder="Paste your OpenAI API key here">
                             <p class="text-[10px] text-slate-500 dark:text-[#8A8F98] mt-1">
                                 <button id="apiKeyHelpBtn" type="button" class="text-cyan-400 hover:text-cyan-300 hover:underline font-medium cursor-pointer bg-transparent border-none p-0">
-                                    Get a free API key at Google AI Studio
+                                    Get an API key at OpenAI Platform
                                 </button>
                             </p>
                         </div>
@@ -465,7 +465,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                         <table class="w-full text-sm">
                             <thead class="sticky top-0 bg-white dark:bg-[#1A1A1E] z-10 shadow-sm text-slate-600 dark:text-[#8A8F98]">
                                 <tr>
-                                    <th class="px-3 py-2 text-left text-xs font-medium">Type</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Original</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Translation</th>
                                     <th class="px-3 py-2 text-left text-xs font-medium">Standard</th>
@@ -473,7 +472,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                             </thead>
                             <tbody id="termsTable" class="divide-y divide-slate-100 dark:divide-white/10">
                                 <tr>
-                                    <td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                                    <td colspan="3" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
                                         No terms extracted yet. Upload and process a video.
                                     </td>
                                 </tr>
@@ -520,15 +519,15 @@ HTML_INTERFACE = """<!DOCTYPE html>
             <button id="apiKeyModalClose" type="button" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors" aria-label="Close modal">
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
-            <h3 class="text-lg font-semibold text-white mb-2">How to get a Free Gemini API Key</h3>
-            <p class="text-sm text-gray-300 mb-4">You can get a Gemini API key for free through Google AI Studio. No credit card is required, making it perfect for prototyping and personal projects.</p>
+            <h3 class="text-lg font-semibold text-white mb-2">How to get an OpenAI API Key</h3>
+            <p class="text-sm text-gray-300 mb-4">You can get an OpenAI API key through the OpenAI Platform. A valid payment method is required, but you only pay for what you use.</p>
             <ol class="list-decimal list-inside text-sm text-gray-300 space-y-2 mb-4">
-                <li>Navigate to <a href="https://aistudio.google.com/" target="_blank" class="text-cyan-400 hover:underline font-medium">Google AI Studio</a> and sign in with your Google account.</li>
-                <li>Accept the terms of service.</li>
-                <li>Click <strong>"Get API key"</strong> in the left-hand navigation menu.</li>
-                <li>Select <strong>"Create API key"</strong> (you can generate one inside a new or existing project environment).</li>
+                <li>Navigate to <a href="https://platform.openai.com/" target="_blank" class="text-cyan-400 hover:underline font-medium">OpenAI Platform</a> and sign in with your account.</li>
+                <li>Go to <strong>Settings &rarr; Billing</strong> and add a payment method.</li>
+                <li>Click <strong>"API keys"</strong> in the left-hand navigation menu.</li>
+                <li>Select <strong>"Create new secret key"</strong> and copy it immediately (it will not be shown again).</li>
             </ol>
-            <p class="text-xs text-gray-400 italic">Note: The free tier allows you to deploy powerful models (including Gemini 1.5 Pro, 2.0 Flash, and 2.5 Flash) with generous rate limits, though it remains subject to standard usage caps and is designed for prototyping rather than commercial production.</p>
+            <p class="text-xs text-gray-400 italic">Note: whisper-1 and gpt-5.4-mini are billed per token / per minute of audio. Costs are typically very low for prototyping and personal projects. Always monitor your usage dashboard.</p>
         </div>
     </div>
 
@@ -560,7 +559,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             context_ready: { label: 'Context Ready', color: 'bg-sky-100 text-sky-800', dotColor: 'bg-sky-500' },
             glossary_extracting: { label: 'Extracting Terms', color: 'bg-yellow-100 text-yellow-800', dotColor: 'bg-yellow-500' },
             terms_ready: { label: 'Terms Ready', color: 'bg-indigo-100 text-indigo-800', dotColor: 'bg-indigo-500' },
-            translating: { label: 'Translating via Gemini', color: 'bg-purple-100 text-purple-800', dotColor: 'bg-purple-500' },
+            translating: { label: 'Translating via OpenAI', color: 'bg-purple-100 text-purple-800', dotColor: 'bg-purple-500' },
             completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-800', dotColor: 'bg-emerald-500' },
             awaiting_choice: { label: 'Awaiting Choice', color: 'bg-blue-100 text-blue-800', dotColor: 'bg-blue-500' },
             error: { label: 'Error', color: 'bg-rose-100 text-rose-800', dotColor: 'bg-rose-500' }
@@ -685,7 +684,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 const tbody = document.getElementById('termsTable');
                 
                 if (!terms || terms.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">No terms extracted yet.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="3" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">No terms extracted yet.</td></tr>';
                     return;
                 }
 
@@ -694,12 +693,6 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     const cleanTranslation = (term.translated_term || '').replace(/^\\[.*?\\]\\s*/, '');
                     return `
                     <tr class="hover:bg-slate-50 dark:hover:bg-[#1A1A1E] ${term.source === 'manual' ? 'bg-amber-50/50 dark:bg-amber-900/20' : ''}">
-                        <td class="px-3 py-2">
-                            <div class="flex flex-wrap gap-1">
-                                <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-medium ${term.source === 'manual' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}">${escapeHtml(term.category || 'Term')}</span>
-                                ${term.source === 'manual' ? '<span class="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-amber-200 text-amber-800">Manual</span>' : ''}
-                            </div>
-                        </td>
                         <td class="px-3 py-2 font-medium text-slate-900 dark:text-[#E2E2E8]">${escapeHtml(term.original_term)}</td>
                         <td class="px-3 py-2 text-slate-600 dark:text-[#8A8F98] rtl-text">${escapeHtml(cleanTranslation)}</td>
                         <td class="px-3 py-2">
@@ -1230,7 +1223,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
                     break;
                     
                 case 'translating':
-                    log('Translating via Gemini AI...');
+                    log('Translating via OpenAI AI...');
                     break;
                     
                 case 'completed':
@@ -1465,7 +1458,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const termsTableReset = document.getElementById('termsTable');
             if (termsTableReset) termsTableReset.innerHTML = `
                 <tr>
-                    <td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                    <td colspan="3" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
                         No terms extracted yet. Upload and process a video.
                     </td>
                 </tr>
@@ -1601,16 +1594,16 @@ HTML_INTERFACE = """<!DOCTYPE html>
             const isTextFile = currentFileType === 'text';
             const actionName = isTextFile ? 'parsing text' : 'transcription';
             
-            log(isTextFile ? 'Starting text parsing...' : 'Starting Gemini Cloud transcription...');
+            log(isTextFile ? 'Starting text parsing...' : 'Starting OpenAI Cloud transcription...');
             
             try {
                 const requestHeaders = {};
-                const apiKey = localStorage.getItem('termsub_gemini_api_key') || document.getElementById('geminiApiKey').value || '';
+                const apiKey = localStorage.getItem('termsub_openai_api_key') || document.getElementById('openaiApiKey').value || '';
                 if (apiKey.trim()) {
-                    requestHeaders['X-Gemini-API-Key'] = apiKey.trim();
+                    requestHeaders['X-OpenAI-API-Key'] = apiKey.trim();
                 }
                 
-                const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=gemini`, {
+                const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=openai`, {
                     method: 'POST',
                     headers: requestHeaders
                 });
@@ -1689,7 +1682,7 @@ HTML_INTERFACE = """<!DOCTYPE html>
             isJobRunning = true;
             hasStartedProcessing = false;
             
-            log('Starting Gemini Translator Agent...');
+            log('Starting OpenAI Translator Agent...');
             log('Using sliding window translation with glossary constraints');
             
             try {
@@ -1821,14 +1814,14 @@ HTML_INTERFACE = """<!DOCTYPE html>
                 });
             }
 
-            // --- Gemini API Key Vault (localStorage) ---
-            const apiKeyInput = document.getElementById('geminiApiKey');
-            const savedKey = localStorage.getItem('termsub_gemini_api_key');
+            // --- OpenAI API Key Vault (localStorage) ---
+            const apiKeyInput = document.getElementById('openaiApiKey');
+            const savedKey = localStorage.getItem('termsub_openai_api_key');
             if (savedKey) {
                 apiKeyInput.value = savedKey;
             }
             apiKeyInput.addEventListener('input', () => {
-                localStorage.setItem('termsub_gemini_api_key', apiKeyInput.value);
+                localStorage.setItem('termsub_openai_api_key', apiKeyInput.value);
             });
 
             // --- API Key Help Modal ---

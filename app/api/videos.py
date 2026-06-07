@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.models.video import Video, VideoStatus, Segment
 from app.schemas.video import VideoOut
 from app.core.config import settings
-from app.core.sqlite_queue import enqueue_job, get_job_status, set_gemini_api_key
+from app.core.sqlite_queue import enqueue_job, get_job_status, set_openai_api_key
 from app.services.upload_service import save_uploaded_file
 from app.services.text_parser import parse_text_file
 from app.services.gemini_service import translate_video_sliding_window
@@ -84,8 +84,8 @@ def transcribe_video_endpoint(
     """Queue transcription job for video using Gemini, or parse text files."""
     print(f"[API Transcribe] Request for video {video_id}")
     
-    # Extract Gemini API key manually from raw headers to bypass Pydantic annotation quirks
-    gemini_api_key = request.headers.get("X-Gemini-API-Key")
+    # Extract OpenAI API key manually from raw headers to bypass Pydantic annotation quirks
+    openai_api_key = request.headers.get("X-OpenAI-API-Key")
     
     try:
         video = db.query(Video).filter(Video.id == video_id).first()
@@ -110,13 +110,13 @@ def transcribe_video_endpoint(
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Parsing failed: {str(e)}")
         
-        # Validation: Gemini API key is required
-        if not gemini_api_key or not gemini_api_key.strip():
+        # Validation: OpenAI API key is required
+        if not openai_api_key or not openai_api_key.strip():
             raise HTTPException(
                 status_code=400,
-                detail="Gemini API Key is required for transcription."
+                detail="OpenAI API Key is required for transcription."
             )
-        set_gemini_api_key(video_id, gemini_api_key.strip())
+        set_openai_api_key(video_id, openai_api_key.strip())
         
         # Queue transcription job
         try:

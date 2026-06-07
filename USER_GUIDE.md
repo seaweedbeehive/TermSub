@@ -56,13 +56,13 @@ Before starting, tell TermSub which languages you are working with:
 
 > **Tip:** TermSub is built with particular strength for **Persian (Farsi)**, **Arabic**, and other **right-to-left (RTL)** languages, including automatic punctuation fixes during export.
 
-### 3. Enter Your Gemini API Key
+### 3. Enter Your OpenAI API Key
 
-In the **Gemini API Key** field, paste your personal API key from Google AI Studio.
+In the **OpenAI API Key** field, paste your personal API key from the OpenAI Platform.
 
 - This key powers the AI transcription, analysis, and translation engines.
 - Your key is saved locally in your browser for convenience and is never stored on the server.
-- If you need a key, click **Get a free API key at Google AI Studio** beneath the input field for a guided walkthrough.
+- If you need a key, click **Get an API key at OpenAI Platform** beneath the input field for a guided walkthrough.
 
 ### 4. Start the Pipeline
 
@@ -83,8 +83,8 @@ If you uploaded video or audio, TermSub begins by extracting a precise transcrip
 ### What Happens
 
 1. **Audio Extraction**: The audio track is extracted from your video file using FFmpeg.
-2. **Cloud Transcription**: The audio is sent to **Google Gemini Flash**, which returns a structured transcript with speaker-aware segments and coarse timestamps.
-3. **Word-Level Alignment**: **WhisperX** refines those timestamps down to the individual word level, ensuring your subtitles are tightly synchronized to speech.
+2. **Cloud Transcription**: The audio is sent to **OpenAI whisper-1**, which returns a structured transcript with segment-level timestamps born directly from the cloud.
+3. **No Local Alignment Needed**: Because text and timestamps are generated together by the cloud model, no secondary alignment step is required.
 
 ### What You See
 
@@ -150,7 +150,7 @@ The **Translator Agent** processes your transcript segment by segment, using a s
 
 ### What You See
 
-- The status changes to **Translating via Gemini**.
+- The status changes to **Translating via OpenAI**.
 - The **Processed Counter** advances in real time as segments are completed.
 - When finished, the status changes to **Completed**, and the **Translated Subtitle Timeline** appears.
 
@@ -274,7 +274,7 @@ For final delivery, import your subtitle file directly into your Non-Linear Edit
 - **Refine the glossary before translating**: A two-minute glossary review prevents hours of timeline correction.
 - **Use Find & Replace before manual edits**: If you spot a systemic translation issue, fix it globally first, then fine-tune individual cards.
 - **Export SRT for maximum compatibility**: SRT is the safest choice when you are unsure what your editor or platform expects.
-- **Keep your API key handy**: The key is stored in your browser, but clearing cookies will remove it. Bookmark the Google AI Studio key page for quick access.
+- **Keep your API key handy**: The key is stored in your browser, but clearing cookies will remove it. Bookmark the OpenAI Platform key page for quick access.
 
 ---
 

@@ -1,5 +1,5 @@
 # TermSub - Video Translation and Terminology Management
-# Cloud-optimized dependency list
+# Cloud-optimized dependency list (OpenAI-native)
 # Python 3.11+ recommended
 
 # Web Framework
@@ -18,12 +18,7 @@ sqlalchemy==2.0.36
 alembic==1.14.0
 
 # AI/ML Services
-google-genai==1.2.0
-
-# Hybrid alignment (WhisperX + Gemini)
-whisperx>=3.1.0
-torch>=2.0.0,<3.0.0
-torchaudio>=2.0.0,<3.0.0
+openai==1.65.0
 
 # Async Support
 anyio==4.6.0
@@ -60,13 +55,9 @@ pluggy==1.5.0
 # Development Tools
 click==8.2.1
 
-# Core ML utilities (used by google-genai and general math)
+# Core ML utilities
 numpy<2.0.0
 tqdm==4.66.5
-
-# Google GenAI Dependencies
-requests==2.32.3
-google-auth==2.35.0
 
 # Utility
 packaging==24.1
