@@ -1,0 +1,33 @@
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .progress-bar { transition: width 0.3s ease; }
+        .rtl-text {
+            direction: rtl;
+            text-align: right;
+            unicode-bidi: isolate;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        .pulse-indicator {
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+
+        /* Activity Log — modern dark-editor scrollbar */
+        #activityLog::-webkit-scrollbar {
+            width: 6px;
+        }
+        #activityLog::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #activityLog::-webkit-scrollbar-thumb {
+            background-color: #475569;
+            border-radius: 3px;
+        }
+        #activityLog::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b;
+        }
+        #activityLog {
+            scrollbar-width: thin;
+            scrollbar-color: #475569 transparent;
+        }
