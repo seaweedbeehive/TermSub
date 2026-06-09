@@ -153,20 +153,20 @@
 
                 tbody.innerHTML = terms.map(term => {
                     // Clean translation: remove bracketed type prefix (e.g., "[Key Concept] ")
-                    const cleanTranslation = (term.translated_term || '').replace(/^\\[.*?\\]\\s*/, '');
+                    const cleanTranslation = (term.translated_term || '').replace(/^\[.*?\]\s*/, '');
                     // Format category for display: "proper_noun" → "Proper Noun"
                     const displayCategory = (term.category || 'General')
                         .replace(/_/g, ' ')
-                        .replace(/\\b\\w/g, c => c.toUpperCase());
+                        .replace(/\b\w/g, c => c.toUpperCase());
                     return `
                     <tr class="hover:bg-slate-50 dark:hover:bg-[#1A1A1E] ${term.source === 'manual' ? 'bg-amber-50/50 dark:bg-amber-900/20' : ''}">
-                        <td class="px-3 py-2 font-medium text-slate-900 dark:text-[#E2E2E8]">${escapeHtml(term.original_term)}</td>
-                        <td class="px-3 py-2 text-slate-600 dark:text-[#8A8F98] rtl-text">${escapeHtml(cleanTranslation)}</td>
                         <td class="px-3 py-2">
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-[#2A2A30] text-slate-600 dark:text-[#8A8F98]">
                                 ${escapeHtml(displayCategory)}
                             </span>
                         </td>
+                        <td class="px-3 py-2 font-medium text-slate-900 dark:text-[#E2E2E8]">${escapeHtml(term.original_term)}</td>
+                        <td class="px-3 py-2 text-slate-600 dark:text-[#8A8F98] rtl-text">${escapeHtml(cleanTranslation)}</td>
                         <td class="px-3 py-2">
                             <div class="flex items-center gap-2">
                                 <input type="text" value="${escapeHtml(term.standardized_term || '')}" 

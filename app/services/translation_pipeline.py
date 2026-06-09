@@ -411,7 +411,9 @@ Consider:
                 for seg in segments
             ])
             
-            source_language = video.source_language or "en"
+            raw_source_language = video.source_language or "en"
+            # "auto" is meaningless to the LLM; default to English or try to infer
+            source_language = raw_source_language if raw_source_language != "auto" else "en"
             target_language = video.target_language
             if not target_language:
                 raise ValueError("Target language is not set for this video.")
@@ -443,12 +445,13 @@ Consider:
                 "fr": "French", "es": "Spanish", "ar": "Arabic"
             }
             target_lang_name = lang_names.get(target_language, target_language)
+            source_lang_name = lang_names.get(source_language, source_language)
             
             prompt = f"""You are a Glossary Agent extracting key terms for translation.
 
 Extract ALL proper nouns, technical terms, names, places, and key concepts from this transcript that need consistent translation.
 
-SOURCE LANGUAGE: {source_language}
+SOURCE LANGUAGE: {source_lang_name}
 TARGET LANGUAGE: {target_lang_name}{style_text}
 
 TRANSCRIPT:
@@ -458,13 +461,20 @@ Return JSON with this structure:
 {{
     "terms": [
         {{
-            "original_term": "<term in source language>",
+            "original_term": "<term in {source_lang_name} — DO NOT translate this field>",
             "proposed_translation": "<suggested translation in {target_lang_name}>",
             "category": "<Name|Place|Technical|Concept|Organization>",
             "context": "<brief context or usage example>"
         }}
     ]
 }}
+
+CRITICAL: The original_term MUST be preserved exactly as it appears in the transcript's source language ({source_lang_name}). Do NOT translate the source terms.
+
+EXAMPLE — CORRECT (English source, Farsi target):
+  {{"original_term": "machine learning", "proposed_translation": "یادگیری ماشین", "category": "Technical"}}
+EXAMPLE — WRONG (English source, Farsi target):
+  {{"original_term": "یادگیری ماشین", "proposed_translation": "یادگیری ماشین", "category": "Technical"}}
 
 Focus on:
 1. People names (preserve or transliterate appropriately)

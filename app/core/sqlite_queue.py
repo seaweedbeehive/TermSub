@@ -436,7 +436,7 @@ class SQLiteQueueWorker(threading.Thread):
         
         Args:
             video_id: ID of the video whose files should be cleaned up
-            audio_path: Optional path to the temporary .wav file
+            audio_path: Optional path to the temporary .mp3 file
         """
         try:
             # Delete original uploaded video file
@@ -449,7 +449,7 @@ class SQLiteQueueWorker(threading.Thread):
             logger.warning(f"[QueueWorker] Failed to delete uploaded file: {e}")
         
         # Delete temporary audio file (deterministic path used by whisper_service)
-        temp_audio = audio_path or os.path.join(tempfile.gettempdir(), f"termsub_{video_id}.wav")
+        temp_audio = audio_path or os.path.join(tempfile.gettempdir(), f"termsub_{video_id}.mp3")
         try:
             if temp_audio:
                 Path(temp_audio).unlink(missing_ok=True)

@@ -6,7 +6,7 @@ no clamping workarounds — text and timestamps are born together from the
 cloud response.
 
 Usage:
-    segments = transcribe_with_openai("/path/to/audio.wav", language="fa")
+    segments = transcribe_with_openai("/path/to/audio.mp3", language="fa")
     # segments == [{"start": 0.0, "end": 3.5, "text": "Hello world"}, ...]
 """
 
@@ -46,6 +46,72 @@ def get_openai_client(api_key: Optional[str] = None) -> OpenAI:
             "OPENAI_API_KEY not configured. Please enter your API key in the UI."
         )
     return OpenAI(api_key=effective_key)
+
+
+def merge_subtitle_segments(
+    segments: List[Dict[str, Any]],
+    min_duration: float = 1.0,
+    min_chars: int = 30,
+    max_duration: float = 7.0,
+    max_chars: int = 84,
+) -> List[Dict[str, Any]]:
+    """Merge adjacent short segments into subtitle-appropriate lengths.
+
+    Uses a greedy algorithm that merges segments until they reach
+    professional subtitle standards (min duration or min chars) or
+    hit maximum limits (max duration or max chars).
+    """
+    if not segments:
+        return []
+
+    # Detect whether these are audio segments (real timestamps) or text segments (all 0.0)
+    has_real_timestamps = any(seg["end"] > 0.0 for seg in segments)
+
+    merged: List[Dict[str, Any]] = []
+    current: Dict[str, Any] = {
+        "start": segments[0]["start"],
+        "end": segments[0]["end"],
+        "text": segments[0]["text"],
+    }
+
+    for next_seg in segments[1:]:
+        next_text = next_seg["text"]
+        if not next_text:
+            continue  # Skip empty segments
+
+        next_start = next_seg["start"]
+        next_end = next_seg["end"]
+
+        merged_text = (current["text"] + " " + next_text).strip()
+        merged_chars = len(merged_text)
+        merged_end = next_end
+        merged_duration = merged_end - current["start"] if has_real_timestamps else 0.0
+
+        current_duration = current["end"] - current["start"] if has_real_timestamps else 0.0
+        current_chars = len(current["text"])
+
+        # "Good enough" to stand alone?
+        is_good_enough = (
+            (has_real_timestamps and current_duration >= min_duration)
+            or current_chars >= min_chars
+        )
+
+        # Would merging exceed hard maximums?
+        would_exceed_max = False
+        if has_real_timestamps and merged_duration > max_duration:
+            would_exceed_max = True
+        if merged_chars > max_chars:
+            would_exceed_max = True
+
+        if is_good_enough or would_exceed_max:
+            merged.append(current)
+            current = {"start": next_start, "end": next_end, "text": next_text}
+        else:
+            current["end"] = merged_end
+            current["text"] = merged_text
+
+    merged.append(current)
+    return merged
 
 
 def transcribe_with_openai(
@@ -125,6 +191,9 @@ def transcribe_with_openai(
             "end": float(end),
             "text": str(text).strip(),
         })
+
+    # Merge short Whisper fragments into subtitle-appropriate lengths
+    segments = merge_subtitle_segments(segments)
 
     logger.info(
         "OpenAI transcription successful for '%s': %d segments, lang=%s",

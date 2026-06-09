@@ -65,7 +65,8 @@ def extract_audio(video_path: str, audio_path: str, progress_tracker=None, video
         "-y",  # Overwrite output file
         "-i", video_path,
         "-vn",  # No video
-        "-acodec", "pcm_s16le",  # PCM 16-bit little-endian
+        "-acodec", "libmp3lame",  # MP3 codec for high compression
+        "-q:a", "2",  # VBR quality (0=best, 9=worst; 2 ≈ 190 kbps, excellent quality)
         "-ar", "16000",  # 16kHz sample rate (optimal for Whisper)
         "-ac", "1",  # Mono
         audio_path,
@@ -246,7 +247,7 @@ def transcribe_video(video_id: str, language: str = None, api_key: Optional[str]
     audio_path = None
     try:
         # Create deterministic temporary audio file path for worker cleanup
-        audio_path = os.path.join(tempfile.gettempdir(), f"termsub_{video_id}.wav")
+        audio_path = os.path.join(tempfile.gettempdir(), f"termsub_{video_id}.mp3")
 
         # Step 1: Extract audio (NO DATABASE SESSION during this long operation)
         progress_tracker.update_progress(

@@ -100,16 +100,20 @@ def _get_openai_client():
     return OpenAI(api_key=settings.OPENAI_API_KEY)
 
 
-def build_context_analysis_prompt(full_transcript: str, domain: str, target_language: str) -> str:
+def build_context_analysis_prompt(full_transcript: str, domain: str, target_language: str, source_language: str = "") -> str:
     """Build the context analysis prompt for Pass 1."""
     
     domain_prompt = CONTEXT_ANALYSIS_PROMPTS.get(domain, CONTEXT_ANALYSIS_PROMPTS[VideoDomain.GENERAL.value])
     domain_prompt = domain_prompt.format(target_language=target_language)
     
+    source_lang_clause = f"The transcript is written in {source_language}." if source_language else ""
+    
     return f"""{domain_prompt}
 
 FULL TRANSCRIPT:
 {full_transcript}
+
+{source_lang_clause}
 
 Respond in JSON format:
 {{
@@ -117,7 +121,7 @@ Respond in JSON format:
   "sub_topics": ["sub-topic 1", "sub-topic 2", "sub-topic 3"],
   "key_terms": [
     {{
-      "original": "<term exactly as it appears in the transcript's source language>",
+      "original": "<term exactly as it appears in the transcript's source language — DO NOT translate>",
       "target_standard": "Standard {target_language} translation",
       "category": "Technical|Proper Noun|Key Concept",
       "confidence": "high|medium|low"
@@ -125,7 +129,7 @@ Respond in JSON format:
   ],
   "named_entities": [
     {{
-      "name": "<name exactly as it appears in the transcript's source language>",
+      "name": "<name exactly as it appears in the transcript's source language — DO NOT translate>",
       "type": "Person|Organization|Theory|Product|Place",
       "target_translation": "{target_language} translation or transliteration"
     }}
@@ -137,7 +141,13 @@ CRITICAL TARGET LANGUAGE RULE:
 You MUST write the Director's Context Brief (main_topic, sub_topics, and translation_notes) entirely in {target_language}. Do not write the brief in English unless English is the target language. All narrative and explanatory text in your response must be strictly in {target_language}.
 
 CRITICAL SOURCE LANGUAGE RULE:
-The "original" field inside the key_terms array MUST contain the exact term or concept as written in the native source language of the provided transcript. If the transcript is in Farsi, the original term must be in Farsi. If the transcript is in German, the original term must be in German. Do NOT translate the original field into English.
+The "original" field inside the key_terms array MUST contain the exact term or concept as written in the native source language of the provided transcript. {source_lang_clause}
+If the transcript is in English, the original term must be in English. If the transcript is in Farsi, the original term must be in Farsi. If the transcript is in German, the original term must be in German. Do NOT translate the original field into the target language.
+
+EXAMPLE — CORRECT (English source, Farsi target):
+  {{"original": "machine learning", "target_standard": "یادگیری ماشین"}}
+EXAMPLE — WRONG (English source, Farsi target):
+  {{"original": "یادگیری ماشین", "target_standard": "یادگیری ماشین"}}
 
 Guidelines:
 - Extract 10-20 key terms maximum - focus on the most important
@@ -188,6 +198,7 @@ def analyze_video_context(
         # Extract all needed data before session closes
         domain = video.domain or VideoDomain.GENERAL.value
         target_language = video.target_language
+        source_language = video.source_language or ""
         if not target_language:
             raise ValueError("Target language is not set for this video.")
         
@@ -216,7 +227,7 @@ def analyze_video_context(
     progress_tracker.start_step("CONTEXT_ANALYSIS", f"Analyzing {len(segments)} segments for context and terminology")
     
     # Build prompt
-    prompt = build_context_analysis_prompt(full_transcript, domain, target_language)
+    prompt = build_context_analysis_prompt(full_transcript, domain, target_language, source_language)
     
     # ========================================================================
     # PHASE 2: ANALYZE - Call OpenAI API (NO DATABASE SESSION)
@@ -442,6 +453,7 @@ def extract_glossary(
             raise RuntimeError(f"Video {video_id} is in ERROR status, aborting glossary extraction")
         
         target_language = video.target_language
+        source_language = video.source_language or ""
         if not target_language:
             raise ValueError("Target language is not set for this video.")
         
@@ -481,6 +493,8 @@ def extract_glossary(
         main_topic = context_analysis.get("main_topic", "General content")
         sub_topics = context_analysis.get("sub_topics", [])
         
+        source_lang_clause = f"The transcript is written in {source_language}." if source_language else ""
+        
         prompt = f"""You are a Glossary Extraction Agent. Your task is to extract and standardize terminology.
 
 CONTEXT FROM PREVIOUS ANALYSIS:
@@ -490,18 +504,29 @@ CONTEXT FROM PREVIOUS ANALYSIS:
 FULL TRANSCRIPT:
 {full_transcript}
 
+{source_lang_clause}
+
 Extract a comprehensive glossary of terms:
 
 1. KEY TERMS (10-20 items): Technical terminology, jargon, and key concepts
-   - original: The term or concept exactly as it appears in its native source language text inside the transcript
+   - original: The term or concept exactly as it appears in the native source language text (do NOT translate it)
    - target_standard: The standard {target_language} translation
    - category: Technical | Proper Noun | Key Concept | Academic Term
    - confidence: high | medium | low
 
 2. NAMED ENTITIES (5-10 items): People, organizations, products, places
-   - name: The name exactly as it appears in its native source language text inside the transcript
+   - name: The name exactly as it appears in the native source language text (do NOT translate it)
    - type: Person | Organization | Product | Place | Theory
    - target_translation: {target_language} translation or transliteration
+
+CRITICAL SOURCE LANGUAGE RULE:
+The "original" and "name" fields MUST contain the exact term or concept as written in the native source language of the provided transcript. {source_lang_clause}
+If the transcript is in English, the original term must be in English. If the transcript is in Farsi, the original term must be in Farsi. If the transcript is in German, the original term must be in German. Do NOT translate the original field into the target language.
+
+EXAMPLE — CORRECT (English source, Farsi target):
+  {{"original": "machine learning", "target_standard": "یادگیری ماشین", "category": "Technical"}}
+EXAMPLE — WRONG (English source, Farsi target):
+  {{"original": "یادگیری ماشین", "target_standard": "یادگیری ماشین", "category": "Technical"}}
 
 Respond in JSON format:
 {{
