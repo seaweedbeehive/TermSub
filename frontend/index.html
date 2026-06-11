@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TermSub - Video Translation</title>
+    <script>
+        // Suppress Tailwind CDN warning in development
+        const originalWarn = console.warn;
+        console.warn = function(...args) {
+            if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss')) return;
+            originalWarn.apply(console, args);
+        };
+    </script>
+    <script>
+      // Prevent FOUC: apply theme before Tailwind loads
+      (function() {
+        const theme = localStorage.getItem('termsub_theme') || 'light';
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+      })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="bg-slate-50 dark:bg-[#121214] min-h-screen">
+    <div class="max-w-6xl mx-auto p-6">
+        <!-- App Header -->
+        <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fa-solid fa-closed-captioning text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-slate-900 dark:text-[#E2E2E8]">TermSub</h1>
+                        <p class="text-sm text-slate-500 dark:text-[#8A8F98]">Video Translation & Terminology Management</p>
+                    </div>
+                </div>
+                <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="Toggle theme">
+                    <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
+                    <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Panel - Upload & Controls -->
+            <div class="lg:col-span-1 flex flex-col gap-4 max-h-[calc(100vh-3rem)]">
+                <!-- Upload Card -->
+                <div id="uploadCard" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 shrink-0">
+                    <div id="uploadForm" class="space-y-4">
+                        <div>
+                            <input type="file" id="fileInput" accept="video/*,audio/*,.txt" class="hidden">
+                            <label for="fileInput" id="dropZone"
+                                class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 dark:border-[#2A2A30] rounded-lg bg-slate-50 dark:bg-[#0F0F12] hover:bg-slate-100 dark:hover:bg-[#0F0F12] cursor-pointer transition-colors dark:hover:border-[#00F0FF]">
+                                <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-400 dark:text-[#6B7280] mb-2"></i>
+                                <p class="text-sm text-slate-600 dark:text-[#8A8F98] font-medium" id="fileLabel">Click or drag &amp; drop a file</p>
+                                <p class="text-xs text-slate-400 dark:text-[#6B7280] mt-1">MP4, MOV, AVI, MP3, TXT</p>
+                            </label>
+                        </div>
+
+                        <div id="setupConfigPanel" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Source Language</label>
+                            <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <option value="auto">Auto-detect</option>
+                                <option value="en">English</option>
+                                <option value="fa">Persian (Farsi)</option>
+                                <option value="ar">Arabic</option>
+                                <option value="de">German</option>
+                                <option value="fr">French</option>
+                                <option value="es">Spanish</option>
+                                <option value="it">Italian</option>
+                                <option value="ja">Japanese</option>
+                                <option value="zh">Chinese</option>
+                            </select>
+
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Target Language</label>
+                            <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <option value="" disabled selected>Select target language...</option>
+                                <option value="en">English</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                                <option value="de">German</option>
+                                <option value="ar">Arabic</option>
+                                <option value="it">Italian</option>
+                                <option value="ja">Japanese</option>
+                                <option value="zh">Chinese</option>
+                                <option value="fa">Persian (Farsi)</option>
+                            </select>
+                            <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
+                        </div>
+
+                        <!-- OpenAI API Key Vault -->
+                        <!-- OpenAI API Key Vault -->
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1" for="openaiApiKey">OpenAI API Key</label>
+                            <input type="password" id="openaiApiKey" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]" placeholder="Paste your OpenAI API key here">
+                            <p class="text-[10px] text-slate-500 dark:text-[#8A8F98] mt-1">
+                                <button id="apiKeyHelpBtn" type="button" class="text-cyan-400 hover:text-cyan-300 hover:underline font-medium cursor-pointer bg-transparent border-none p-0">
+                                    Get an API key at OpenAI Platform
+                                </button>
+                            </p>
+                        </div>
+
+                        </div>
+
+                        <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                            <i class="fa-solid fa-upload mr-2"></i>Start
+                        </button>
+                    </div>
+
+                    <!-- Post-upload compact state -->
+                    <div id="uploadCompleteCard" class="hidden space-y-3">
+                        <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/10">
+                            <i class="fa-solid fa-file-check text-emerald-500"></i>
+                            <span id="uploadedFilename" class="text-sm font-medium text-slate-700 dark:text-[#E2E2E8] truncate">filename.mp4</span>
+                        </div>
+                        <button id="startNewProjectBtn" class="w-full py-2 px-3 text-xs font-medium text-slate-600 dark:text-[#8A8F98] bg-white dark:bg-[#2A2A30] border border-slate-300 dark:border-[#2A2A30] rounded-lg hover:bg-slate-50 dark:hover:bg-[#1A1A1E] transition-colors">
+                            <i class="fa-solid fa-rotate-right mr-1"></i>Start New Project
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Project Metadata & Status Card (Unified) -->
+                <div id="statusCard" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm overflow-hidden hidden shrink-0">
+                    <!-- Project Header -->
+                    <div class="bg-slate-50 dark:bg-[#121214] px-6 py-4 border-b border-slate-200 dark:border-white/10">
+                        <h2 id="projectTitle" class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] truncate">Untitled Project</h2>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-[#8A8F98]">
+                            <span id="projectType"><i class="fa-solid fa-video mr-1"></i>Video</span>
+                            <span>•</span>
+                            <span id="projectLangs">EN → FA</span>
+                            <span>•</span>
+                            <span id="projectId" class="font-mono">-</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Status Section -->
+                    <div class="p-6">
+                        <!-- Status Badge with Color -->
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-xs font-medium text-slate-500 dark:text-[#8A8F98] uppercase tracking-wider">Status</span>
+                            <span id="statusBadge" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-cyan-500/20 text-slate-700 dark:text-cyan-300 text-xs font-semibold rounded-full">
+                                <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-cyan-400"></span>
+                                Uploaded
+                            </span>
+                        </div>
+                        
+                        <!-- Current Step & Segment Counters (no progress bar) -->
+                        <div class="mb-4">
+                            <div class="flex items-end justify-between mb-2">
+                                <span id="currentStep" class="text-sm text-slate-600 dark:text-[#8A8F98]">Ready to process</span>
+                            </div>
+                            <div class="flex justify-between text-xs text-slate-500 dark:text-[#8A8F98]">
+                                <span id="segmentCount">0 segments</span>
+                                <span id="processedCount">0 processed</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Step Detail -->
+                        <div id="stepDetail" class="text-xs text-slate-500 dark:text-[#8A8F98] bg-slate-50 dark:bg-[#121214] rounded-lg px-3 py-2 hidden"></div>
+                        
+                        <!-- Director's Context Brief -->
+                        <div id="contextBriefContainer" class="hidden mt-3 pt-3 border-t border-slate-100 dark:border-white/10">
+                            <p class="text-[10px] font-semibold text-slate-400 dark:text-[#6B7280] uppercase tracking-wider mb-1">Director's Context Brief</p>
+                            <p id="contextBriefText" class="text-xs text-slate-600 dark:text-[#8A8F98] italic bg-slate-50 dark:bg-[#121214] p-2 rounded border border-slate-100 dark:border-white/10 leading-relaxed"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Primary Action Container -->
+                <div id="primaryActionContainer" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-4 hidden shrink-0">
+                    <p id="primaryHelperText" class="text-xs text-amber-700 mb-2 hidden">💡 Review and edit your Extracted Terms before translating.</p>
+                    
+                    <button id="primaryActionBtn" class="w-full py-3 px-4 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                        Action
+                    </button>
+                    
+                    <div id="primaryGhostLink" class="mt-2 text-center hidden">
+                        <button id="downloadRawTranscriptionLink" class="text-xs text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] underline">or download raw transcription</button>
+                    </div>
+                    
+                    <p id="exportHeader" class="hidden text-[10px] font-semibold text-slate-400 dark:text-[#6B7280] uppercase tracking-wider mb-2">Download Subtitles & Translations</p>
+                    <div id="primaryExportGrid" class="hidden grid grid-cols-2 gap-2">
+                        <button id="exportSrtBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
+                            <i class="fa-solid fa-closed-captioning mr-1"></i>SRT
+                        </button>
+                        <button id="exportVttBtn" class="py-2 px-3 bg-slate-700 hover:bg-slate-800 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
+                            <i class="fa-brands fa-html5 mr-1"></i>VTT
+                        </button>
+                        <button id="exportTxtBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
+                            <i class="fa-solid fa-file-text mr-1"></i>TXT
+                        </button>
+                        <button id="exportJsonBtn" class="py-2 px-3 bg-slate-600 hover:bg-slate-700 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
+                            <i class="fa-solid fa-code mr-1"></i>JSON
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Terms & Activity -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Terms Table -->
+                <div id="termsPanel" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
+                    <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-4">Extracted Terms</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="sticky top-0 bg-white dark:bg-[#1A1A1E] z-10 shadow-sm text-slate-600 dark:text-[#8A8F98]">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium">Type</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium">Original</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium">Translation</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium">Standard</th>
+                                </tr>
+                            </thead>
+                            <tbody id="termsTable" class="divide-y divide-slate-100 dark:divide-white/10">
+                                <tr>
+                                    <td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                                        No terms extracted yet. Upload and process a video.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Subtitle Review Timeline -->
+                <div id="subtitleReviewPanel" class="hidden h-full flex flex-col bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Translated Subtitle Timeline</h2>
+                        <button id="undoTimelineBtn" class="px-2 py-1 text-xs bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors opacity-50 cursor-not-allowed" disabled title="Undo last change (Ctrl+Z)">
+                            <i class="fa-solid fa-rotate-left mr-1"></i>Undo
+                        </button>
+                    </div>
+                    
+                    <!-- Global Find & Replace Bar -->
+                    <div class="flex items-center gap-2 mb-3">
+                        <input type="text" id="findInput" placeholder="Find text..." class="flex-1 text-xs border border-slate-200 dark:border-[#2A2A30] bg-slate-50 dark:bg-[#0F0F12] rounded px-2 py-1 focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF] outline-none transition-all">
+                        <input type="text" id="replaceInput" placeholder="Replace with..." class="flex-1 text-xs border border-slate-200 dark:border-[#2A2A30] bg-slate-50 dark:bg-[#0F0F12] rounded px-2 py-1 focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF] outline-none transition-all">
+                        <button id="replaceAllBtn" class="px-3 py-1 bg-slate-700 hover:bg-slate-800 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded transition-colors">Replace All</button>
+                    </div>
+                    
+                    <div id="timelineCardGrid" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
+                        <div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>
+                    </div>
+                </div>
+
+                <!-- Activity Log -->
+                <div class="bg-slate-900 dark:bg-[#0A0A0C] rounded-xl shadow-sm p-4">
+                    <h2 class="text-sm font-semibold text-slate-200 dark:text-[#E2E2E8] mb-3">Activity Log</h2>
+                    <div id="activityLog" class="h-48 overflow-y-auto font-mono text-xs space-y-1">
+                        <div class="text-slate-500 dark:text-[#8A8F98]">Waiting for file upload...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Help Modal -->
+    <div id="apiKeyModal" class="hidden fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm" aria-hidden="true">
+        <div class="bg-[#1A1A1E] border border-[#2A2A30] rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 relative">
+            <button id="apiKeyModalClose" type="button" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors" aria-label="Close modal">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <h3 class="text-lg font-semibold text-white mb-2">How to get an OpenAI API Key</h3>
+            <p class="text-sm text-gray-300 mb-4">You can get an OpenAI API key through the OpenAI Platform. A valid payment method is required, but you only pay for what you use.</p>
+            <ol class="list-decimal list-inside text-sm text-gray-300 space-y-2 mb-4">
+                <li>Navigate to <a href="https://platform.openai.com/" target="_blank" class="text-cyan-400 hover:underline font-medium">OpenAI Platform</a> and sign in with your account.</li>
+                <li>Go to <strong>Settings &rarr; Billing</strong> and add a payment method.</li>
+                <li>Click <strong>"API keys"</strong> in the left-hand navigation menu.</li>
+                <li>Select <strong>"Create new secret key"</strong> and copy it immediately (it will not be shown again).</li>
+            </ol>
+            <p class="text-xs text-gray-400 italic">Note: whisper-1 and gpt-5.4-mini are billed per token / per minute of audio. Costs are typically very low for prototyping and personal projects. Always monitor your usage dashboard.</p>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
+
+    <script src="/static/js/main.js" defer></script>
+</body>
+</html>

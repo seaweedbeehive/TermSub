@@ -8,14 +8,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory inside the application folder
-WORKDIR /app/02_Code/termsub
+WORKDIR /app
 
 # Install Python dependencies first (leverages Docker layer caching)
-COPY 02_Code/termsub/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
-COPY 02_Code/termsub/ .
+COPY . .
 
 # Expose the Uvicorn port
 EXPOSE 8000

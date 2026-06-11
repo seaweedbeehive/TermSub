@@ -1,4 +1,3 @@
-.git-worktrees/
 # macOS
 .DS_Store
 ._*
@@ -15,6 +14,7 @@
 # Environment
 .env
 .env.local
+.env.*.local
 
 # Python cache
 __pycache__/
@@ -25,23 +25,25 @@ __pycache__/
 # Virtual environment
 venv/
 env/
+.venv/
 
-# Database & large files
+# Database & runtime files
 *.db
 *.sqlite3
+*.sqlite3-journal
+
+# User content directories
 uploads/
 exports/
-uploads/*
-models/
 
-# IDE
-.vscode/
-.idea/
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
 
-# OS
-.DS_Store
+# Cache directories
+.ruff_cache/
+.mypy_cache/
 
-# Environment
-.env
-EOF
-02_Code/termsub
+# Git worktrees
+.git-worktrees/

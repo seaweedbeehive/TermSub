@@ -1,0 +1,1491 @@
+        // State
+        let currentVideoId = null;
+        let videoProgressPercent = 0;  // Track progress for WebSocket updates
+        let currentFileType = 'video'; // 'video' or 'text' - tracks uploaded file type
+        let loggedCompletions = new Set(); // Track completed jobs to prevent duplicate logs
+        let currentJobId = null; // Track current job to ignore stale messages
+        let isJobRunning = false; // Silver bullet: prevents stale completion logs
+        let hasStartedProcessing = false; // Status Transition Guard: ignore COMPLETED until processing starts
+        let isSavingSegment = false; // Prevents concurrent blur / replace-all race conditions
+        let timelineHistory = [];    // Stack of segment snapshots for undo
+        let currentTimelineSegments = []; // Last rendered segment state
+        const MAX_TIMELINE_HISTORY = 20;
+
+        // Status config with colors
+        const statusConfig = {
+            uploaded: { label: 'Uploaded', color: 'bg-slate-100 dark:bg-cyan-500/20 text-slate-700 dark:text-cyan-300', dotColor: 'bg-slate-400 dark:bg-cyan-400' },
+            queued: { label: 'Queued', color: 'bg-gray-100 text-gray-700', dotColor: 'bg-gray-400' },
+            extracting_audio: { label: 'Extracting Audio', color: 'bg-amber-100 text-amber-800', dotColor: 'bg-amber-500' },
+            transcribing: { label: 'Transcribing', color: 'bg-orange-100 text-orange-800', dotColor: 'bg-orange-500' },
+            transcribed: { label: 'Transcribed', color: 'bg-blue-100 text-blue-800', dotColor: 'bg-blue-500' },
+            analyzing: { label: 'Analyzing', color: 'bg-cyan-100 text-cyan-800', dotColor: 'bg-cyan-500' },
+            context_ready: { label: 'Context Ready', color: 'bg-sky-100 text-sky-800', dotColor: 'bg-sky-500' },
+            glossary_extracting: { label: 'Extracting Terms', color: 'bg-yellow-100 text-yellow-800', dotColor: 'bg-yellow-500' },
+            terms_ready: { label: 'Terms Ready', color: 'bg-indigo-100 text-indigo-800', dotColor: 'bg-indigo-500' },
+            translating: { label: 'Translating via OpenAI', color: 'bg-purple-100 text-purple-800', dotColor: 'bg-purple-500' },
+            completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-800', dotColor: 'bg-emerald-500' },
+            awaiting_choice: { label: 'Awaiting Choice', color: 'bg-blue-100 text-blue-800', dotColor: 'bg-blue-500' },
+            error: { label: 'Error', color: 'bg-rose-100 text-rose-800', dotColor: 'bg-rose-500' }
+        };
+
+        // Utility functions
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('activityLog');
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            
+            if (logEl.children.length === 1 && logEl.children[0].textContent.includes('Waiting')) {
+                logEl.innerHTML = '';
+            }
+            
+            // Prevent duplicate completion messages
+            const lastEntry = logEl.lastElementChild;
+            if (lastEntry && lastEntry.textContent.includes(message)) {
+                return; // Skip duplicate message
+            }
+            
+            // Badge map
+            const badgeMap = {
+                info:    { label: 'INFO',    bg: 'bg-slate-700',    text: 'text-slate-200' },
+                success: { label: 'SUCCESS', bg: 'bg-emerald-600',  text: 'text-white' },
+                error:   { label: 'ERROR',   bg: 'bg-red-600',      text: 'text-white' },
+                warning: { label: 'WARN',    bg: 'bg-amber-500',    text: 'text-white' },
+                align:   { label: 'ALIGN',   bg: 'bg-cyan-600',     text: 'text-white' },
+                context: { label: 'CONTEXT', bg: 'bg-indigo-600',   text: 'text-white' }
+            };
+            const cfg = badgeMap[type] || badgeMap.info;
+            
+            const html = `<div class="flex items-start gap-2 text-slate-300">
+                <span class="shrink-0 mt-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${cfg.bg} ${cfg.text}">${cfg.label}</span>
+                <span class="text-[11px] leading-tight">[${time}] ${message}</span>
+            </div>`;
+            
+            logEl.insertAdjacentHTML('beforeend', html);
+            logEl.scrollTo({ top: logEl.scrollHeight, behavior: 'smooth' });
+        }
+        
+        function clearActivityLog() {
+            const logEl = document.getElementById('activityLog');
+            logEl.innerHTML = '';
+            loggedCompletions.clear(); // Reset completion tracking
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message, type = 'info') {
+            console.log("🔔 [Toast Triggered]:", message, type);
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const colorMap = {
+                info:    { bg: 'bg-blue-600',   icon: 'text-white' },
+                success: { bg: 'bg-emerald-600', icon: 'text-white' },
+                error:   { bg: 'bg-red-600',     icon: 'text-white' },
+                warning: { bg: 'bg-amber-500',   icon: 'text-white' }
+            };
+            const cfg = colorMap[type] || colorMap.info;
+
+            const el = document.createElement('div');
+            el.className = `pointer-events-auto ${cfg.bg} text-white shadow-xl px-4 py-2 rounded-lg font-sans text-sm flex items-center gap-2 transition-all duration-300 transform translate-x-full`;
+            el.innerHTML = `
+                <svg class="w-4 h-4 shrink-0 ${cfg.icon}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="font-medium">${message}</span>
+            `;
+            container.appendChild(el);
+
+            // Slide in
+            requestAnimationFrame(() => el.classList.remove('translate-x-full'));
+
+            // Auto-dismiss after 2.5 seconds
+            setTimeout(() => {
+                el.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => el.remove(), 300);
+            }, 2500);
+        }
+
+        function updateStatus(data) {
+            const cfg = statusConfig[data.status] || statusConfig.uploaded;
+            const isProcessing = ['transcribing', 'extracting_audio', 'analyzing', 'glossary_extracting', 'translating', 'queued'].includes(data.status);
+            
+            // Update Status Badge in Card
+            const statusBadge = document.getElementById('statusBadge');
+            statusBadge.className = `inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.color} text-xs font-semibold rounded-full transition-colors`;
+            statusBadge.innerHTML = `<span id="statusDot" class="w-1.5 h-1.5 rounded-full ${cfg.dotColor} ${isProcessing ? 'pulse-indicator' : ''}"></span>${cfg.label}`;
+            
+            // Update step & segment counters
+            const currentStepEl = document.getElementById('currentStep');
+            if (currentStepEl) currentStepEl.textContent = data.current_step || 'Ready';
+            const segmentCountEl = document.getElementById('segmentCount');
+            if (segmentCountEl) segmentCountEl.textContent = `${data.total_segments ?? 0} segments`;
+            const processedCountEl = document.getElementById('processedCount');
+            if (processedCountEl) processedCountEl.textContent = `${data.processed_segments || 0} processed`;
+            
+            // Update Step Detail
+            const stepDetail = document.getElementById('stepDetail');
+            if (data.step_detail || (isProcessing && data.current_step)) {
+                stepDetail.textContent = data.step_detail || data.current_step;
+                stepDetail.classList.remove('hidden');
+            } else {
+                stepDetail.classList.add('hidden');
+            }
+
+            // Show/hide buttons based on status
+            updateButtonVisibility(data.status);
+        }
+
+        async function renderTerms() {
+            if (!currentVideoId) return;
+            
+            try {
+                const response = await fetch(`/terms/video/${currentVideoId}`);
+                const terms = await response.json();
+                
+                const tbody = document.getElementById('termsTable');
+                
+                if (!terms || terms.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">No terms extracted yet.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = terms.map(term => {
+                    // Clean translation: remove bracketed type prefix (e.g., "[Key Concept] ")
+                    const cleanTranslation = (term.translated_term || '').replace(/^\[.*?\]\s*/, '');
+                    // Format category for display: "proper_noun" → "Proper Noun"
+                    const displayCategory = (term.category || 'General')
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, c => c.toUpperCase());
+                    return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-[#1A1A1E] ${term.source === 'manual' ? 'bg-amber-50/50 dark:bg-amber-900/20' : ''}">
+                        <td class="px-3 py-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-[#2A2A30] text-slate-600 dark:text-[#8A8F98]">
+                                ${escapeHtml(displayCategory)}
+                            </span>
+                        </td>
+                        <td class="px-3 py-2 font-medium text-slate-900 dark:text-[#E2E2E8]">${escapeHtml(term.original_term)}</td>
+                        <td class="px-3 py-2 text-slate-600 dark:text-[#8A8F98] rtl-text">${escapeHtml(cleanTranslation)}</td>
+                        <td class="px-3 py-2">
+                            <div class="flex items-center gap-2">
+                                <input type="text" value="${escapeHtml(term.standardized_term || '')}" 
+                                    onchange="updateTerm('${term.id}', this.value)"
+                                    class="flex-1 border-transparent bg-slate-50/50 dark:bg-[#2A2A30]/70 hover:bg-slate-100/70 dark:hover:bg-[#2A2A30] focus:bg-white dark:focus:bg-[#1A1A1E] focus:border-slate-300 dark:focus:border-[#3A3A42] focus:ring-1 focus:ring-slate-300 dark:focus:ring-[#3A3A42] text-slate-900 dark:text-[#E2E2E8] placeholder-slate-400 dark:placeholder-[#6B7280] transition-all rounded px-2 py-1 text-xs">
+                            </div>
+                        </td>
+                    </tr>
+                `}).join('');
+            } catch (err) {
+                console.error('Failed to load terms:', err);
+            }
+        }
+
+        function formatTimecode(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            const ms = Math.floor((seconds % 1) * 1000).toString().padStart(3, '0');
+            return `${m}:${s}.${ms}`;
+        }
+        
+        function renderSubtitleTimeline(segments) {
+            const grid = document.getElementById('timelineCardGrid');
+            if (!grid) return;
+
+            // Track the latest rendered state for history snapshots
+            currentTimelineSegments = JSON.parse(JSON.stringify(segments || []));
+            _updateUndoButton();
+
+            if (!segments || segments.length === 0) {
+                grid.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
+                return;
+            }
+            
+            grid.innerHTML = segments.map((seg, idx) => `
+                <div class="bg-slate-50 dark:bg-[#1A1A1E] rounded-lg p-3 border border-slate-100 dark:border-white/10 hover:border-slate-200 dark:hover:border-white/20 transition-colors group">
+                    <div class="flex items-center justify-between mb-1.5 text-slate-400 dark:text-[#6B7280]">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold bg-slate-200 dark:bg-[#2A2A30] text-slate-600 dark:text-[#8A8F98] px-1.5 py-0.5 rounded">#${seg.sequence_number || idx + 1}</span>
+                            <span class="text-[11px] font-mono">⏱ [${formatTimecode(seg.start_time)} → ${formatTimecode(seg.end_time)}]</span>
+                        </div>
+                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button data-split-segment="${seg.id || ''}" title="Split card" class="px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors">
+                                <i class="fa-solid fa-scissors mr-0.5"></i>Split
+                            </button>
+                            <button data-add-below="${seg.sequence_number || idx + 1}" title="Add card below" class="px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors">
+                                <i class="fa-solid fa-plus mr-0.5"></i>Add
+                            </button>
+                            <button data-remove-segment="${seg.id || ''}" title="Remove card" class="px-1.5 py-0.5 text-[10px] bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded transition-colors">
+                                <i class="fa-solid fa-trash mr-0.5"></i>Remove
+                            </button>
+                        </div>
+                    </div>
+                    <div contenteditable="true" data-segment-id="${seg.id || ''}"
+                        class="text-slate-800 dark:text-[#E2E2E8] leading-relaxed outline-none focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 rounded p-1 transition-all ${seg.translated_text != null ? '' : 'text-slate-400 dark:text-[#6B7280] italic'}"
+                    >${escapeHtml(seg.translated_text != null ? seg.translated_text : seg.original_text || '(empty)')}</div>
+                </div>
+            `).join('');
+            
+            // Attach auto-save blur listeners to editable fields
+            grid.querySelectorAll('[data-segment-id]').forEach(el => {
+                el.addEventListener('blur', async (e) => {
+                    if (isSavingSegment) return;
+                    pushTimelineHistory();
+                    const segmentId = e.target.getAttribute('data-segment-id');
+                    const newText = e.target.innerText.trim();
+                    if (!segmentId || !currentVideoId) return;
+                    
+                    // Guard against accidental empty strings
+                    if (newText === '') {
+                        log('Segment text cannot be empty — change discarded.', 'warning');
+                        e.target.textContent = e.target.dataset.originalText || '(empty)';
+                        return;
+                    }
+                    
+                    isSavingSegment = true;
+                    try {
+                        const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ translated_text: newText })
+                        });
+                        if (!response.ok) throw new Error('Server returned ' + response.status);
+                        log('Segment updated and saved.', 'info');
+                        showToast('Segment saved successfully', 'success');
+                    } catch (err) {
+                        console.error('Auto-save failed:', err);
+                        log('Auto-save failed: ' + err.message, 'error');
+                    } finally {
+                        isSavingSegment = false;
+                    }
+                });
+                // Store original text for rollback on empty blur
+                el.dataset.originalText = el.textContent;
+            });
+            
+            // Attach Split Card listeners
+            grid.querySelectorAll('[data-split-segment]').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const segmentId = btn.getAttribute('data-split-segment');
+                    if (!segmentId || !currentVideoId) return;
+                    pushTimelineHistory();
+                    
+                    try {
+                        const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}/split`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        if (!response.ok) throw new Error('Server returned ' + response.status);
+                        const data = await response.json();
+                        log('Segment split successfully.', 'success');
+                        if (data.segments) renderSubtitleTimeline(data.segments);
+                    } catch (err) {
+                        console.error('Split failed:', err);
+                        log('Split failed: ' + err.message, 'error');
+                    }
+                });
+            });
+            
+            // Attach Add Card Below listeners
+            grid.querySelectorAll('[data-add-below]').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const targetSeq = parseInt(btn.getAttribute('data-add-below'), 10) + 1;
+                    if (!currentVideoId || isNaN(targetSeq)) return;
+                    pushTimelineHistory();
+                    
+                    try {
+                        const response = await fetch(`/videos/${currentVideoId}/segments/add`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                target_sequence: targetSeq,
+                                start_time: 0.0,
+                                end_time: 2.0,
+                                text: ''
+                            })
+                        });
+                        if (!response.ok) throw new Error('Server returned ' + response.status);
+                        const data = await response.json();
+                        log('New segment added.', 'success');
+                        if (data.segments) renderSubtitleTimeline(data.segments);
+                    } catch (err) {
+                        console.error('Add segment failed:', err);
+                        log('Add segment failed: ' + err.message, 'error');
+                    }
+                });
+            });
+            
+            // Attach Remove Card listeners
+            grid.querySelectorAll('[data-remove-segment]').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const segmentId = btn.getAttribute('data-remove-segment');
+                    if (!segmentId || !currentVideoId) return;
+                    pushTimelineHistory();
+                    
+                    try {
+                        const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}`, {
+                            method: 'DELETE'
+                        });
+                        if (!response.ok) throw new Error('Server returned ' + response.status);
+                        const data = await response.json();
+                        log('Segment removed.', 'success');
+                        if (data.segments) renderSubtitleTimeline(data.segments);
+                    } catch (err) {
+                        console.error('Remove segment failed:', err);
+                        log('Remove segment failed: ' + err.message, 'error');
+                    }
+                });
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Timeline Undo System
+        // ------------------------------------------------------------------
+        function pushTimelineHistory() {
+            // Save a snapshot of the current timeline before a mutating operation.
+            if (!currentTimelineSegments || currentTimelineSegments.length === 0) return;
+            timelineHistory.push(JSON.parse(JSON.stringify(currentTimelineSegments)));
+            if (timelineHistory.length > MAX_TIMELINE_HISTORY) {
+                timelineHistory.shift();
+            }
+            _updateUndoButton();
+        }
+
+        function _updateUndoButton() {
+            const btn = document.getElementById('undoTimelineBtn');
+            if (!btn) return;
+            const hasHistory = timelineHistory.length > 0;
+            btn.disabled = !hasHistory;
+            btn.classList.toggle('opacity-50', !hasHistory);
+            btn.classList.toggle('cursor-not-allowed', !hasHistory);
+            btn.classList.toggle('hover:bg-slate-300', hasHistory);
+            btn.classList.toggle('dark:hover:bg-[#3A3A40]', hasHistory);
+        }
+
+        async function undoTimeline() {
+            if (timelineHistory.length === 0 || !currentVideoId) return;
+            const restoredSegments = timelineHistory.pop();
+
+            try {
+                const response = await fetch(`/videos/${currentVideoId}/segments/restore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ segments: restoredSegments })
+                });
+                if (!response.ok) throw new Error('Server returned ' + response.status);
+                const data = await response.json();
+                log('Undo successful.', 'success');
+                if (data.segments) renderSubtitleTimeline(data.segments);
+            } catch (err) {
+                console.error('Undo failed:', err);
+                log('Undo failed: ' + err.message, 'error');
+                // Push the snapshot back so the user can retry
+                timelineHistory.push(restoredSegments);
+                _updateUndoButton();
+            }
+        }
+
+        async function updateTerm(termId, value) {
+            try {
+                await fetch(`/terms/${termId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ standardized_term: value })
+                });
+                log(`Updated term ${termId.substring(0, 8)}...`, 'success');
+            } catch (err) {
+                log('Failed to update term: ' + err.message, 'error');
+            }
+        }
+
+        async function fetchVideoStatus() {
+            // Fetch current video status from server
+            if (!currentVideoId) return;
+            
+            try {
+                const response = await fetch(`/videos/${currentVideoId}`);
+                const data = await response.json();
+                
+                // Guard: Don't update status if we have an active job and this is stale data
+                if (currentJobId && data.status === 'completed' && !loggedCompletions.has(currentJobId)) {
+                    // This is likely stale data - wait for WebSocket confirmation
+                    console.log('[fetchVideoStatus] Ignoring stale completion status');
+                    return;
+                }
+                
+                updateStatus({
+                    status: data.status,
+                    progress_percent: data.progress_percent || 0,
+                    total_segments: data.total_segments,
+                    processed_segments: data.processed_segments
+                });
+                
+                updateButtonVisibility(data.status);
+                updateContextBrief(data);
+                if (data.status === 'completed' && data.segments) {
+                    renderSubtitleTimeline(data.segments);
+                }
+            } catch (err) {
+                console.error('Failed to fetch video status:', err);
+            }
+        }
+
+        // ============================================================================
+        // WebSocket Connection Management (REPLACES OLD POLLING)
+        // ============================================================================
+        
+        let ws = null;
+        let wsReconnectAttempts = 0;
+        const MAX_WS_RECONNECT_ATTEMPTS = 3;
+        
+        function connectWebSocket(videoId) {
+            // Close existing connection if any
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/videos/${videoId}`;
+            
+            log('Connecting to WebSocket...');
+            console.log(`[WebSocket] Connecting to ${wsUrl}`);
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    console.log('[WebSocket] Connected');
+                    log('WebSocket connected - real-time updates enabled', 'success');
+                    wsReconnectAttempts = 0;
+                    
+                    // Send initial ping
+                    ws.send(JSON.stringify({type: 'ping'}));
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('[WebSocket] Message received:', data);
+                        
+                        // Handle different message types
+                        if (data.type === 'pong' || data.type === 'keepalive') {
+                            return; // Ignore keepalive messages
+                        }
+                        
+                        if (data.type === 'connected') {
+                            log(`Connected to video stream: ${data.video_id?.substring(0, 8)}...`);
+                            return;
+                        }
+                        
+                        // Update UI based on status
+                        handleWebSocketMessage(data);
+                        
+                    } catch (err) {
+                        console.error('[WebSocket] Failed to parse message:', err);
+                    }
+                };
+                
+                ws.onerror = (err) => {
+                    console.error('[WebSocket] Error:', err);
+                    log('WebSocket error - falling back to status polling', 'error');
+                };
+                
+                ws.onclose = () => {
+                    console.log('[WebSocket] Connection closed');
+                    ws = null;
+                    
+                    // Attempt to reconnect if we have a video ID and haven't exceeded attempts
+                    if (currentVideoId && wsReconnectAttempts < MAX_WS_RECONNECT_ATTEMPTS) {
+                        wsReconnectAttempts++;
+                        log(`WebSocket disconnected. Reconnecting (${wsReconnectAttempts}/${MAX_WS_RECONNECT_ATTEMPTS})...`);
+                        setTimeout(() => connectWebSocket(currentVideoId), 2000);
+                    }
+                };
+                
+            } catch (err) {
+                console.error('[WebSocket] Failed to create connection:', err);
+                log('WebSocket connection failed', 'error');
+            }
+        }
+        
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                console.log('[WebSocket] Disconnected by client');
+            }
+        }
+        
+        function handleWebSocketMessage(data) {
+            // Handle both direct status updates and job messages
+            let status = data.status;
+            
+            // Handle job_complete messages
+            if (data.type === 'job_complete') {
+                const jobType = data.job_type || 'task';
+                const jobId = data.job_id || `${jobType}-${Date.now()}`;
+                
+                // Guard: Skip if we've already logged this completion
+                if (loggedCompletions.has(jobId)) {
+                    console.log('[WebSocket] Ignoring duplicate job_complete for:', jobId);
+                    return;
+                }
+                
+                // Guard: Skip if this is a stale message for a previous job
+                if (currentJobId && data.job_id && data.job_id !== currentJobId) {
+                    console.log('[WebSocket] Ignoring stale job_complete for old job:', jobId);
+                    return;
+                }
+                
+                console.log('[WebSocket] Job complete:', jobType);
+                loggedCompletions.add(jobId);
+                
+                // Map job types to status and log appropriate completion message
+                if (jobType === 'transcribe') {
+                    if (!isJobRunning || !hasStartedProcessing) {
+                        console.log('[WebSocket] Ignoring stale transcribe complete');
+                        return;
+                    }
+                    status = 'transcribed';
+                    // Safe segment count extraction with nullish coalescing
+                    const segmentCount = data.result?.total_segments ?? data.total_segments ?? 0;
+                    const segText = segmentCount > 0 ? `: ${segmentCount} segments` : '';
+                    log(`Transcription complete${segText}`, 'success');
+                    isJobRunning = false;
+                    hasStartedProcessing = false;
+                    updateButtonVisibility('transcribed');
+                } else if (jobType === 'analyze') {
+                    if (!isJobRunning || !hasStartedProcessing) {
+                        console.log('[WebSocket] Ignoring stale analyze complete');
+                        return;
+                    }
+                    status = 'terms_ready';
+                    const termCount = data.result?.terms_extracted ?? data.terms_count ?? 0;
+                    const termText = termCount > 0 ? `: ${termCount} terms extracted` : '';
+                    log(`Analysis complete${termText}`, 'success');
+                    isJobRunning = false;
+                    hasStartedProcessing = false;
+                    renderTerms();
+                    updateButtonVisibility('terms_ready');
+                } else if (jobType === 'translate') {
+                    if (!isJobRunning || !hasStartedProcessing) {
+                        console.log('[WebSocket] Ignoring stale translate complete');
+                        return;
+                    }
+                    status = 'completed';
+                    const translatedCount = data.result?.translated_segments ?? data.translated_count ?? 0;
+                    const totalCount = data.result?.total_segments ?? data.total_segments ?? 0;
+                    const countText = (translatedCount > 0 || totalCount > 0) 
+                        ? `: ${translatedCount}/${totalCount} segments` 
+                        : '';
+                    log(`Translation complete${countText}`, 'success');
+                    isJobRunning = false;
+                    hasStartedProcessing = false;
+                    updateButtonVisibility('completed');
+                    if (data.result?.segments) renderSubtitleTimeline(data.result.segments);
+                } else {
+                    log(`${jobType} complete`, 'success');
+                }
+                
+                // Refresh status from server (without triggering duplicate logs)
+                fetchVideoStatus();
+                return; // Don't process further - we handled it
+            }
+            
+            // Handle job_error messages
+            if (data.type === 'job_error') {
+                const jobType = data.job_type || 'task';
+                const errorMsg = data.error || 'Unknown error';
+                console.log('[WebSocket] Job error:', data);
+                log(`${jobType} failed: ${errorMsg}`, 'error');
+                return;
+            }
+            
+            // Handle job_started messages
+            if (data.type === 'job_started') {
+                const jobType = data.job_type || 'task';
+                console.log('[WebSocket] Job started:', jobType);
+                hasStartedProcessing = true;
+                // Log appropriate started message
+                if (jobType === 'transcribe') {
+                    log('Transcription started...');
+                } else if (jobType === 'analyze') {
+                    log('Analysis started...');
+                } else if (jobType === 'translate') {
+                    log('Translation started...');
+                } else {
+                    log(`${jobType} started...`);
+                }
+                return;
+            }
+            
+            // Update status display for regular status messages
+            updateStatus({
+                status: status,
+                progress_percent: data.progress || videoProgressPercent || 0,
+                total_segments: data.total_segments,
+                processed_segments: data.processed_segments,
+                current_step: data.message || status
+            });
+            
+            // Log the update (only if meaningful message exists)
+            const logMessage = data.message || data.step_detail;
+            if (logMessage && logMessage !== status && logMessage !== 'undefined') {
+                // Badge duration & completion metrics as SUCCESS
+                const isMetric = /(?:duration|elapsed|complete in|segments?|total)\\s*[:\\-]?\\s*\\d/i.test(logMessage);
+                log(logMessage, isMetric ? 'success' : 'info');
+            }
+            
+            // Status Transition Guard: only mark after we see a processing state
+            if (['queued', 'extracting_audio', 'transcribing', 'analyzing', 'glossary_extracting', 'translating'].includes(status)) {
+                hasStartedProcessing = true;
+            }
+            
+            // Handle specific statuses
+            switch (status) {
+                case 'queued':
+                    log('Job queued - waiting for available worker...');
+                    break;
+                    
+                case 'transcribing':
+                    log('Transcribing audio...');
+                    break;
+                    
+                case 'transcribed':
+                    if (isJobRunning && hasStartedProcessing) {
+                        log('Transcription complete!', 'success');
+                        isJobRunning = false;
+                        hasStartedProcessing = false;
+                    }
+                    updateButtonVisibility('transcribed');
+                    break;
+                    
+                case 'awaiting_choice':
+                    updateButtonVisibility('awaiting_choice');
+                    break;
+                    
+                case 'analyzing':
+                    log('Director Agent: Analyzing content...');
+                    break;
+                    
+                case 'context_ready':
+                    log(`Director Agent complete: ${data.tone} tone`, 'context');
+                    // Fetch full Pass 1 context_analysis for the narrative brief
+                    fetch(`/videos/${currentVideoId}`)
+                        .then(r => r.json())
+                        .then(videoData => updateContextBrief(videoData));
+                    break;
+                    
+                case 'glossary_extracting':
+                    log('Glossary Agent: Extracting terms...');
+                    break;
+                    
+                case 'terms_ready':
+                    if (isJobRunning && hasStartedProcessing) {
+                        log(`Glossary complete: ${data.terms_count ?? 0} terms`, 'success');
+                        isJobRunning = false;
+                        hasStartedProcessing = false;
+                    }
+                    renderTerms();
+                    updateButtonVisibility('terms_ready');
+                    break;
+                    
+                case 'translating':
+                    log('Translating via OpenAI AI...');
+                    break;
+                    
+                case 'completed':
+                    if (isJobRunning && hasStartedProcessing) {
+                        log('Translation complete!', 'success');
+                        isJobRunning = false;
+                        hasStartedProcessing = false;
+                    }
+                    renderTerms();
+                    updateButtonVisibility('completed');
+                    if (data.segments) renderSubtitleTimeline(data.segments);
+                    break;
+                    
+                case 'error':
+                    log(`Error: ${data.message || data.error}`, 'error');
+                    break;
+            }
+            
+            // Handle job retry messages
+            if (data.type === 'job_retry') {
+                log(`Retrying: ${data.job_type} (${data.retry_count}/${data.max_retries})`);
+            }
+        }
+        
+        function updateButtonVisibility(status) {
+            const primaryBtn = document.getElementById('primaryActionBtn');
+            const helperText = document.getElementById('primaryHelperText');
+            const ghostLink = document.getElementById('primaryGhostLink');
+            const exportGrid = document.getElementById('primaryExportGrid');
+            const exportHeader = document.getElementById('exportHeader');
+            const container = document.getElementById('primaryActionContainer');
+            
+            if (!container) return;
+            
+            // Reset all sub-elements
+            primaryBtn?.classList.remove('hidden');
+            helperText?.classList.add('hidden');
+            ghostLink?.classList.add('hidden');
+            exportGrid?.classList.add('hidden');
+            exportHeader?.classList.add('hidden');
+            
+            // Configure primary action based on pipeline state
+            switch (status) {
+                case 'uploaded':
+                    primaryBtn.textContent = currentFileType === 'text' ? 'Parse Text' : 'Transcribe Audio';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.onclick = processFile;
+                    break;
+                    
+                case 'transcribed':
+                    primaryBtn.textContent = 'Extract Terminology';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.onclick = analyzeVideo;
+                    ghostLink?.classList.remove('hidden');
+                    break;
+                    
+                case 'awaiting_choice':
+                    primaryBtn?.classList.add('hidden');
+                    ghostLink?.classList.add('hidden');
+                    helperText?.classList.add('hidden');
+                    exportGrid?.classList.add('hidden');
+                    exportHeader?.classList.add('hidden');
+                    // Show two-choice helper
+                    const choiceContainer = document.createElement('div');
+                    choiceContainer.id = 'postTranscribeChoices';
+                    choiceContainer.className = 'grid grid-cols-1 gap-2';
+                    choiceContainer.innerHTML = `
+                        <button id="btnReviewTerms" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                            <i class="fa-solid fa-list-check mr-2"></i>Review Terminology
+                        </button>
+                        <button id="btnSkipTranslate" class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                            <i class="fa-solid fa-forward mr-2"></i>Skip & Translate Directly
+                        </button>
+                    `;
+                    // Only inject once
+                    if (!container.querySelector('#postTranscribeChoices')) {
+                        container.appendChild(choiceContainer);
+                        document.getElementById('btnReviewTerms').addEventListener('click', () => {
+                            choiceContainer.remove();
+                            analyzeVideo();
+                        });
+                        document.getElementById('btnSkipTranslate').addEventListener('click', () => {
+                            choiceContainer.remove();
+                            skipAndTranslate();
+                        });
+                    }
+                    break;
+                    
+                case 'terms_ready':
+                    helperText?.classList.remove('hidden');
+                    primaryBtn.textContent = 'Translate Subtitles';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                    primaryBtn.onclick = translateVideo;
+                    break;
+                    
+                case 'completed':
+                    primaryBtn?.classList.add('hidden');
+                    exportGrid?.classList.remove('hidden');
+                    exportHeader?.classList.remove('hidden');
+                    document.getElementById('termsPanel').classList.add('hidden');
+                    document.getElementById('subtitleReviewPanel').classList.remove('hidden');
+                    break;
+                    
+                default:
+                    primaryBtn?.classList.add('hidden');
+                    document.getElementById('termsPanel').classList.remove('hidden');
+                    document.getElementById('subtitleReviewPanel').classList.add('hidden');
+            }
+        }
+        
+        function updateContextBrief(data) {
+            const container = document.getElementById('contextBriefContainer');
+            const textEl = document.getElementById('contextBriefText');
+            if (!container || !textEl) return;
+            
+            let brief = '';
+            
+            // Prefer explicit main_topic if available
+            if (data.main_topic) {
+                brief = data.main_topic;
+            }
+            // Try parsing context_analysis JSON (from polling)
+            else if (data.context_analysis) {
+                try {
+                    const ca = typeof data.context_analysis === 'string' ? JSON.parse(data.context_analysis) : data.context_analysis;
+                    if (ca.main_topic) brief = ca.main_topic;
+                    else if (ca.translation_notes) brief = ca.translation_notes;
+                } catch (e) { /* ignore parse errors */ }
+            }
+            // Fallback to style-guide metadata from WebSocket
+            else if (data.domain || data.tone) {
+                const parts = [];
+                if (data.domain) parts.push(data.domain);
+                if (data.tone) parts.push(`${data.tone} tone`);
+                if (data.formality_level) parts.push(`formality ${data.formality_level}/5`);
+                brief = parts.join(' • ');
+            }
+            
+            if (brief) {
+                textEl.textContent = brief;
+                container.classList.remove('hidden');
+            }
+        }
+        
+        // Legacy polling fallback (only used if WebSocket fails)
+        let fallbackPollInterval = null;
+        let fallbackPollCount = 0;
+        
+        function fallbackToPolling(videoId) {
+            log('Falling back to HTTP polling (WebSocket unavailable)', 'warning');
+            console.log('[FALLBACK] Starting HTTP polling');
+            
+            if (fallbackPollInterval) {
+                clearInterval(fallbackPollInterval);
+            }
+            
+            fallbackPollCount = 0;
+            fallbackPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/videos/${videoId}`);
+                    const data = await response.json();
+                    updateStatus(data);
+                    updateContextBrief(data);
+                    fallbackPollCount++;
+                    
+                    if (fallbackPollCount % 5 === 0) {
+                        log(`Fallback poll #${fallbackPollCount}: status=${data.status}`);
+                    }
+                    
+                    if (['terms_ready', 'completed', 'error'].includes(data.status)) {
+                        clearInterval(fallbackPollInterval);
+                        fallbackPollInterval = null;
+                        if (data.status === 'terms_ready' || data.status === 'completed') {
+                            renderTerms();
+                        }
+                        if (data.status === 'completed' && data.segments) {
+                            renderSubtitleTimeline(data.segments);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Fallback poll error:', err);
+                }
+            }, 5000);
+        }
+
+        function resetApp() {
+            currentVideoId = null;
+            currentFileType = 'video';
+            timelineHistory = [];
+            currentTimelineSegments = [];
+            currentJobId = null;
+            isJobRunning = false;
+            hasStartedProcessing = false;
+            loggedCompletions.clear();
+            
+            // Reset upload form
+            const fileInputEl = document.getElementById('fileInput');
+            if (fileInputEl) fileInputEl.value = '';
+            const fileLabelEl = document.getElementById('fileLabel');
+            if (fileLabelEl) fileLabelEl.textContent = 'Click to select file';
+            const dropZoneEl = document.getElementById('dropZone');
+            if (dropZoneEl) dropZoneEl.classList.remove('border-blue-400', 'bg-blue-50');
+            const uploadFormReset = document.getElementById('uploadForm');
+            if (uploadFormReset) uploadFormReset.classList.remove('hidden');
+            const uploadCompleteCardReset = document.getElementById('uploadCompleteCard');
+            if (uploadCompleteCardReset) uploadCompleteCardReset.classList.add('hidden');
+            const setupConfigPanelReset = document.getElementById('setupConfigPanel');
+            if (setupConfigPanelReset) setupConfigPanelReset.classList.remove('hidden');
+            
+            // Hide status and action containers
+            const statusCardReset = document.getElementById('statusCard');
+            if (statusCardReset) statusCardReset.classList.add('hidden');
+            const primaryActionReset = document.getElementById('primaryActionContainer');
+            if (primaryActionReset) primaryActionReset.classList.add('hidden');
+            const termsPanelReset = document.getElementById('termsPanel');
+            if (termsPanelReset) termsPanelReset.classList.remove('hidden');
+            const subtitleReviewReset = document.getElementById('subtitleReviewPanel');
+            if (subtitleReviewReset) subtitleReviewReset.classList.add('hidden');
+            const timelineGridReset = document.getElementById('timelineCardGrid');
+            if (timelineGridReset) timelineGridReset.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
+            
+            // Reset step & segment counters
+            const segCountReset = document.getElementById('segmentCount');
+            if (segCountReset) segCountReset.textContent = '0 segments';
+            const procCountReset = document.getElementById('processedCount');
+            if (procCountReset) procCountReset.textContent = '0 processed';
+            const stepReset = document.getElementById('currentStep');
+            if (stepReset) stepReset.textContent = 'Ready to process';
+            
+            // Clear logs and terms
+            clearActivityLog();
+            const termsTableReset = document.getElementById('termsTable');
+            if (termsTableReset) termsTableReset.innerHTML = `
+                <tr>
+                    <td colspan="3" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                        No terms extracted yet. Upload and process a video.
+                    </td>
+                </tr>
+            `;
+            
+            // Disconnect WebSocket
+            disconnectWebSocket();
+            
+            // Clear URL param
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            log('New project ready. Upload a file to begin.', 'success');
+        }
+
+        // Upload handler
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const targetLangSelect = document.getElementById('targetLanguage');
+            const sourceLangSelect = document.getElementById('sourceLanguage');
+            
+            if (!fileInput.files || !fileInput.files[0]) {
+                return;
+            }
+            
+            // Client-side validation: target language is required
+            if (!targetLangSelect || !targetLangSelect.value) {
+                const warningEl = document.getElementById('languageWarning');
+                if (warningEl) warningEl.classList.remove('hidden');
+                if (targetLangSelect) {
+                    targetLangSelect.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                    targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                log('Upload blocked: target language is required.', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('target_language', targetLangSelect.value);
+            formData.append('source_language', sourceLangSelect.value);
+
+            log('Uploading file...');
+            
+            try {
+                const response = await fetch('/videos/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    // Try to get detailed error message from response
+                    let errorDetail = 'Upload failed';
+                    try {
+                        const errorData = await response.json();
+                        errorDetail = errorData.detail || `HTTP ${response.status}: ${response.statusText}`;
+                    } catch (e) {
+                        errorDetail = `HTTP ${response.status}: ${response.statusText}`;
+                    }
+                    throw new Error(errorDetail);
+                }
+                
+                const data = await response.json();
+                currentVideoId = data.id;
+                currentFileType = data.content_type || 'video';
+                
+                // Set Project Metadata
+                const projectTitleEl = document.getElementById('projectTitle');
+                if (projectTitleEl) projectTitleEl.textContent = data.filename || 'Untitled Project';
+                
+                const projectTypeEl = document.getElementById('projectType');
+                if (projectTypeEl) projectTypeEl.innerHTML = 
+                    `<i class="fa-solid ${currentFileType === 'text' ? 'fa-file-lines' : 'fa-video'} mr-1"></i>${currentFileType === 'text' ? 'Text File' : 'Video'}`;
+                
+                const sourceLangSel = document.getElementById('sourceLanguage');
+                const sourceLang = sourceLangSel && sourceLangSel.value === 'auto' ? 'Auto' : 
+                    (sourceLangSel ? sourceLangSel.value.toUpperCase() : 'Auto');
+                const targetLangSel = document.getElementById('targetLanguage');
+                const targetLang = targetLangSel ? targetLangSel.value.toUpperCase() : '';
+                const projectLangsEl = document.getElementById('projectLangs');
+                if (projectLangsEl) projectLangsEl.textContent = `${sourceLang} → ${targetLang}`;
+                
+                const projectIdEl = document.getElementById('projectId');
+                if (projectIdEl) projectIdEl.textContent = currentVideoId.substring(0, 8);
+                
+                const statusCardEl = document.getElementById('statusCard');
+                if (statusCardEl) statusCardEl.classList.remove('hidden');
+                const primaryActionEl = document.getElementById('primaryActionContainer');
+                if (primaryActionEl) primaryActionEl.classList.remove('hidden');
+                
+                // Swap upload form for compact filename card
+                const uploadFormEl = document.getElementById('uploadForm');
+                if (uploadFormEl) uploadFormEl.classList.add('hidden');
+                const uploadCompleteCardEl = document.getElementById('uploadCompleteCard');
+                if (uploadCompleteCardEl) uploadCompleteCardEl.classList.remove('hidden');
+                const uploadedFilenameEl = document.getElementById('uploadedFilename');
+                if (uploadedFilenameEl) uploadedFilenameEl.textContent = data.filename || 'Untitled Project';
+                
+                log('Upload complete: ' + data.filename, 'success');
+                
+                updateStatus({ status: 'uploaded', progress_percent: 0 });
+                
+            } catch (err) {
+                const errorMsg = err.message || 'Upload failed';
+                log('Upload failed: ' + errorMsg, 'error');
+            }
+        }
+
+        // Process file handler (handles both video transcription and text parsing)
+        async function processFile() {
+            if (!currentVideoId) return;
+            
+            // Validate target language is selected
+            const targetLangSelect = document.getElementById('targetLanguage');
+            if (!targetLangSelect || !targetLangSelect.value) {
+                const warningEl = document.getElementById('languageWarning');
+                if (warningEl) warningEl.classList.remove('hidden');
+                if (targetLangSelect) {
+                    targetLangSelect.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                    targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+            
+            // Collapse setup config panel once processing starts
+            const setupPanel = document.getElementById('setupConfigPanel');
+            if (setupPanel) setupPanel.classList.add('hidden');
+            
+            // Reset state for new job
+            currentJobId = `transcribe-${currentVideoId}-${Date.now()}`;
+            isJobRunning = true;
+            hasStartedProcessing = false;
+            
+            const isTextFile = currentFileType === 'text';
+            const actionName = isTextFile ? 'parsing text' : 'transcription';
+            
+            log(isTextFile ? 'Starting text parsing...' : 'Starting OpenAI Cloud transcription...');
+            
+            try {
+                const requestHeaders = {};
+                const apiKey = localStorage.getItem('termsub_openai_api_key') || document.getElementById('openaiApiKey').value || '';
+                if (apiKey.trim()) {
+                    requestHeaders['X-OpenAI-API-Key'] = apiKey.trim();
+                }
+                
+                const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=openai`, {
+                    method: 'POST',
+                    headers: requestHeaders
+                });
+                
+                if (!response.ok) {
+                    let errorMessage = isTextFile ? 'Text parsing failed' : 'Transcription failed';
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || errorMessage;
+                    } catch (e) {
+                        // response wasn't JSON — keep default
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                const data = await response.json();
+                
+                // Update UI silently — completion will be logged via WebSocket
+                updateStatus({ status: 'transcribed', total_segments: data.total_segments ?? 0 });
+                const segCountUpload = document.getElementById('segmentCount');
+                if (segCountUpload) segCountUpload.textContent = data.total_segments ?? 0;
+                
+                // Show analyze button
+                updateButtonVisibility('transcribed');
+                
+                // Connect WebSocket for future updates
+                connectWebSocket(currentVideoId);
+                
+            } catch (err) {
+                log((isTextFile ? 'Parsing' : 'Transcription') + ' failed: ' + err.message, 'error');
+            }
+        }
+
+        // Analyze handler (Multi-Agent Step 1)
+        async function analyzeVideo() {
+            if (!currentVideoId) return;
+            
+            // Reset state for new job
+            currentJobId = `analyze-${currentVideoId}-${Date.now()}`;
+            isJobRunning = true;
+            hasStartedProcessing = false;
+            
+            log('Starting Multi-Agent Analysis (Director + Glossary)...');
+            log('Director Agent: Analyzing context and style...');
+            
+            try {
+                const response = await fetch(`/videos/${currentVideoId}/analyze`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Analysis failed');
+                }
+                
+                const data = await response.json();
+                
+                // Update UI silently — completion will be logged via WebSocket
+                updateStatus({ status: 'terms_ready' });
+                updateButtonVisibility('terms_ready');
+                
+                // Render terms
+                await renderTerms();
+                
+            } catch (err) {
+                log('Analysis failed: ' + err.message, 'error');
+            }
+        }
+
+        // Translate handler (Multi-Agent Step 2)
+        async function translateVideo() {
+            if (!currentVideoId) return;
+            
+            // Reset state for new job
+            currentJobId = `translate-${currentVideoId}-${Date.now()}`;
+            isJobRunning = true;
+            hasStartedProcessing = false;
+            
+            log('Starting OpenAI Translator Agent...');
+            log('Using sliding window translation with glossary constraints');
+            
+            try {
+                const response = await fetch(`/videos/${currentVideoId}/translate`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Translation failed');
+                }
+                
+                
+                // Update UI silently — completion will be logged via WebSocket
+                updateStatus({ status: 'completed' });
+                updateButtonVisibility('completed');
+                
+            } catch (err) {
+                log('Translation failed: ' + err.message, 'error');
+            }
+        }
+
+        async function skipAndTranslate() {
+            if (!currentVideoId) return;
+            
+            // Reset state for new job
+            currentJobId = `translate-${currentVideoId}-${Date.now()}`;
+            isJobRunning = true;
+            hasStartedProcessing = false;
+            
+            log('Skipping terminology review and starting translation...');
+            
+            try {
+                const response = await fetch(`/videos/${currentVideoId}/translate-direct`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Translation failed');
+                }
+                
+                // Update UI silently — completion will be logged via WebSocket
+                updateStatus({ status: 'translating' });
+                updateButtonVisibility('translating');
+                
+            } catch (err) {
+                log('Translation failed: ' + err.message, 'error');
+            }
+        }
+
+        // Helper: extract filename from Content-Disposition header
+        function getFilenameFromHeader(response, fallback) {
+            const header = response.headers.get('Content-Disposition');
+            if (!header) return fallback;
+            const match = header.match(/filename="?([^"]+)"?/);
+            return match ? match[1] : fallback;
+        }
+
+        // Generic export handler
+        async function exportFormat(format) {
+            if (!currentVideoId) return;
+            
+            const formatNames = {
+                'srt': 'SRT',
+                'vtt': 'WebVTT',
+                'txt': 'Text',
+                'json': 'JSON'
+            };
+            
+            try {
+                const response = await fetch(`/export/${currentVideoId}/${format}`);
+                
+                if (!response.ok) throw new Error('Export failed');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const fallback = `translation_${currentVideoId.substring(0, 8)}.${format}`;
+                a.download = getFilenameFromHeader(response, fallback);
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                
+                log(`${formatNames[format]} exported`, 'success');
+                
+            } catch (err) {
+                log('Export failed: ' + err.message, 'error');
+            }
+        }
+
+        // Download original transcription handler
+        async function downloadTranscription() {
+            if (!currentVideoId) return;
+            
+            try {
+                const response = await fetch(`/export/${currentVideoId}/transcription`);
+                
+                if (!response.ok) throw new Error('Download failed');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const fallback = `transcription_${currentVideoId.substring(0, 8)}.srt`;
+                a.download = getFilenameFromHeader(response, fallback);
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                
+                log('Transcription downloaded', 'success');
+                
+            } catch (err) {
+                log('Download failed: ' + err.message, 'error');
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Theme toggle handler
+            const themeToggleBtn = document.getElementById('themeToggleBtn');
+            if (themeToggleBtn) {
+                themeToggleBtn.addEventListener('click', () => {
+                    const isDark = document.documentElement.classList.toggle('dark');
+                    localStorage.setItem('termsub_theme', isDark ? 'dark' : 'light');
+                });
+            }
+
+            // --- OpenAI API Key Vault (localStorage) ---
+            const apiKeyInput = document.getElementById('openaiApiKey');
+            const savedKey = localStorage.getItem('termsub_openai_api_key');
+            if (savedKey) {
+                apiKeyInput.value = savedKey;
+            }
+            apiKeyInput.addEventListener('input', () => {
+                localStorage.setItem('termsub_openai_api_key', apiKeyInput.value);
+            });
+
+            // --- API Key Help Modal ---
+            const apiKeyModal = document.getElementById('apiKeyModal');
+            const apiKeyHelpBtn = document.getElementById('apiKeyHelpBtn');
+            const apiKeyModalClose = document.getElementById('apiKeyModalClose');
+
+            function openApiKeyModal() {
+                if (apiKeyModal) {
+                    apiKeyModal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function closeApiKeyModal() {
+                if (apiKeyModal) {
+                    apiKeyModal.classList.add('hidden');
+                    document.body.style.overflow = '';
+                }
+            }
+
+            if (apiKeyHelpBtn) apiKeyHelpBtn.addEventListener('click', openApiKeyModal);
+            if (apiKeyModalClose) apiKeyModalClose.addEventListener('click', closeApiKeyModal);
+            if (apiKeyModal) {
+                apiKeyModal.addEventListener('click', (e) => {
+                    if (e.target === apiKeyModal) closeApiKeyModal();
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && !apiKeyModal.classList.contains('hidden')) {
+                        closeApiKeyModal();
+                    }
+                });
+            }
+
+            // File input
+            const fileInput = document.getElementById('fileInput');
+            const fileLabel = document.getElementById('fileLabel');
+            
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files && fileInput.files[0]) {
+                    const file = fileInput.files[0];
+                    fileLabel.textContent = file.name;
+                    document.getElementById('dropZone').classList.add('border-blue-400', 'bg-blue-50');
+                    
+                    // Detect file type for downstream pipeline text
+                    const isTextFile = file.name.toLowerCase().endsWith('.txt');
+                    currentFileType = isTextFile ? 'text' : 'video';
+                }
+            });
+            
+            // Drag & Drop handlers
+            const dropZone = document.getElementById('dropZone');
+            if (dropZone) {
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }, false);
+                });
+                
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, () => {
+                        dropZone.classList.add('border-blue-400', 'bg-blue-50', 'dark:bg-blue-900/20');
+                    }, false);
+                });
+                
+                ['dragleave', 'drop'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, () => {
+                        dropZone.classList.remove('border-blue-400', 'bg-blue-50', 'dark:bg-blue-900/20');
+                    }, false);
+                });
+                
+                dropZone.addEventListener('drop', (e) => {
+                    const files = e.dataTransfer.files;
+                    if (files && files.length > 0) {
+                        const dt = new DataTransfer();
+                        dt.items.add(files[0]);
+                        fileInput.files = dt.files;
+                        fileInput.dispatchEvent(new Event('change'));
+                    }
+                }, false);
+            }
+            
+            // Target language change: clear validation warning
+            const targetLangSelect = document.getElementById('targetLanguage');
+            if (targetLangSelect) {
+                targetLangSelect.addEventListener('change', () => {
+                    if (targetLangSelect.value) {
+                        const warningEl = document.getElementById('languageWarning');
+                        if (warningEl) warningEl.classList.add('hidden');
+                        targetLangSelect.classList.remove('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                    }
+                });
+            }
+
+            // Buttons
+            document.getElementById('uploadBtn').addEventListener('click', uploadFile);
+            document.getElementById('startNewProjectBtn').addEventListener('click', resetApp);
+
+            // Undo button click
+            const undoBtn = document.getElementById('undoTimelineBtn');
+            if (undoBtn) undoBtn.addEventListener('click', undoTimeline);
+
+            // Keyboard shortcut: Ctrl+Z / Cmd+Z for undo
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    undoTimeline();
+                }
+            });
+            
+            // Global Find & Replace handler
+            document.getElementById('replaceAllBtn').addEventListener('click', async () => {
+                if (!currentVideoId || isSavingSegment) return;
+                pushTimelineHistory();
+                const findInput = document.getElementById('findInput');
+                const replaceInput = document.getElementById('replaceInput');
+                const replaceBtn = document.getElementById('replaceAllBtn');
+                const findText = findInput ? findInput.value.trim() : '';
+                if (!findText) return;
+                
+                isSavingSegment = true;
+                if (replaceBtn) {
+                    replaceBtn.textContent = 'Replacing...';
+                    replaceBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+                
+                try {
+                    const response = await fetch(`/videos/${currentVideoId}/replace`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ find_text: findText, replace_text: replaceInput ? replaceInput.value : '' })
+                    });
+                    if (!response.ok) throw new Error('Replace failed');
+                    const data = await response.json();
+                    if (data.segments) renderSubtitleTimeline(data.segments);
+                    if (findInput) findInput.value = '';
+                    if (replaceInput) replaceInput.value = '';
+                    log('Global replace applied successfully.', 'success');
+                    showToast('Batch replacement complete!', 'success');
+                } catch (err) {
+                    log('Replace failed: ' + err.message, 'error');
+                } finally {
+                    isSavingSegment = false;
+                    if (replaceBtn) {
+                        replaceBtn.textContent = 'Replace All';
+                        replaceBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                }
+            });
+            document.getElementById('downloadRawTranscriptionLink').addEventListener('click', downloadTranscription);
+            document.getElementById('exportSrtBtn').addEventListener('click', () => exportFormat('srt'));
+            document.getElementById('exportVttBtn').addEventListener('click', () => exportFormat('vtt'));
+            document.getElementById('exportTxtBtn').addEventListener('click', () => exportFormat('txt'));
+            document.getElementById('exportJsonBtn').addEventListener('click', () => exportFormat('json'));   
+
+            // Check for video ID in URL
+            const videoId = new URLSearchParams(window.location.search).get('video');
+            if (videoId) {
+                currentVideoId = videoId;
+                const videoIdShortEl = document.getElementById('videoIdShort');
+                if (videoIdShortEl) videoIdShortEl.textContent = videoId.substring(0, 8);
+                const statusCardEl2 = document.getElementById('statusCard');
+                if (statusCardEl2) statusCardEl2.classList.remove('hidden');
+                const primaryActionEl2 = document.getElementById('primaryActionContainer');
+                if (primaryActionEl2) primaryActionEl2.classList.remove('hidden');
+                
+                // Hide upload form, show compact card for loaded project
+                const uploadFormEl2 = document.getElementById('uploadForm');
+                if (uploadFormEl2) uploadFormEl2.classList.add('hidden');
+                const uploadCompleteCardEl2 = document.getElementById('uploadCompleteCard');
+                if (uploadCompleteCardEl2) uploadCompleteCardEl2.classList.remove('hidden');
+                const uploadedFilenameEl2 = document.getElementById('uploadedFilename');
+                if (uploadedFilenameEl2) uploadedFilenameEl2.textContent = 'Loaded project';
+                
+                // Connect WebSocket for real-time updates
+                connectWebSocket(videoId);
+                
+                // Fetch current status
+                fetch(`/videos/${videoId}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        updateStatus(data);
+                        updateButtonVisibility(data.status);
+                        updateContextBrief(data);
+                        if (data.total_segments) {
+                            const segCountLoad = document.getElementById('segmentCount');
+                            if (segCountLoad) segCountLoad.textContent = data.total_segments;
+                        }
+                        if (data.status === 'completed' && data.segments) {
+                            renderSubtitleTimeline(data.segments);
+                        }
+                    });
+            }
+        });

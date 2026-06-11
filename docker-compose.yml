@@ -12,8 +12,8 @@ services:
       - .:/app
     env_file:
       # Point to the existing .env inside the application directory
-      - 02_Code/termsub/.env
-    working_dir: /app/02_Code/termsub
+      - .env
+    working_dir: /app
     command: >
       python -m uvicorn app.main:app
       --host 0.0.0.0
@@ -33,8 +33,8 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file:
-      - 02_Code/termsub/.env
-    working_dir: /app/02_Code/termsub
+      - .env
+    working_dir: /app
     command: >
       celery -A app.core.celery_app worker
       --loglevel=info
