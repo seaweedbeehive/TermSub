@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim
+
+# Install system dependencies for video/audio processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory inside the application folder
+WORKDIR /app/02_Code/termsub
+
+# Install Python dependencies first (leverages Docker layer caching)
+COPY 02_Code/termsub/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application code
+COPY 02_Code/termsub/ .
+
+# Expose the Uvicorn port
+EXPOSE 8000
+
+# Default command to run the FastAPI application
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

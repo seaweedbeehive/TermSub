@@ -1,0 +1,100 @@
+# TermSub - Central Project Configuration
+# Configures Ruff (linting/formatting) and MyPy (type checking)
+# Run from repo root or from 02_Code/termsub/
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "termsub"
+version = "2.0.0"
+description = "FastAPI video transcription and translation service"
+requires-python = ">=3.11"
+
+# ---------------------------------------------------------------------------
+# Ruff — An extremely fast Python linter and code formatter
+# https://docs.astral.sh/ruff/
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+# Exclude directories that should not be linted/formatted
+exclude = [
+    "**/migrations/",
+    "**/venv/",
+    "**/.venv/",
+    "**/__pycache__/",
+    "**/.git/",
+    "**/node_modules/",
+    "03_Data/",
+    "04_Output/",
+    ".git-worktrees/",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "I",   # isort (import sorting)
+    "W",   # pycodestyle warnings
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+ignore = [
+    # B008: FastAPI's Depends() in default arguments is idiomatic.
+    "B008",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ---------------------------------------------------------------------------
+# MyPy — Static type checker for Python
+# https://mypy.readthedocs.io/
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+
+# Third-party libraries that lack type stubs or are C-extension heavy.
+# We ignore missing imports per-module so that strict mode still applies
+# to our own codebase.
+[[tool.mypy.overrides]]
+module = [
+    "celery.*",
+    "celery_app",
+    "celery.exceptions.*",
+    "redis.*",
+    "openai.*",
+    "psycopg2.*",
+    "psycopg2_binary.*",
+    "python_magic.*",
+    "magic.*",
+    "websockets.*",
+    "watchfiles.*",
+    "dnspython.*",
+    "whisperx.*",
+    "torch.*",
+    "torchaudio.*",
+    "pytorch_lightning.*",
+    "transformers.*",
+    "google.genai.*",
+    "ffmpeg.*",
+]
+ignore_missing_imports = true

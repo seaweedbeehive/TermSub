@@ -1,0 +1,60 @@
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the project root to enable hot-reloading of source code
+      - .:/app
+    env_file:
+      # Point to the existing .env inside the application directory
+      - 02_Code/termsub/.env
+    working_dir: /app/02_Code/termsub
+    command: >
+      python -m uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+    depends_on:
+      - db
+      - redis
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - 02_Code/termsub/.env
+    working_dir: /app/02_Code/termsub
+    command: >
+      celery -A app.core.celery_app worker
+      --loglevel=info
+      --concurrency=2
+    depends_on:
+      - redis
+      - db
+    volumes:
+      - .:/app
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: termsub
+      POSTGRES_PASSWORD: termsub
+      POSTGRES_DB: termsub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
