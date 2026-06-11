@@ -1,10 +1,11 @@
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class SegmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: str
     sequence_number: int
     start_time: float
@@ -37,7 +38,7 @@ class VideoOut(VideoBase):
     domain: str = "general"
     created_at: datetime
     updated_at: datetime
-    
+
     # Progress tracking fields
     progress_percent: int = 0
     current_step: str | None = None
@@ -55,8 +56,9 @@ class VideoOut(VideoBase):
 
 class VideoProgress(BaseModel):
     """Detailed progress information for a video."""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     video_id: str
     status: str
     progress_percent: int
@@ -68,12 +70,13 @@ class VideoProgress(BaseModel):
     estimated_time_remaining: str | None
     started_at: datetime | None
     completed_at: datetime | None
-    
-    
+
+
 class ProcessingLogEntry(BaseModel):
     """Single processing log entry."""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     timestamp: datetime
     level: str
     step: str
@@ -83,4 +86,5 @@ class ProcessingLogEntry(BaseModel):
 
 class VideoProgressDetail(VideoProgress):
     """Progress with detailed logs."""
+
     recent_logs: list[ProcessingLogEntry]

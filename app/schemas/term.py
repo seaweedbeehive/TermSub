@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -19,7 +20,7 @@ class TermUpdate(BaseModel):
 
 class TranslationVariantOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     variant_translation: str
     occurrence_count: int
 

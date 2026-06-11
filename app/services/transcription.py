@@ -11,8 +11,8 @@ Usage:
 """
 
 import logging
-from typing import List, Dict, Any, Optional
 from pathlib import Path
+from typing import Any
 
 from openai import OpenAI
 
@@ -27,10 +27,11 @@ class TranscriptionError(Exception):
     This is a HARD FAILURE — the caller must NOT fall back to heuristics.
     The pipeline step should be marked as failed.
     """
+
     pass
 
 
-def get_openai_client(api_key: Optional[str] = None) -> OpenAI:
+def get_openai_client(api_key: str | None = None) -> OpenAI:
     """Initialize and return an OpenAI client.
 
     Args:
@@ -49,12 +50,12 @@ def get_openai_client(api_key: Optional[str] = None) -> OpenAI:
 
 
 def merge_subtitle_segments(
-    segments: List[Dict[str, Any]],
+    segments: list[dict[str, Any]],
     min_duration: float = 1.0,
     min_chars: int = 30,
     max_duration: float = 7.0,
     max_chars: int = 84,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Merge adjacent short segments into subtitle-appropriate lengths.
 
     Uses a greedy algorithm that merges segments until they reach
@@ -64,11 +65,12 @@ def merge_subtitle_segments(
     if not segments:
         return []
 
-    # Detect whether these are audio segments (real timestamps) or text segments (all 0.0)
+    # Detect whether these are audio segments (real timestamps)
+    # or text segments (all 0.0)
     has_real_timestamps = any(seg["end"] > 0.0 for seg in segments)
 
-    merged: List[Dict[str, Any]] = []
-    current: Dict[str, Any] = {
+    merged: list[dict[str, Any]] = []
+    current: dict[str, Any] = {
         "start": segments[0]["start"],
         "end": segments[0]["end"],
         "text": segments[0]["text"],
@@ -87,14 +89,15 @@ def merge_subtitle_segments(
         merged_end = next_end
         merged_duration = merged_end - current["start"] if has_real_timestamps else 0.0
 
-        current_duration = current["end"] - current["start"] if has_real_timestamps else 0.0
+        current_duration = (
+            current["end"] - current["start"] if has_real_timestamps else 0.0
+        )
         current_chars = len(current["text"])
 
         # "Good enough" to stand alone?
         is_good_enough = (
-            (has_real_timestamps and current_duration >= min_duration)
-            or current_chars >= min_chars
-        )
+            has_real_timestamps and current_duration >= min_duration
+        ) or current_chars >= min_chars
 
         # Would merging exceed hard maximums?
         would_exceed_max = False
@@ -116,9 +119,9 @@ def merge_subtitle_segments(
 
 def transcribe_with_openai(
     audio_path: str,
-    language: Optional[str] = None,
-    api_key: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    language: str | None = None,
+    api_key: str | None = None,
+) -> list[dict[str, Any]]:
     """Transcribe audio using OpenAI whisper-1.
 
     Args:
@@ -145,7 +148,7 @@ def transcribe_with_openai(
 
     try:
         with open(audio_path, "rb") as audio_file:
-            kwargs: Dict[str, Any] = {
+            kwargs: dict[str, Any] = {
                 "model": "whisper-1",
                 "file": audio_file,
                 "response_format": "verbose_json",
@@ -165,7 +168,9 @@ def transcribe_with_openai(
     # The modern openai SDK returns a Transcription pydantic model;
     # fall back to dict-style access for maximum compatibility.
     segments_raw = getattr(response, "segments", None) or response.get("segments", [])
-    detected_language = getattr(response, "language", None) or response.get("language", language or "en")
+    detected_language = getattr(response, "language", None) or response.get(
+        "language", language or "en"
+    )
 
     if not segments_raw:
         raise TranscriptionError(
@@ -173,7 +178,7 @@ def transcribe_with_openai(
             f"The audio may be silent, corrupted, or in an unsupported language."
         )
 
-    segments: List[Dict[str, Any]] = []
+    segments: list[dict[str, Any]] = []
     for seg in segments_raw:
         # Support both pydantic model items and plain dicts
         start = getattr(seg, "start", None)
@@ -186,11 +191,13 @@ def transcribe_with_openai(
         if text is None:
             text = seg.get("text", "")
 
-        segments.append({
-            "start": float(start),
-            "end": float(end),
-            "text": str(text).strip(),
-        })
+        segments.append(
+            {
+                "start": float(start),
+                "end": float(end),
+                "text": str(text).strip(),
+            }
+        )
 
     # Merge short Whisper fragments into subtitle-appropriate lengths
     segments = merge_subtitle_segments(segments)

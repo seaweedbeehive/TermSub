@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import Optional, List
 from datetime import datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.video import Term, Video, TranslationVariant, TermSource
+from app.models.video import Term, TermSource, Video
 
 router = APIRouter(prefix="/terms", tags=["terms"])
 
@@ -16,8 +17,8 @@ class CustomTermCreate(BaseModel):
 
 
 class TermUpdate(BaseModel):
-    standardized_term: Optional[str] = None
-    is_standardized: Optional[bool] = None
+    standardized_term: str | None = None
+    is_standardized: bool | None = None
 
 
 class TranslationVariantOut(BaseModel):
@@ -31,26 +32,26 @@ class TermOut(BaseModel):
     original_term: str
     translated_term: str
     is_standardized: bool
-    standardized_term: Optional[str]
+    standardized_term: str | None
     frequency: int
-    category: Optional[str]
+    category: str | None
     source: str
     created_at: datetime
-    translation_variants: List[TranslationVariantOut]
-    
+    translation_variants: list[TranslationVariantOut]
+
     class Config:
         from_attributes = True
 
 
 @router.get("/video/{video_id}")
-def list_terms(video_id: str, db: Session = Depends(get_db)):
+def list_terms(video_id: str, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     """List all extracted terms for a video, including translation variants."""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
-    
+
     terms = db.query(Term).filter(Term.video_id == video_id).all()
-    
+
     # Include translation variants for each term
     result = []
     for term in terms:
@@ -68,18 +69,20 @@ def list_terms(video_id: str, db: Session = Depends(get_db)):
             "translation_variants": [
                 {
                     "variant_translation": v.variant_translation,
-                    "occurrence_count": v.occurrence_count
+                    "occurrence_count": v.occurrence_count,
                 }
                 for v in term.translation_variants
-            ]
+            ],
         }
         result.append(term_dict)
-    
+
     return result
 
 
 @router.patch("/{term_id}", response_model=TermOut)
-def update_term(term_id: str, update: TermUpdate, db: Session = Depends(get_db)):
+def update_term(
+    term_id: str, update: TermUpdate, db: Session = Depends(get_db)
+) -> Term:
     """Standardize a term (set standardized_term and is_standardized)."""
     term = db.query(Term).filter(Term.id == term_id).first()
     if not term:
@@ -94,12 +97,14 @@ def update_term(term_id: str, update: TermUpdate, db: Session = Depends(get_db))
 
 
 @router.post("/video/{video_id}/custom", response_model=TermOut)
-def add_custom_term(video_id: str, term_data: CustomTermCreate, db: Session = Depends(get_db)):
+def add_custom_term(
+    video_id: str, term_data: CustomTermCreate, db: Session = Depends(get_db)
+) -> Term:
     """Add a custom term (manual find & replace) for a video."""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
-    
+
     # Create manual term
     term = Term(
         video_id=video_id,
@@ -114,22 +119,26 @@ def add_custom_term(video_id: str, term_data: CustomTermCreate, db: Session = De
     db.add(term)
     db.commit()
     db.refresh(term)
-    
+
     return term
 
 
 @router.delete("/video/{video_id}/custom/{term_id}")
-def delete_custom_term(video_id: str, term_id: str, db: Session = Depends(get_db)):
+def delete_custom_term(
+    video_id: str, term_id: str, db: Session = Depends(get_db)
+) -> dict[str, str]:
     """Delete a custom term. Only manual terms can be deleted."""
     term = db.query(Term).filter(Term.id == term_id, Term.video_id == video_id).first()
     if not term:
         raise HTTPException(status_code=404, detail="Term not found")
-    
+
     # Only allow deletion of manual terms
     if term.source != TermSource.MANUAL:
-        raise HTTPException(status_code=403, detail="Only custom (manual) terms can be deleted")
-    
+        raise HTTPException(
+            status_code=403, detail="Only custom (manual) terms can be deleted"
+        )
+
     db.delete(term)
     db.commit()
-    
+
     return {"message": "Custom term deleted"}

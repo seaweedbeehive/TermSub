@@ -16,9 +16,14 @@ email-validator==2.2.0
 # Database
 sqlalchemy==2.0.36
 alembic==1.14.0
+psycopg2-binary==2.9.10
 
 # AI/ML Services
 openai==1.65.0
+
+# Background Task Queue (Celery + Redis)
+celery==5.4.0
+redis==5.2.0
 
 # Async Support
 anyio==4.6.0

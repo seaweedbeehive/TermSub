@@ -4,32 +4,26 @@ This module is the backward-compatible service layer that wraps the core
 OpenAI translator agent (app.agents.translator) with database persistence.
 
 All Gemini-specific logic has been replaced with OpenAI Chat Completions.
-"""
+"""  # noqa: E501
 
-import json
-import re
-import time
 import asyncio
-from typing import List, Dict, Optional, Any
-from collections import defaultdict
+import time
+from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.agents.translator import (
+    DEFAULT_OVERLAP,
+    DEFAULT_WINDOW_SIZE,
+    create_sliding_windows,
+    get_async_openai_client,
+    merge_translations,
+    translate_batches_concurrently,
+)
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.video import Video, VideoStatus, Segment, Term, TermOccurrence, TranslationVariant
+from app.models.video import Segment, Video, VideoStatus
 from app.services.progress_service import get_progress_tracker
-from app.agents.translator import (
-    get_async_openai_client,
-    create_sliding_windows,
-    translate_batches_concurrently,
-    merge_translations,
-    DEFAULT_WINDOW_SIZE,
-    DEFAULT_OVERLAP,
-    MAX_RETRIES,
-    BASE_RETRY_DELAY,
-)
-
 
 # Re-export constants for backward compatibility
 __all__ = [
@@ -53,19 +47,31 @@ def test_openai_connection(api_key: str | None = None) -> tuple[bool, str]:
     """
     try:
         from openai import OpenAI
+
         effective_key = api_key or settings.OPENAI_API_KEY
         if not effective_key:
-            return False, "OPENAI_API_KEY not configured. Please enter your API key in the UI."
+            return (
+                False,
+                "OPENAI_API_KEY not configured. Please enter your API key in the UI.",
+            )
 
         client = OpenAI(api_key=effective_key)
         response = client.chat.completions.create(
             model="gpt-5.4-mini",
-            messages=[{"role": "user", "content": "Say 'API test successful' in 5 words or less."}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Say 'API test successful' in 5 words or less.",
+                }
+            ],
             max_completion_tokens=20,
         )
 
         if response and response.choices and response.choices[0].message.content:
-            return True, f"API working! Response: {response.choices[0].message.content[:50]}"
+            return (
+                True,
+                f"API working! Response: {response.choices[0].message.content[:50]}",
+            )
         else:
             return False, "API returned empty response"
     except Exception as e:
@@ -96,11 +102,12 @@ get_gemini_client = get_openai_client
 # Database Persistence Functions
 # ============================================================================
 
+
 def bulk_save_segments(
     db: Session,
     video: Video,
-    translations: List[Dict[str, Any]],
-    all_segments: List[Segment],
+    translations: list[dict[str, Any]],
+    all_segments: list[Segment],
     batch_size: int = 50,
     progress_tracker: Any = None,
 ) -> int:
@@ -126,10 +133,12 @@ def bulk_save_segments(
         translated_text = translation.get("translated_text", "").strip()
 
         if seq_num and translated_text and seq_num in seq_to_segment:
-            translation_data.append({
-                "sequence_number": seq_num,
-                "translated_text": translated_text,
-            })
+            translation_data.append(
+                {
+                    "sequence_number": seq_num,
+                    "translated_text": translated_text,
+                }
+            )
             translation_count += 1
 
     if not translation_data:
@@ -144,7 +153,7 @@ def bulk_save_segments(
 
     for i in range(0, len(translation_data), batch_size):
         batch_start = time.time()
-        batch = translation_data[i:i + batch_size]
+        batch = translation_data[i : i + batch_size]
 
         batch_saved = bulk_update_segment_translations(video.id, batch)
         saved_count += batch_saved
@@ -159,12 +168,16 @@ def bulk_save_segments(
         if progress_tracker:
             progress_tracker.info(
                 "TRANSLATING",
-                f"Bulk saved {batch_saved} segments ({saved_count}/{len(translation_data)})",
-                f"Batch {video.processed_batches}/{total_batches} in {batch_elapsed:.1f}ms"
+                f"Bulk saved {batch_saved} segments "
+                f"({saved_count}/{len(translation_data)})",
+                f"Batch {video.processed_batches}/{total_batches} "
+                f"in {batch_elapsed:.1f}ms",
             )
 
-        print(f"[TRANSLATING] Bulk saved {len(batch)} segments in {batch_elapsed:.1f}ms "
-              f"(batch {video.processed_batches}/{total_batches})")
+        print(
+            f"[TRANSLATING] Bulk saved {len(batch)} segments in {batch_elapsed:.1f}ms "
+            f"(batch {video.processed_batches}/{total_batches})"
+        )
 
     total_elapsed = (time.time() - start_time) * 1000
 
@@ -172,18 +185,20 @@ def bulk_save_segments(
         progress_tracker.info(
             "TRANSLATING",
             f"Bulk save complete: {saved_count} segments",
-            f"Total time: {total_elapsed:.1f}ms in {total_batches} batches"
+            f"Total time: {total_elapsed:.1f}ms in {total_batches} batches",
         )
 
-    print(f"[TRANSLATING] ✓ Bulk saved {saved_count} segments in {total_elapsed:.1f}ms "
-          f"({total_batches} batches)")
+    print(
+        f"[TRANSLATING] ✓ Bulk saved {saved_count} segments in {total_elapsed:.1f}ms "
+        f"({total_batches} batches)"
+    )
 
     return saved_count
 
 
 def bulk_save_segments_with_short_sessions(
     video_id: str,
-    translations: List[Dict[str, Any]],
+    translations: list[dict[str, Any]],
     batch_size: int = 50,
     progress_tracker: Any = None,
 ) -> int:
@@ -201,10 +216,12 @@ def bulk_save_segments_with_short_sessions(
         translated_text = translation.get("translated_text", "").strip()
 
         if seq_num and translated_text:
-            translation_data.append({
-                "sequence_number": seq_num,
-                "translated_text": translated_text,
-            })
+            translation_data.append(
+                {
+                    "sequence_number": seq_num,
+                    "translated_text": translated_text,
+                }
+            )
 
     if not translation_data:
         return 0
@@ -221,7 +238,7 @@ def bulk_save_segments_with_short_sessions(
 
     for i in range(0, len(translation_data), batch_size):
         batch_start = time.time()
-        batch = translation_data[i:i + batch_size]
+        batch = translation_data[i : i + batch_size]
 
         batch_saved = bulk_update_segment_translations(video_id, batch)
         saved_count += batch_saved
@@ -231,7 +248,9 @@ def bulk_save_segments_with_short_sessions(
             if video:
                 video.processed_batches = (i // batch_size) + 1
                 video.processed_segments = saved_count
-                video.progress_percent = int((saved_count / len(translation_data)) * 100)
+                video.progress_percent = int(
+                    (saved_count / len(translation_data)) * 100
+                )
                 db.commit()
 
         batch_elapsed = (time.time() - batch_start) * 1000
@@ -239,12 +258,16 @@ def bulk_save_segments_with_short_sessions(
         if progress_tracker:
             progress_tracker.info(
                 "TRANSLATING",
-                f"Bulk saved {batch_saved} segments ({saved_count}/{len(translation_data)})",
-                f"Batch {((i // batch_size) + 1)}/{total_batches} in {batch_elapsed:.1f}ms"
+                f"Bulk saved {batch_saved} segments "
+                f"({saved_count}/{len(translation_data)})",
+                f"Batch {((i // batch_size) + 1)}/{total_batches} "
+                f"in {batch_elapsed:.1f}ms",
             )
 
-        print(f"[TRANSLATING] Bulk saved {len(batch)} segments in {batch_elapsed:.1f}ms "
-              f"(batch {((i // batch_size) + 1)}/{total_batches})")
+        print(
+            f"[TRANSLATING] Bulk saved {len(batch)} segments in {batch_elapsed:.1f}ms "
+            f"(batch {((i // batch_size) + 1)}/{total_batches})"
+        )
 
     total_elapsed = (time.time() - start_time) * 1000
 
@@ -252,11 +275,13 @@ def bulk_save_segments_with_short_sessions(
         progress_tracker.info(
             "TRANSLATING",
             f"Bulk save complete: {saved_count} segments",
-            f"Total time: {total_elapsed:.1f}ms in {total_batches} batches"
+            f"Total time: {total_elapsed:.1f}ms in {total_batches} batches",
         )
 
-    print(f"[TRANSLATING] ✓ Bulk saved {saved_count} segments in {total_elapsed:.1f}ms "
-          f"({total_batches} batches)")
+    print(
+        f"[TRANSLATING] ✓ Bulk saved {saved_count} segments in {total_elapsed:.1f}ms "
+        f"({total_batches} batches)"
+    )
 
     return saved_count
 
@@ -265,14 +290,15 @@ def bulk_save_segments_with_short_sessions(
 # Main Translation Functions
 # ============================================================================
 
+
 async def translate_video_sliding_window_async(
     video_id: str,
-    db: Optional[Session] = None,
+    db: Session | None = None,
     model_name: str = "gpt-5.4-mini",
     window_size: int = DEFAULT_WINDOW_SIZE,
     overlap: int = DEFAULT_OVERLAP,
-    glossary: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    glossary: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Async sliding window translation with concurrent batch processing.
 
     This function uses short-lived database sessions to avoid holding locks
@@ -331,7 +357,8 @@ async def translate_video_sliding_window_async(
     if progress_tracker._current_step_name != "TRANSLATING":
         progress_tracker.start_step(
             "TRANSLATING",
-            f"Async sliding window: {total_segments} segments, window={window_size}, max_concurrent={5}"
+            f"Async sliding window: {total_segments} segments, "
+            f"window={window_size}, max_concurrent={5}",
         )
         step_started_here = True
 
@@ -339,7 +366,9 @@ async def translate_video_sliding_window_async(
         client = get_async_openai_client()
 
         progress_tracker.info("TRANSLATING", "Creating sliding window batches...")
-        full_transcript_text = "\n".join([seg["original_text"] for seg in all_segment_dicts])
+        full_transcript_text = "\n".join(
+            [str(seg["original_text"]) for seg in all_segment_dicts]
+        )
 
         batches = create_sliding_windows(
             all_segment_dicts, window_size, overlap, glossary, full_transcript_text
@@ -348,7 +377,7 @@ async def translate_video_sliding_window_async(
         progress_tracker.info(
             "TRANSLATING",
             f"Created {len(batches)} batches from {total_segments} segments",
-            f"Window: {window_size}, Overlap: {overlap}, Step: {window_size - overlap}"
+            f"Window: {window_size}, Overlap: {overlap}, Step: {window_size - overlap}",
         )
 
         start_time = time.time()
@@ -368,7 +397,7 @@ async def translate_video_sliding_window_async(
             progress_tracker.warning(
                 "TRANSLATING",
                 f"{len(failed_batches)}/{len(batches)} batches failed",
-                "Will attempt to continue with partial results"
+                "Will attempt to continue with partial results",
             )
 
         progress_tracker.info("TRANSLATING", "Merging batch translations...")
@@ -379,7 +408,7 @@ async def translate_video_sliding_window_async(
         progress_tracker.info(
             "TRANSLATING",
             f"Merged into {len(final_translations)} final translations",
-            f"Extracted {len(extracted_terms)} terms in {elapsed:.2f}s"
+            f"Extracted {len(extracted_terms)} terms in {elapsed:.2f}s",
         )
 
         progress_tracker.info("TRANSLATING", "Saving translations to database...")
@@ -397,7 +426,10 @@ async def translate_video_sliding_window_async(
                 video.status = VideoStatus.COMPLETED.value
                 video.progress_percent = 100
                 video.processed_segments = translation_count
-                video.current_step = f"Translation complete: {translation_count}/{total_segments} segments"
+                video.current_step = (
+                    f"Translation complete: {translation_count}/"
+                    f"{total_segments} segments"
+                )
                 db.commit()
 
         if step_started_here:
@@ -425,17 +457,17 @@ async def translate_video_sliding_window_async(
                 "status": video.status,
                 "translated_count": video.processed_segments,
                 "total_segments": video.total_segments,
-                "success": video.status == VideoStatus.COMPLETED.value
+                "success": video.status == VideoStatus.COMPLETED.value,
             }
         return {"video_id": video_id, "status": "not_found", "success": False}
 
 
 def translate_video_sliding_window(
     video_id: str,
-    db: Optional[Session] = None,
+    db: Session | None = None,
     model_name: str = "gpt-5.4-mini",
-    glossary: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    glossary: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Synchronous wrapper for async sliding window translation.
 
     Args:
@@ -447,7 +479,11 @@ def translate_video_sliding_window(
     Returns:
         Dict with video_id, status, translated_count, total_segments, success flag
     """
-    return asyncio.run(translate_video_sliding_window_async(video_id, db, model_name, glossary=glossary))
+    return asyncio.run(
+        translate_video_sliding_window_async(
+            video_id, db, model_name, glossary=glossary
+        )
+    )
 
 
 # Backward compatibility aliases
@@ -458,16 +494,18 @@ def translate_video_simple(
     video_id: str,
     db: Session,
     model_name: str = "gpt-5.4-mini",
-) -> Video:
+) -> dict[str, Any]:
     """DEPRECATED: Use translate_video_sliding_window() instead.
 
     Simple translation without context analysis.
     Kept for backward compatibility but not recommended.
     """
     import warnings
+
     warnings.warn(
-        "translate_video_simple() is deprecated. Use translate_video_sliding_window() instead.",
+        "translate_video_simple() is deprecated. "
+        "Use translate_video_sliding_window() instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
     return translate_video_sliding_window(video_id, model_name=model_name)
