@@ -1,6 +1,6 @@
 # TermSub - Central Project Configuration
 # Configures Ruff (linting/formatting) and MyPy (type checking)
-# Run from repo root
+# Run from repo root or from 02_Code/termsub/
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
