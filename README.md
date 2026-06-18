@@ -2,7 +2,7 @@
 
 > **AI-Powered Video Translation & Terminology Management**
 
-TermSub is a FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **OpenAI cloud-native transcription and translation**, a **built-in web UI with light/dark theme toggle**, and **real-time progress tracking** — all designed to produce consistent, high-quality subtitles with standardized terminology.
+TermSub is a production-ready FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **OpenAI cloud-native transcription and translation**, a **built-in web UI with light/dark theme toggle**, and **real-time progress tracking via WebSocket** — all designed to produce consistent, high-quality subtitles with standardized terminology.
 
 Built with a focus on **Persian (Farsi)** and other RTL languages, but supports any language pair OpenAI models can handle.
 
@@ -59,48 +59,59 @@ A complete single-page interface served at `http://localhost:8000/` with:
 ### Additional Features
 - **Text file bypass** — Upload `.txt` or `.srt` to skip transcription entirely
 - **WebSocket progress** — Real-time status updates during long-running jobs
-- **Background job queue** — Celery + Redis worker with heartbeat, timeout recovery, and retry logic
+- **Distributed background queue** — Celery + Redis worker with heartbeat, timeout recovery, and retry logic
 - **Processing logs** — Detailed per-step logging for debugging
 - **CORS enabled** — Ready for frontend integration
-- **Auto-cleanup** — Original video and temp `.wav` files are deleted after job completion or error
+- **Auto-cleanup** — Original video and temp `.mp3` files are deleted after job completion or error
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────────────┐     ┌─────────────────────┐
-│   Upload    │────▶│  FFmpeg Audio   │────▶│  OpenAI whisper-1   │
-│  (Video)    │     │   Extraction    │     │  Transcription      │
-└─────────────┘     └─────────────────┘     └─────────────────────┘
-                                                     │
-                              ┌──────────────────────┘
-                              │
-                              ▼
-                     ┌─────────────────┐
-                     │ Segment Timestamps │  (born from cloud)
-                     └─────────────────┘
-                              │
-┌─────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Multi-Agent Translation Pipeline               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │Director Agent│─▶│Glossary Agent│─▶│   Translator Agent   │  │
-│  │Style Guide   │  │Term Extraction│  │Sliding-Window Translate│ │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Terminology Review  │  Subtitle Timeline (Edit / Find & Replace) │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Export (SRT / VTT / TXT / JSON)                     │
-└─────────────────────────────────────────────────────────────────┘
+                          FFmpeg              OpenAI
+  Upload (Video)  ──▶  Audio Extraction  ──▶  whisper-1
+                                                  │
+                                                  ▼
+                                        Segment Timestamps
+                                          (born from cloud)
+                                                  │
+                                                  ▼
+                                       ┌──────────────────┐
+                                       │    PostgreSQL    │◀────┐
+                                       │     Database     │     │
+                                       └────────┬─────────┘     │
+                                                │               │
+                                                ▼               │
+                                       ┌──────────────────┐     │
+                                       │  Celery Worker   │     │
+                                       │  + Redis Broker  │     │
+                                       └────────┬─────────┘     │
+                                                │               │
+                                                ▼               │
+                                       ┌──────────────────┐     │
+                                       │  Redis Pub/Sub   │─────┘
+                                       │  WebSocket Feed  │
+                                       └──────────────────┘
+                                                │
+                                                ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                    Multi-Agent Translation Pipeline                │
+  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐  │
+  │  │Director Agent│──▶│Glossary Agent│──▶│   Translator Agent   │  │
+  │  │  Style Guide │   │Term Extraction│  │Sliding-Window Translate│ │
+  │  └──────────────┘   └──────────────┘   └──────────────────────┘  │
+  └──────────────────────────────────────────────────────────────────┘
+                                                │
+                                                ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  Terminology Review  │  Subtitle Timeline (Edit / Find & Replace) │
+  └──────────────────────────────────────────────────────────────────┘
+                                                │
+                                                ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │              Export (SRT / VTT / TXT / JSON)                      │
+  └──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -109,6 +120,9 @@ A complete single-page interface served at `http://localhost:8000/` with:
 
 ```
 ├── app/
+│   ├── agents/               # Standalone AI agent modules
+│   │   ├── __init__.py
+│   │   └── translator.py     # Sliding-window translator agent
 │   ├── api/                  # FastAPI routers
 │   │   ├── videos.py         # Upload, transcribe, analyze, translate, segments
 │   │   ├── terms.py          # Term CRUD
@@ -117,12 +131,12 @@ A complete single-page interface served at `http://localhost:8000/` with:
 │   ├── core/
 │   │   ├── config.py         # Pydantic settings (.env)
 │   │   ├── celery_app.py     # Celery application configuration
-│   │   ├── redis_pubsub.py   # Redis pub/sub for real-time updates
+│   │   ├── redis_pubsub.py   # Redis pub/sub for real-time WebSocket broadcasts
 │   │   └── task_tracker.py   # Background job tracking
 │   ├── db/
 │   │   ├── base.py           # SQLAlchemy base
 │   │   ├── session.py        # Engine + session factory
-│   │   └── session_utils.py  # Session helpers
+│   │   └── session_utils.py  # Session helpers (context-manager based)
 │   ├── models/
 │   │   ├── video.py          # Video, Segment, Term, JobQueue, ProcessingLog
 │   │   └── job_queue.py      # JobQueue, JobStatus, JobType
@@ -130,19 +144,21 @@ A complete single-page interface served at `http://localhost:8000/` with:
 │   ├── services/
 │   │   ├── whisper_service.py      # FFmpeg + OpenAI transcription
 │   │   ├── transcription.py        # OpenAI whisper-1 transcription
-│   │   ├── gemini_service.py       # OpenAI translation + validation
 │   │   ├── translation_pipeline.py # Multi-agent pipeline orchestration
 │   │   ├── context_analysis_service.py # Director + Glossary agents
 │   │   ├── progress_service.py     # Progress tracking
 │   │   ├── upload_service.py       # File upload handling
 │   │   └── text_parser.py          # Text file ingestion
 │   └── main.py               # FastAPI app + WebSocket + built-in UI
+├── frontend/                 # Extracted UI assets (JS + Tailwind CSS)
 ├── migrations/               # Database migration scripts
 ├── uploads/                  # Uploaded files (runtime)
 ├── exports/                  # Generated subtitle files (runtime)
 ├── requirements.txt
 ├── setup_env.sh              # Environment setup script
 ├── .env.example
+├── docker-compose.yml        # PostgreSQL + Redis + App
+├── Dockerfile
 └── README.md
 ```
 
@@ -153,6 +169,8 @@ A complete single-page interface served at `http://localhost:8000/` with:
 ### Prerequisites
 - Python 3.11+
 - FFmpeg (for audio extraction from video)
+- PostgreSQL 14+ (database — included in Docker Compose)
+- Redis (Celery broker — included in Docker Compose)
 
 ### 1. Clone & Setup
 
@@ -182,7 +200,7 @@ Edit `.env` and add your API keys:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | **Yes** | OpenAI API key (transcription + translation + analysis) |
-| `DATABASE_URL` | No | PostgreSQL default: `postgresql://termsub:termsub@db:5432/termsub` |
+| `DATABASE_URL` | **Yes** | PostgreSQL URL: `postgresql://termsub:termsub@db:5432/termsub` |
 | `UPLOAD_DIR` | No | Upload folder (default: `uploads`) |
 | `EXPORT_DIR` | No | Export folder (default: `exports`) |
 
@@ -196,6 +214,9 @@ python migrations/add_skip_glossary_column.py
 
 # Add job_queue timeout/heartbeat fields
 python migrations/apply_migration.py
+
+# Add Celery task ID tracking (required for v2.0.0+)
+python migrations/add_celery_task_id_column.py
 ```
 
 ### 4. Run
@@ -207,7 +228,7 @@ docker compose up --build
 
 #### Option B: Local Development
 
-You need **Redis** running locally (install via Homebrew, apt, or Docker). Then start the Celery worker in one terminal:
+You need **PostgreSQL** and **Redis** running locally. Then start the Celery worker in one terminal:
 
 ```bash
 source venv/bin/activate
@@ -238,11 +259,11 @@ POST /videos/upload
 ```
 
 ### 2. Transcribe
-Click **Transcribe** (or call the API). The background worker:
-- Extracts audio with FFmpeg (16kHz mono WAV)
+Click **Transcribe** (or call the API). The background Celery worker:
+- Extracts audio with FFmpeg (16kHz mono MP3)
 - Sends audio to OpenAI whisper-1 for segment-level transcription
 - Timestamps are born together with text from the cloud
-- Saves segments with timestamps to the database
+- Saves segments with timestamps to the PostgreSQL database
 
 ```bash
 POST /videos/{id}/transcribe
@@ -323,7 +344,7 @@ GET /export/{id}/transcription   # Original (untranslated) SRT
 | **Term** | Extracted key term, its translation, and standardized version |
 | **TermOccurrence** | Links a Term to specific Segment(s) where it appears |
 | **TranslationVariant** | Tracks different translations found for the same term |
-| **JobQueue** | Background job with heartbeat, timeout, and retry tracking |
+| **JobQueue** | Background job with heartbeat, timeout, retry tracking, and Celery task ID |
 | **ProcessingLog** | Detailed per-step logs for debugging |
 
 ### Video Status Pipeline
@@ -347,11 +368,26 @@ Errors land in `ERROR` status.
 pytest
 ```
 
+### Code Quality
+This project uses **Ruff** for linting/formatting and **MyPy** for strict static type checking. CI runs both on every push to `main`.
+
+```bash
+# Lint check
+ruff check .
+
+# Format check
+ruff format --check .
+
+# Type check
+mypy app/ --config-file pyproject.toml
+```
+
 ### Database Migrations
 If you need to apply migrations manually:
 ```bash
 python migrations/add_skip_glossary_column.py
 python migrations/apply_migration.py
+python migrations/add_celery_task_id_column.py
 ```
 
 ### Environment Sync
@@ -364,12 +400,14 @@ If dependencies change:
 
 ## Tech Stack
 
-- **Backend**: FastAPI + SQLAlchemy + PostgreSQL
+- **Backend**: FastAPI + SQLAlchemy 2.0 + PostgreSQL
 - **AI/ML**: OpenAI (`openai`) — whisper-1 for transcription, gpt-5.4-mini for translation
-- **Queue**: Celery + Redis background worker with WebSocket updates
+- **Queue**: Celery + Redis background worker with WebSocket updates via Redis Pub/Sub
 - **Frontend**: Built-in vanilla JS + Tailwind CSS with light/dark mode (served from `main.py`)
 - **Audio**: FFmpeg for extraction
+- **Code Quality**: Ruff (linting/formatting) + MyPy (strict type checking)
 - **Testing**: pytest
+- **Deployment**: Docker Compose (PostgreSQL + Redis + App)
 
 ---
 
