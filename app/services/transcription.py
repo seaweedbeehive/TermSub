@@ -152,6 +152,10 @@ def transcribe_with_openai(
                 "model": "whisper-1",
                 "file": audio_file,
                 "response_format": "verbose_json",
+                # Request both segment and word timestamps. Word timestamps let us
+                # recover the true start time of the first spoken word when Whisper
+                # clamps the first segment's start to 0.0 because of leading silence.
+                "timestamp_granularities": ["word", "segment"],
             }
             if language:
                 kwargs["language"] = language
@@ -168,9 +172,23 @@ def transcribe_with_openai(
     # The modern openai SDK returns a Transcription pydantic model;
     # fall back to dict-style access for maximum compatibility.
     segments_raw = getattr(response, "segments", None) or response.get("segments", [])
+    words_raw = getattr(response, "words", None) or response.get("words", [])
     detected_language = getattr(response, "language", None) or response.get(
         "language", language or "en"
     )
+
+    # Whisper sometimes reports the first segment as starting at 0.0 even when
+    # the audio begins with silence. The word-level timestamp of the first spoken
+    # word is authoritative, so we use it to correct the first segment's start.
+    first_word_start: float | None = None
+    if words_raw:
+        for word in words_raw:
+            w_start = getattr(word, "start", None)
+            if w_start is None and isinstance(word, dict):
+                w_start = word.get("start")
+            if w_start is not None:
+                first_word_start = float(w_start)
+                break
 
     if not segments_raw:
         raise TranscriptionError(
@@ -179,7 +197,7 @@ def transcribe_with_openai(
         )
 
     segments: list[dict[str, Any]] = []
-    for seg in segments_raw:
+    for idx, seg in enumerate(segments_raw):
         # Support both pydantic model items and plain dicts
         start = getattr(seg, "start", None)
         if start is None:
@@ -190,6 +208,14 @@ def transcribe_with_openai(
         text = getattr(seg, "text", None)
         if text is None:
             text = seg.get("text", "")
+
+        # Apply the authoritative first-word timestamp to the first segment only.
+        if (
+            idx == 0
+            and first_word_start is not None
+            and first_word_start > float(start)
+        ):
+            start = first_word_start
 
         segments.append(
             {
