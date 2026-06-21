@@ -490,6 +490,12 @@ def translate_video_task(self: Any, video_id: str) -> dict[str, Any]:
                 .all()
             ]
 
+        if translated != total:
+            raise RuntimeError(
+                f"Translation incomplete: {translated}/{total} segments translated. "
+                "Retrying the task."
+            )
+
         _send_progress(
             video_id,
             {

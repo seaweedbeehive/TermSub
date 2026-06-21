@@ -258,6 +258,8 @@ Upload a video, audio, or text file via the web UI or API:
 POST /videos/upload
 ```
 
+> **Note:** Maximum upload size is **500 MB per file**.
+
 ### 2. Transcribe
 Click **Transcribe** (or call the API). The background Celery worker:
 - Extracts audio with FFmpeg (16kHz mono MP3)
@@ -319,7 +321,7 @@ GET /export/{id}/transcription   # Original (untranslated) SRT
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/videos/upload` | POST | Upload file. Requires `target_language`. |
+| `/videos/upload` | POST | Upload file. Requires `target_language`. Max **500 MB**. |
 | `/videos/{id}/transcribe` | POST | Queue transcription job. |
 | `/videos/{id}/analyze` | POST | Queue Director + Glossary analysis. |
 | `/videos/{id}/translate` | POST | Queue Translator agent. |

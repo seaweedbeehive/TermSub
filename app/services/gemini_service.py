@@ -394,10 +394,17 @@ async def translate_video_sliding_window_async(
 
         failed_batches = [r for r in batch_results if not r.success]
         if failed_batches:
-            progress_tracker.warning(
+            errors = " | ".join(
+                f"batch {r.batch_index + 1}: {r.error}" for r in failed_batches[:3]
+            )
+            progress_tracker.error(
                 "TRANSLATING",
                 f"{len(failed_batches)}/{len(batches)} batches failed",
-                "Will attempt to continue with partial results",
+                errors,
+            )
+            raise RuntimeError(
+                f"{len(failed_batches)}/{len(batches)} translation batches failed. "
+                f"First errors: {errors}"
             )
 
         progress_tracker.info("TRANSLATING", "Merging batch translations...")

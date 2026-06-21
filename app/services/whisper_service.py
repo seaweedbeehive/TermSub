@@ -15,7 +15,10 @@ from typing import Any
 
 from app.models.video import Segment, Video, VideoStatus
 from app.services.progress_service import get_progress_tracker
-from app.services.transcription import TranscriptionError, transcribe_with_openai
+from app.services.transcription import (
+    TranscriptionError,
+    transcribe_audio_with_chunking,
+)
 
 # ---------------------------------------------------------------------------
 # Shared output format
@@ -152,10 +155,11 @@ def openai_transcribe(
     transcribe_start = time.time()
 
     try:
-        raw_segments = transcribe_with_openai(
+        raw_segments = transcribe_audio_with_chunking(
             audio_path=audio_path,
             language=language,
             api_key=api_key,
+            progress_tracker=progress_tracker,
         )
     except TranscriptionError:
         # Hard failure — propagate so the background worker marks the job as ERROR.

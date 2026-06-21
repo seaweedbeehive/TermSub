@@ -11,11 +11,13 @@ Usage:
 """
 
 import logging
+import shutil
 from pathlib import Path
 from typing import Any
 
 from openai import OpenAI
 
+from app.core.audio import chunk_audio_if_needed, get_chunk_offsets
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -121,6 +123,7 @@ def transcribe_with_openai(
     audio_path: str,
     language: str | None = None,
     api_key: str | None = None,
+    time_offset: float = 0.0,
 ) -> list[dict[str, Any]]:
     """Transcribe audio using OpenAI whisper-1.
 
@@ -131,6 +134,8 @@ def transcribe_with_openai(
             whisper-1 supports this natively.
         api_key: Optional API key override. Falls back to
             settings.OPENAI_API_KEY.
+        time_offset: Seconds to add to every timestamp.  Used when transcribing
+            a chunk that starts later in the original audio.
 
     Returns:
         List of dicts with ``start``, ``end``, and ``text`` keys.
@@ -180,6 +185,8 @@ def transcribe_with_openai(
     # Whisper sometimes reports the first segment as starting at 0.0 even when
     # the audio begins with silence. The word-level timestamp of the first spoken
     # word is authoritative, so we use it to correct the first segment's start.
+    # When processing a chunk, shift the authoritative word timestamp by the
+    # chunk's offset in the original audio.
     first_word_start: float | None = None
     if words_raw:
         for word in words_raw:
@@ -187,7 +194,7 @@ def transcribe_with_openai(
             if w_start is None and isinstance(word, dict):
                 w_start = word.get("start")
             if w_start is not None:
-                first_word_start = float(w_start)
+                first_word_start = float(w_start) + time_offset
                 break
 
     if not segments_raw:
@@ -209,18 +216,22 @@ def transcribe_with_openai(
         if text is None:
             text = seg.get("text", "")
 
+        # Shift segment timestamps by the chunk offset before any correction.
+        start = float(start) + time_offset
+        end = float(end) + time_offset
+
         # Apply the authoritative first-word timestamp to the first segment only.
         if (
             idx == 0
             and first_word_start is not None
-            and first_word_start > float(start)
+            and first_word_start > start
         ):
             start = first_word_start
 
         segments.append(
             {
-                "start": float(start),
-                "end": float(end),
+                "start": start,
+                "end": end,
                 "text": str(text).strip(),
             }
         )
@@ -236,3 +247,80 @@ def transcribe_with_openai(
     )
 
     return segments
+
+
+def transcribe_audio_with_chunking(
+    audio_path: str,
+    language: str | None = None,
+    api_key: str | None = None,
+    progress_tracker: Any = None,
+) -> list[dict[str, Any]]:
+    """Transcribe audio, automatically chunking if it exceeds Whisper's size limit.
+
+    Chunks are transcribed sequentially and their timestamps are shifted by the
+    exact duration of all previous chunks, producing a single seamless segment
+    list relative to the original audio.
+
+    Args:
+        audio_path: Path to the extracted audio file.
+        language: Optional ISO-639-1 language code.
+        api_key: Optional OpenAI API key override.
+        progress_tracker: Optional progress tracker for per-chunk logging.
+
+    Returns:
+        Merged list of segment dicts with ``start``, ``end``, and ``text`` keys.
+
+    Raises:
+        TranscriptionError: If any chunk transcription fails.
+        RuntimeError: If FFmpeg chunking fails.
+    """
+    chunks: list[str] = []
+    temp_dir: str | None = None
+    try:
+        chunks, temp_dir = chunk_audio_if_needed(audio_path)
+        offsets = get_chunk_offsets(chunks)
+
+        if progress_tracker:
+            progress_tracker.info(
+                "WHISPER",
+                f"Transcribing audio in {len(chunks)} chunk(s)",
+                f"file={audio_path}",
+            )
+
+        all_segments: list[dict[str, Any]] = []
+        for idx, (chunk_path, offset) in enumerate(
+            zip(chunks, offsets, strict=True), start=1
+        ):
+            if progress_tracker:
+                progress_tracker.info(
+                    "WHISPER",
+                    f"Transcribing chunk {idx}/{len(chunks)}",
+                    f"offset={offset:.2f}s, file={chunk_path}",
+                )
+
+            chunk_segments = transcribe_with_openai(
+                audio_path=chunk_path,
+                language=language,
+                api_key=api_key,
+                time_offset=offset,
+            )
+            all_segments.extend(chunk_segments)
+
+            if progress_tracker:
+                progress_tracker.info(
+                    "WHISPER",
+                    f"Chunk {idx}/{len(chunks)} complete",
+                    f"segments={len(chunk_segments)}, offset={offset:.2f}s",
+                )
+
+        if progress_tracker:
+            progress_tracker.info(
+                "WHISPER",
+                "All chunks transcribed",
+                f"total_segments={len(all_segments)}",
+            )
+
+        return all_segments
+    finally:
+        if temp_dir:
+            shutil.rmtree(temp_dir, ignore_errors=True)

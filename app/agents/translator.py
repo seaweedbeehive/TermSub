@@ -18,13 +18,12 @@ import functools
 import json
 import logging
 import re
-import threading
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar, cast
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RateLimitError
 from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import settings
@@ -35,11 +34,12 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-MAX_CONCURRENT_CALLS = 5
+MAX_CONCURRENT_CALLS = 2
 DEFAULT_WINDOW_SIZE = 20
 DEFAULT_OVERLAP = 10
-MAX_RETRIES = 3
+MAX_RETRIES = 5
 BASE_RETRY_DELAY = 2  # seconds
+RATE_LIMIT_DELAY = 10  # seconds
 RETRYABLE_EXCEPTIONS = (Exception,)
 DEFAULT_TRANSLATION_MODEL = "gpt-5.4-mini"
 
@@ -109,27 +109,6 @@ def retry_with_backoff(
         return wrapper
 
     return decorator
-
-
-# ---------------------------------------------------------------------------
-# Thread-Safe Semaphore Management
-# ---------------------------------------------------------------------------
-
-
-class SemaphoreManager:
-    """Thread-safe semaphore manager for API concurrency control."""
-
-    def __init__(self, max_concurrent: int = MAX_CONCURRENT_CALLS):
-        self.max_concurrent = max_concurrent
-        self._local = threading.local()
-
-    def get_semaphore(self) -> asyncio.Semaphore:
-        if not hasattr(self._local, "semaphore"):
-            self._local.semaphore = asyncio.Semaphore(self.max_concurrent)
-        return cast(asyncio.Semaphore, self._local.semaphore)
-
-
-_semaphore_manager = SemaphoreManager(MAX_CONCURRENT_CALLS)
 
 
 # ---------------------------------------------------------------------------
@@ -421,9 +400,6 @@ STYLE GUIDE:
 # ---------------------------------------------------------------------------
 
 
-@retry_with_backoff(
-    max_retries=MAX_RETRIES, base_delay=BASE_RETRY_DELAY, backoff_factor=2.0
-)
 async def translate_single_batch(
     batch: TranslationBatch,
     client: AsyncOpenAI,
@@ -431,9 +407,10 @@ async def translate_single_batch(
     source_language: str,
     target_language: str,
     progress_tracker: Any,
+    semaphore: asyncio.Semaphore,
     retry_attempt: int = 0,
 ) -> BatchResult:
-    """Translate a single batch with retry logic and JSON validation."""
+    """Translate a single batch with JSON validation."""
     if not target_language or not str(target_language).strip():
         raise ValueError(
             "Target language is missing or empty. Cannot translate without a "
@@ -444,8 +421,6 @@ async def translate_single_batch(
     system_instruction = build_system_instruction(batch, target_language)
 
     logger.debug("Final Glossary being sent to LLM: %s", batch.glossary)
-
-    semaphore = _semaphore_manager.get_semaphore()
 
     async with semaphore:
         start_time = time.time()
@@ -523,9 +498,14 @@ async def translate_single_batch_with_retry(
     source_language: str,
     target_language: str,
     progress_tracker: Any,
+    semaphore: asyncio.Semaphore,
 ) -> BatchResult:
-    """Translate a single batch with exponential backoff retry."""
-    last_error = None
+    """Translate a single batch with exponential backoff retry.
+
+    Uses a longer backoff for OpenAI 429 (Too Many Requests) errors so that
+    rate-limited batches wait and retry instead of being dropped.
+    """
+    last_error: Exception | None = None
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -536,8 +516,34 @@ async def translate_single_batch_with_retry(
                 source_language=source_language,
                 target_language=target_language,
                 progress_tracker=progress_tracker,
+                semaphore=semaphore,
                 retry_attempt=attempt,
             )
+        except RateLimitError as e:
+            last_error = e
+            if attempt < MAX_RETRIES - 1:
+                delay = RATE_LIMIT_DELAY * (2**attempt)
+                if progress_tracker:
+                    progress_tracker.warning(
+                        "TRANSLATING",
+                        f"Batch {batch.batch_index + 1} rate limited "
+                        f"(attempt {attempt + 1}), retrying in {delay}s",
+                        str(e),
+                    )
+                await asyncio.sleep(delay)
+            else:
+                if progress_tracker:
+                    progress_tracker.error(
+                        "TRANSLATING",
+                        f"Batch {batch.batch_index + 1} rate limited after "
+                        f"{MAX_RETRIES} attempts",
+                        str(e),
+                    )
+                return BatchResult(
+                    batch_index=batch.batch_index,
+                    success=False,
+                    error=str(e),
+                )
         except Exception as e:
             last_error = e
             if attempt < MAX_RETRIES - 1:
@@ -585,9 +591,16 @@ async def translate_batches_concurrently(
     target_language: str,
     progress_tracker: Any,
 ) -> list[BatchResult]:
-    """Translate all batches concurrently with semaphore-controlled concurrency."""
+    """Translate all batches concurrently with semaphore-controlled concurrency.
+
+    A fresh semaphore is created for every call so it is always bound to the
+    currently running event loop.  This avoids the "bound to a different event
+    loop" error that can occur when Celery reuses worker threads.
+    """
     if not batches:
         return []
+
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_CALLS)
 
     tasks = [
         translate_single_batch_with_retry(
@@ -597,6 +610,7 @@ async def translate_batches_concurrently(
             source_language=source_language,
             target_language=target_language,
             progress_tracker=progress_tracker,
+            semaphore=semaphore,
         )
         for batch in batches
     ]

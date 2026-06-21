@@ -56,6 +56,8 @@ Begin by opening the TermSub web interface in your browser.
   - **Text files**: `.txt` or `.srt` (use this if you already have a transcript and want to skip transcription)
 - Once selected, your filename appears in the upload area.
 
+> **Note:** Maximum upload size is **500 MB per file**.
+
 > **Tip:** If you upload a `.txt` or `.srt` file, TermSub will skip the audio transcription phase and move directly to analysis and translation.
 
 ### 2. Configure Your Language Pair
