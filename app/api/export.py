@@ -1,32 +1,15 @@
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.session_utils import get_db_session
 from app.models.video import Segment, Video, VideoStatus
+from app.utils.timecode import format_timestamp, format_timestamp_vtt
 
 router = APIRouter(prefix="/export", tags=["export"])
-
-
-def format_srt_time(seconds: float) -> str:
-    """Convert seconds to SRT time format: HH:MM:SS,mmm"""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    millis = int((seconds % 1) * 1000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
-
-
-def format_vtt_time(seconds: float) -> str:
-    """Convert seconds to WebVTT time format: HH:MM:SS.mmm"""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    millis = int((seconds % 1) * 1000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
 
 
 def sanitize_filename(filename: str) -> str:
@@ -54,8 +37,8 @@ def generate_srt(segments: list[Segment]) -> str:
         # Append RLM for RTL languages to keep punctuation on the correct side
         text = f"{text}\u200f"
 
-        start_time = format_srt_time(segment.start_time)
-        end_time = format_srt_time(segment.end_time)
+        start_time = format_timestamp(segment.start_time)
+        end_time = format_timestamp(segment.end_time)
 
         srt_lines.append(str(i))
         srt_lines.append(f"{start_time} --> {end_time}")
@@ -75,8 +58,8 @@ def generate_vtt(segments: list[Segment]) -> str:
         # Append RLM for RTL languages to keep punctuation on the correct side
         text = f"{text}\u200f"
 
-        start_time = format_vtt_time(segment.start_time)
-        end_time = format_vtt_time(segment.end_time)
+        start_time = format_timestamp_vtt(segment.start_time)
+        end_time = format_timestamp_vtt(segment.end_time)
 
         vtt_lines.append(f"{i}")  # Cue identifier
         vtt_lines.append(f"{start_time} --> {end_time}")
@@ -154,8 +137,7 @@ def get_segments_or_404(video_id: str, db: Session) -> tuple[Video, list[Segment
         raise HTTPException(
             status_code=400,
             detail=(
-                "No translated segments found."
-                " Translation step may not be complete."
+                "No translated segments found. Translation step may not be complete."
             ),
         )
 
@@ -163,15 +145,16 @@ def get_segments_or_404(video_id: str, db: Session) -> tuple[Video, list[Segment
 
 
 @router.get("/{video_id}/srt")
-def export_srt(video_id: str, db: Session = Depends(get_db)) -> Response:
+def export_srt(video_id: str) -> Response:
     """Export the final SRT file with consistent terminology."""
-    video, segments = get_segments_or_404(video_id, db)
+    with get_db_session() as db:
+        video, segments = get_segments_or_404(video_id, db)
 
-    # Generate SRT content
-    srt_content = generate_srt(segments)
+        # Generate SRT content while the session is still open so segment
+        # attributes remain accessible.
+        srt_content = generate_srt(segments)
+        download_name = sanitize_filename(video.filename) + ".srt"
 
-    # Derive download filename from original video name (strip extension)
-    download_name = sanitize_filename(video.filename) + ".srt"
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "text/plain; charset=utf-8",
@@ -181,15 +164,15 @@ def export_srt(video_id: str, db: Session = Depends(get_db)) -> Response:
 
 
 @router.get("/{video_id}/vtt")
-def export_vtt(video_id: str, db: Session = Depends(get_db)) -> Response:
+def export_vtt(video_id: str) -> Response:
     """Export the final WebVTT file."""
-    video, segments = get_segments_or_404(video_id, db)
+    with get_db_session() as db:
+        video, segments = get_segments_or_404(video_id, db)
 
-    # Generate VTT content
-    vtt_content = generate_vtt(segments)
+        # Generate VTT content while the session is still open.
+        vtt_content = generate_vtt(segments)
+        download_name = sanitize_filename(video.filename) + ".vtt"
 
-    # Derive download filename from original video name (strip extension)
-    download_name = sanitize_filename(video.filename) + ".vtt"
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "text/vtt; charset=utf-8",
@@ -199,15 +182,15 @@ def export_vtt(video_id: str, db: Session = Depends(get_db)) -> Response:
 
 
 @router.get("/{video_id}/txt")
-def export_txt(video_id: str, db: Session = Depends(get_db)) -> Response:
+def export_txt(video_id: str) -> Response:
     """Export plain translated text only."""
-    video, segments = get_segments_or_404(video_id, db)
+    with get_db_session() as db:
+        video, segments = get_segments_or_404(video_id, db)
 
-    # Generate TXT content
-    txt_content = generate_txt(segments)
+        # Generate TXT content while the session is still open.
+        txt_content = generate_txt(segments)
+        download_name = sanitize_filename(video.filename) + ".txt"
 
-    # Derive download filename from original video name (strip extension)
-    download_name = sanitize_filename(video.filename) + ".txt"
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "text/plain; charset=utf-8",
@@ -217,15 +200,15 @@ def export_txt(video_id: str, db: Session = Depends(get_db)) -> Response:
 
 
 @router.get("/{video_id}/json")
-def export_json(video_id: str, db: Session = Depends(get_db)) -> Response:
+def export_json(video_id: str) -> Response:
     """Export full JSON with metadata and all segments."""
-    video, segments = get_segments_or_404(video_id, db)
+    with get_db_session() as db:
+        video, segments = get_segments_or_404(video_id, db)
 
-    # Generate JSON content
-    json_data = generate_json(video, segments)
+        # Generate JSON content while the session is still open.
+        json_data = generate_json(video, segments)
+        download_name = sanitize_filename(video.filename) + ".json"
 
-    # Derive download filename from original video name (strip extension)
-    download_name = sanitize_filename(video.filename) + ".json"
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "application/json; charset=utf-8",
@@ -244,8 +227,8 @@ def generate_original_srt(segments: list[Segment]) -> str:
         # Use ORIGINAL text only (not translated)
         text = segment.original_text
 
-        start_time = format_srt_time(segment.start_time)
-        end_time = format_srt_time(segment.end_time)
+        start_time = format_timestamp(segment.start_time)
+        end_time = format_timestamp(segment.end_time)
 
         srt_lines.append(str(i))
         srt_lines.append(f"{start_time} --> {end_time}")
@@ -256,33 +239,31 @@ def generate_original_srt(segments: list[Segment]) -> str:
 
 
 @router.get("/{video_id}/transcription")
-def export_original_transcription(
-    video_id: str, db: Session = Depends(get_db)
-) -> Response:
+def export_original_transcription(video_id: str) -> Response:
     """Export the ORIGINAL transcription (before translation) as SRT."""
-    video = db.query(Video).filter(Video.id == video_id).first()
-    if not video:
-        raise HTTPException(status_code=404, detail="Video not found")
+    with get_db_session() as db:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
 
-    # Get all segments for this video
-    segments = (
-        db.query(Segment)
-        .filter(Segment.video_id == video_id)
-        .order_by(Segment.sequence_number)
-        .all()
-    )
-
-    if not segments:
-        raise HTTPException(
-            status_code=400,
-            detail="No segments found. Transcription may not be complete.",
+        # Get all segments for this video
+        segments = (
+            db.query(Segment)
+            .filter(Segment.video_id == video_id)
+            .order_by(Segment.sequence_number)
+            .all()
         )
 
-    # Generate SRT from original text
-    srt_content = generate_original_srt(segments)
+        if not segments:
+            raise HTTPException(
+                status_code=400,
+                detail="No segments found. Transcription may not be complete.",
+            )
 
-    # Derive download filename from original video name (strip extension)
-    download_name = sanitize_filename(video.filename) + "_transcription.srt"
+        # Generate SRT from original text while the session is still open.
+        srt_content = generate_original_srt(segments)
+        download_name = sanitize_filename(video.filename) + "_transcription.srt"
+
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
         "Content-Type": "text/plain; charset=utf-8",

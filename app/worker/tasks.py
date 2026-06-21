@@ -268,8 +268,7 @@ def analyze_video_task(self: Any, video_id: str) -> dict[str, Any]:
                     "status": "terms_ready",
                     "progress": 100,
                     "message": (
-                        "Terminology extraction skipped"
-                        " — proceeding to translation"
+                        "Terminology extraction skipped — proceeding to translation"
                     ),
                     "terms_count": 0,
                 },
@@ -312,8 +311,7 @@ def analyze_video_task(self: Any, video_id: str) -> dict[str, Any]:
                 "status": "context_ready",
                 "progress": 50,
                 "message": (
-                    f"Director complete:"
-                    f" {style_guide.get('tone', 'neutral')} tone"
+                    f"Director complete: {style_guide.get('tone', 'neutral')} tone"
                 ),
                 "tone": style_guide.get("tone", "neutral"),
                 "formality_level": style_guide.get("formality_level", "medium"),

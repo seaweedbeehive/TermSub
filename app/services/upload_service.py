@@ -190,9 +190,8 @@ def validate_file_content(file: UploadFile, expected_content_type: str) -> None:
     # Check if MIME type is in allowed list
     if mime_type not in ALLOWED_MIME_TYPES:
         # Special handling for text files which can have various MIME types
-        if (
-            expected_content_type == ContentType.TEXT.value
-            and mime_type.startswith("text/")
+        if expected_content_type == ContentType.TEXT.value and mime_type.startswith(
+            "text/"
         ):
             return
 

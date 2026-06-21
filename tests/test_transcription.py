@@ -125,7 +125,6 @@ def test_fallback_when_no_word_timestamps(tmp_path: Path) -> None:
     assert segments[0]["end"] == 3.0
 
 
-
 def test_time_offset_applied_to_segments_and_word_correction(tmp_path: Path) -> None:
     """Chunk timestamps must be shifted by the original-audio offset."""
     audio_path = tmp_path / "audio.mp3"

@@ -51,9 +51,7 @@ def get_audio_duration(audio_path: str) -> float:
             check=True,
         )
     except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            f"ffprobe failed for '{audio_path}': {exc.stderr}"
-        ) from exc
+        raise RuntimeError(f"ffprobe failed for '{audio_path}': {exc.stderr}") from exc
     except FileNotFoundError as exc:
         raise RuntimeError("ffprobe not found. Is FFmpeg installed?") from exc
 
@@ -162,8 +160,7 @@ def chunk_audio_if_needed(
         return [audio_path], None
 
     logger.info(
-        "Audio file size %.2f MB exceeds %.2f MB limit; splitting into "
-        "%.0fs chunks.",
+        "Audio file size %.2f MB exceeds %.2f MB limit; splitting into %.0fs chunks.",
         file_size / 1024 / 1024,
         max_size_bytes / 1024 / 1024,
         chunk_duration,
@@ -173,9 +170,7 @@ def chunk_audio_if_needed(
     if not chunks:
         # Defensive: should never happen if FFmpeg succeeded, but avoid leaking
         # an empty temp directory.
-        raise RuntimeError(
-            f"FFmpeg produced no chunks for '{audio_path}'"
-        )
+        raise RuntimeError(f"FFmpeg produced no chunks for '{audio_path}'")
     return chunks, temp_dir
 
 

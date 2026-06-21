@@ -16,6 +16,8 @@ class SegmentCreate(SegmentBase):
 
 class SegmentUpdate(BaseModel):
     translated_text: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
 
 
 class SegmentOut(SegmentBase):

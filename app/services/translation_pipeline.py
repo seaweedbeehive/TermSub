@@ -201,9 +201,7 @@ class TranslationPipeline:
         """
         self.client = get_async_openai_client()
 
-    async def _send_progress(
-        self, status: str, message: str, **kwargs: Any
-    ) -> None:
+    async def _send_progress(self, status: str, message: str, **kwargs: Any) -> None:
         """Send progress update via WebSocket."""
         print(f"[Pipeline] {status}: {message}")
 

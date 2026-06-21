@@ -26,9 +26,7 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def bulk_upsert_segments(
-    video_id: str, segment_data_list: list[dict[str, Any]]
-) -> int:
+def bulk_upsert_segments(video_id: str, segment_data_list: list[dict[str, Any]]) -> int:
     """Bulk upsert segments using dialect-specific upsert (SQLite)
     or fetch-then-update (PostgreSQL).
 

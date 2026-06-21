@@ -20,11 +20,14 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.celery_app import celery_app
 from app.core.task_tracker import get_latest_task_id, record_task
 from app.db.session import get_db
+from app.db.session_utils import get_db_session
 from app.models.video import ContentType, Segment, Video, VideoStatus
+from app.schemas.segment import SegmentUpdate
 from app.schemas.video import VideoOut
 from app.services.gemini_service import translate_video_sliding_window
 from app.services.text_parser import parse_text_file
 from app.services.upload_service import save_uploaded_file
+from app.utils.timecode import parse_timestamp
 from app.worker.tasks import (
     analyze_video_task,
     transcribe_video_task,
@@ -81,9 +84,7 @@ async def upload_video(
     except Exception as e:
         print(f"[API Upload] Error: {e}")
         traceback.print_exc()
-        raise HTTPException(
-            status_code=500, detail=f"Upload failed: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}") from e
 
 
 @router.get("/{video_id}", response_model=VideoOut)
@@ -266,8 +267,7 @@ def translate_video_endpoint(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Video status is {video.status}. "
-                    "Need terms_ready or transcribed."
+                    f"Video status is {video.status}. Need terms_ready or transcribed."
                 ),
             )
 
@@ -372,24 +372,66 @@ def translate_video_legacy_endpoint(
 
 
 @router.patch("/{video_id}/segments/{segment_id}")
-def update_segment_translation(
-    video_id: str, segment_id: str, body: dict[str, Any], db: Session = Depends(get_db)
+def update_segment(
+    video_id: str,
+    segment_id: str,
+    body: SegmentUpdate,
 ) -> dict[str, str]:
-    """Update translated_text for a single subtitle segment."""
-    segment = (
-        db.query(Segment)
-        .filter(Segment.id == segment_id, Segment.video_id == video_id)
-        .first()
-    )
+    """Update translated text and/or timecodes for a single subtitle segment.
 
-    if not segment:
-        raise HTTPException(status_code=404, detail="Segment not found")
+    The database session is managed by ``get_db_session`` so the update is
+    committed on success and rolled back on any error, preventing connection
+    and transaction leaks.
+    """
+    with get_db_session() as db:
+        segment = (
+            db.query(Segment)
+            .filter(Segment.id == segment_id, Segment.video_id == video_id)
+            .first()
+        )
 
-    new_text = body.get("translated_text")
-    if new_text is not None and isinstance(new_text, str):
-        segment.translated_text = new_text
-        db.commit()
-        db.refresh(segment)
+        if not segment:
+            raise HTTPException(status_code=404, detail="Segment not found")
+
+        new_start: float | None = None
+        new_end: float | None = None
+
+        if body.start_time is not None:
+            try:
+                new_start = parse_timestamp(body.start_time)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid start_time: {exc}",
+                ) from exc
+
+        if body.end_time is not None:
+            try:
+                new_end = parse_timestamp(body.end_time)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid end_time: {exc}",
+                ) from exc
+
+        # Ensure chronological order when either boundary is supplied.
+        effective_start = new_start if new_start is not None else segment.start_time
+        effective_end = new_end if new_end is not None else segment.end_time
+        if effective_start >= effective_end:
+            raise HTTPException(
+                status_code=422,
+                detail="start_time must be strictly before end_time",
+            )
+
+        if body.translated_text is not None:
+            segment.translated_text = body.translated_text
+        if new_start is not None:
+            segment.start_time = new_start
+        if new_end is not None:
+            segment.end_time = new_end
+
+        # Do NOT refresh here: get_db_session commits on exit, and refresh
+        # before commit would reload the old DB values and undo our edits.
 
     return {"status": "success"}
 

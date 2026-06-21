@@ -181,11 +181,31 @@
             }
         }
 
+        const TIMECODE_REGEX = /^(\d{2}):(\d{2}):(\d{2}),(\d{3})$/;
+
         function formatTimecode(seconds) {
-            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-            const ms = Math.floor((seconds % 1) * 1000).toString().padStart(3, '0');
-            return `${m}:${s}.${ms}`;
+            const totalMillis = Math.max(0, Math.round(seconds * 1000));
+            const ms = (totalMillis % 1000).toString().padStart(3, '0');
+            const totalSeconds = Math.floor(totalMillis / 1000);
+            const s = (totalSeconds % 60).toString().padStart(2, '0');
+            const totalMinutes = Math.floor(totalSeconds / 60);
+            const m = (totalMinutes % 60).toString().padStart(2, '0');
+            const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
+            return `${h}:${m}:${s},${ms}`;
+        }
+
+        function isValidTimecode(value) {
+            return typeof value === 'string' && TIMECODE_REGEX.test(value.trim());
+        }
+
+        function timecodeToSeconds(value) {
+            const match = value.trim().match(TIMECODE_REGEX);
+            if (!match) return NaN;
+            const hours = parseInt(match[1], 10);
+            const minutes = parseInt(match[2], 10);
+            const seconds = parseInt(match[3], 10);
+            const millis = parseInt(match[4], 10);
+            return hours * 3600 + minutes * 60 + seconds + millis / 1000;
         }
         
         function renderSubtitleTimeline(segments) {
@@ -201,53 +221,117 @@
                 return;
             }
             
-            grid.innerHTML = segments.map((seg, idx) => `
-                <div class="bg-slate-50 dark:bg-[#1A1A1E] rounded-lg p-3 border border-slate-100 dark:border-white/10 hover:border-slate-200 dark:hover:border-white/20 transition-colors group">
-                    <div class="flex items-center justify-between mb-1.5 text-slate-400 dark:text-[#6B7280]">
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-bold bg-slate-200 dark:bg-[#2A2A30] text-slate-600 dark:text-[#8A8F98] px-1.5 py-0.5 rounded">#${seg.sequence_number || idx + 1}</span>
-                            <span class="text-[11px] font-mono">⏱ [${formatTimecode(seg.start_time)} → ${formatTimecode(seg.end_time)}]</span>
-                        </div>
-                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button data-split-segment="${seg.id || ''}" title="Split card" class="px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors">
-                                <i class="fa-solid fa-scissors mr-0.5"></i>Split
-                            </button>
-                            <button data-add-below="${seg.sequence_number || idx + 1}" title="Add card below" class="px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors">
-                                <i class="fa-solid fa-plus mr-0.5"></i>Add
-                            </button>
-                            <button data-remove-segment="${seg.id || ''}" title="Remove card" class="px-1.5 py-0.5 text-[10px] bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded transition-colors">
-                                <i class="fa-solid fa-trash mr-0.5"></i>Remove
-                            </button>
-                        </div>
-                    </div>
-                    <div contenteditable="true" data-segment-id="${seg.id || ''}"
-                        class="text-slate-800 dark:text-[#E2E2E8] leading-relaxed outline-none focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 rounded p-1 transition-all ${seg.translated_text != null ? '' : 'text-slate-400 dark:text-[#6B7280] italic'}"
-                    >${escapeHtml(seg.translated_text != null ? seg.translated_text : seg.original_text || '(empty)')}</div>
-                </div>
-            `).join('');
-            
+            const template = document.getElementById('segmentCardTemplate');
+            if (!template) return;
+
+            grid.innerHTML = '';
+            segments.forEach((seg, idx) => {
+                const clone = template.content.cloneNode(true);
+                const card = clone.querySelector('.group');
+                clone.querySelector('.seq-num').textContent = `#${seg.sequence_number || idx + 1}`;
+
+                const startInput = card.querySelector('input[data-time-role="start"]');
+                const endInput = card.querySelector('input[data-time-role="end"]');
+                const textEl = card.querySelector('[data-time-role="text"]');
+                const splitBtn = card.querySelector('[data-action="split"]');
+                const addBtn = card.querySelector('[data-action="add"]');
+                const removeBtn = card.querySelector('[data-action="remove"]');
+
+                [startInput, endInput, textEl, splitBtn, addBtn, removeBtn].forEach(el => {
+                    if (el) el.setAttribute('data-segment-id', seg.id || '');
+                });
+                if (addBtn) addBtn.setAttribute('data-add-below', seg.sequence_number || idx + 1);
+
+                if (startInput) startInput.value = formatTimecode(seg.start_time);
+                if (endInput) endInput.value = formatTimecode(seg.end_time);
+
+                if (textEl) {
+                    textEl.textContent = seg.translated_text != null
+                        ? seg.translated_text
+                        : seg.original_text || '(empty)';
+                    if (seg.translated_text == null) {
+                        textEl.classList.add('text-slate-400', 'dark:text-[#6B7280]', 'italic');
+                    }
+                    textEl.dataset.originalText = textEl.textContent;
+                }
+
+                grid.appendChild(clone);
+            });
+
             // Attach auto-save blur listeners to editable fields
-            grid.querySelectorAll('[data-segment-id]').forEach(el => {
+            grid.querySelectorAll('input.timecode-input, [contenteditable="true"]').forEach(el => {
                 el.addEventListener('blur', async (e) => {
                     if (isSavingSegment) return;
-                    pushTimelineHistory();
                     const segmentId = e.target.getAttribute('data-segment-id');
-                    const newText = e.target.innerText.trim();
                     if (!segmentId || !currentVideoId) return;
-                    
-                    // Guard against accidental empty strings
-                    if (newText === '') {
-                        log('Segment text cannot be empty — change discarded.', 'warning');
-                        e.target.textContent = e.target.dataset.originalText || '(empty)';
-                        return;
+
+                    const isTimeInput = e.target.tagName === 'INPUT' && e.target.hasAttribute('data-time-role');
+                    const timeRole = isTimeInput ? e.target.getAttribute('data-time-role') : null;
+                    const card = e.target.closest('.group');
+                    const payload = {};
+
+                    // Validate the specific field that triggered blur before building payload.
+                    if (isTimeInput) {
+                        const raw = e.target.value.trim();
+                        if (!isValidTimecode(raw)) {
+                            log('Invalid timecode format. Use HH:MM:SS,mmm (e.g. 00:01:23,456).', 'warning');
+                            const originalSeg = currentTimelineSegments.find(s => s.id === segmentId);
+                            if (originalSeg) {
+                                e.target.value = formatTimecode(originalSeg[timeRole === 'start' ? 'start_time' : 'end_time']);
+                            }
+                            return;
+                        }
                     }
-                    
+
+                    // Aggregate latest text and timecode values for the segment.
+                    const startInput = card.querySelector('input[data-time-role="start"]');
+                    const endInput = card.querySelector('input[data-time-role="end"]');
+                    const textEl = card.querySelector('[contenteditable="true"]');
+
+                    if (startInput && endInput) {
+                        payload.start_time = startInput.value.trim();
+                        payload.end_time = endInput.value.trim();
+
+                        if (isValidTimecode(payload.start_time) && isValidTimecode(payload.end_time)) {
+                            if (timecodeToSeconds(payload.start_time) >= timecodeToSeconds(payload.end_time)) {
+                                log('Start time must be strictly before end time.', 'warning');
+                                const originalSeg = currentTimelineSegments.find(s => s.id === segmentId);
+                                if (originalSeg && timeRole) {
+                                    e.target.value = formatTimecode(originalSeg[timeRole === 'start' ? 'start_time' : 'end_time']);
+                                }
+                                return;
+                            }
+                        }
+                    }
+
+                    if (textEl) {
+                        const newText = textEl.innerText.trim();
+                        if (newText === '') {
+                            log('Segment text cannot be empty — change discarded.', 'warning');
+                            textEl.textContent = textEl.dataset.originalText || '(empty)';
+                            return;
+                        }
+                        payload.translated_text = newText;
+                    }
+
+                    // Skip network call if nothing changed compared to the last rendered state.
+                    const originalSeg = currentTimelineSegments.find(s => s.id === segmentId);
+                    if (originalSeg) {
+                        const changed = (
+                            (payload.translated_text !== undefined && payload.translated_text !== originalSeg.translated_text) ||
+                            (payload.start_time !== undefined && payload.start_time !== formatTimecode(originalSeg.start_time)) ||
+                            (payload.end_time !== undefined && payload.end_time !== formatTimecode(originalSeg.end_time))
+                        );
+                        if (!changed) return;
+                    }
+
+                    pushTimelineHistory();
                     isSavingSegment = true;
                     try {
                         const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}`, {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ translated_text: newText })
+                            body: JSON.stringify(payload)
                         });
                         if (!response.ok) throw new Error('Server returned ' + response.status);
                         log('Segment updated and saved.', 'info');
@@ -259,18 +343,16 @@
                         isSavingSegment = false;
                     }
                 });
-                // Store original text for rollback on empty blur
-                el.dataset.originalText = el.textContent;
             });
-            
+
             // Attach Split Card listeners
-            grid.querySelectorAll('[data-split-segment]').forEach(btn => {
+            grid.querySelectorAll('[data-action="split"]').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.preventDefault();
-                    const segmentId = btn.getAttribute('data-split-segment');
+                    const segmentId = btn.getAttribute('data-segment-id');
                     if (!segmentId || !currentVideoId) return;
                     pushTimelineHistory();
-                    
+
                     try {
                         const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}/split`, {
                             method: 'POST',
@@ -286,15 +368,15 @@
                     }
                 });
             });
-            
+
             // Attach Add Card Below listeners
-            grid.querySelectorAll('[data-add-below]').forEach(btn => {
+            grid.querySelectorAll('[data-action="add"]').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.preventDefault();
                     const targetSeq = parseInt(btn.getAttribute('data-add-below'), 10) + 1;
                     if (!currentVideoId || isNaN(targetSeq)) return;
                     pushTimelineHistory();
-                    
+
                     try {
                         const response = await fetch(`/videos/${currentVideoId}/segments/add`, {
                             method: 'POST',
@@ -316,15 +398,15 @@
                     }
                 });
             });
-            
+
             // Attach Remove Card listeners
-            grid.querySelectorAll('[data-remove-segment]').forEach(btn => {
+            grid.querySelectorAll('[data-action="remove"]').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.preventDefault();
-                    const segmentId = btn.getAttribute('data-remove-segment');
+                    const segmentId = btn.getAttribute('data-segment-id');
                     if (!segmentId || !currentVideoId) return;
                     pushTimelineHistory();
-                    
+
                     try {
                         const response = await fetch(`/videos/${currentVideoId}/segments/${segmentId}`, {
                             method: 'DELETE'
@@ -1214,10 +1296,29 @@
             return match ? match[1] : fallback;
         }
 
+        // Ensure any pending segment edit is saved before we trigger a download.
+        async function flushPendingEdits() {
+            const active = document.activeElement;
+            if (
+                active &&
+                (active.classList.contains('timecode-input') ||
+                    active.getAttribute('contenteditable') === 'true')
+            ) {
+                active.blur();
+            }
+
+            const start = Date.now();
+            while (isSavingSegment && Date.now() - start < 3000) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+
         // Generic export handler
         async function exportFormat(format) {
             if (!currentVideoId) return;
-            
+
+            await flushPendingEdits();
+
             const formatNames = {
                 'srt': 'SRT',
                 'vtt': 'WebVTT',
@@ -1234,13 +1335,19 @@
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
+                a.style.display = 'none';
                 const fallback = `translation_${currentVideoId.substring(0, 8)}.${format}`;
                 a.download = getFilenameFromHeader(response, fallback);
                 document.body.appendChild(a);
                 a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-                
+
+                // Give the browser a moment to start the download before
+                // cleaning up the anchor and revoking the blob URL.
+                setTimeout(() => {
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                }, 1000);
+
                 log(`${formatNames[format]} exported`, 'success');
                 
             } catch (err) {
@@ -1251,7 +1358,9 @@
         // Download original transcription handler
         async function downloadTranscription() {
             if (!currentVideoId) return;
-            
+
+            await flushPendingEdits();
+
             try {
                 const response = await fetch(`/export/${currentVideoId}/transcription`);
                 
@@ -1261,13 +1370,18 @@
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
+                a.style.display = 'none';
                 const fallback = `transcription_${currentVideoId.substring(0, 8)}.srt`;
                 a.download = getFilenameFromHeader(response, fallback);
                 document.body.appendChild(a);
                 a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-                
+
+                // Delay cleanup so the browser has time to start the download.
+                setTimeout(() => {
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                }, 1000);
+
                 log('Transcription downloaded', 'success');
                 
             } catch (err) {

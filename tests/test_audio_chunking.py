@@ -57,13 +57,16 @@ def test_chunk_audio_if_needed_splits_large_file(tmp_path: Path) -> None:
     fake_chunk_1 = str(tmp_path / "chunk_001.mp3")
     fake_chunk_2 = str(tmp_path / "chunk_002.mp3")
 
-    with patch(
-        "app.core.audio.os.path.getsize",
-        return_value=MAX_AUDIO_SIZE_BYTES + 1,
-    ), patch(
-        "app.core.audio.split_audio_file",
-        return_value=[fake_chunk_1, fake_chunk_2],
-    ) as mock_split:
+    with (
+        patch(
+            "app.core.audio.os.path.getsize",
+            return_value=MAX_AUDIO_SIZE_BYTES + 1,
+        ),
+        patch(
+            "app.core.audio.split_audio_file",
+            return_value=[fake_chunk_1, fake_chunk_2],
+        ) as mock_split,
+    ):
         chunks, temp_dir = chunk_audio_if_needed(str(audio_path))
 
     assert chunks == [fake_chunk_1, fake_chunk_2]
@@ -143,16 +146,20 @@ def test_transcribe_audio_with_chunking_merges_offsets_and_cleans_up(
 
     progress = MagicMock()
 
-    with patch(
-        "app.services.transcription.chunk_audio_if_needed",
-        return_value=(chunk_paths, fake_temp_dir),
-    ), patch(
-        "app.services.transcription.get_chunk_offsets",
-        return_value=[0.0, 600.0],
-    ), patch(
-        "app.services.transcription.transcribe_with_openai",
-        side_effect=_fake_transcribe,
-    ) as mock_transcribe:
+    with (
+        patch(
+            "app.services.transcription.chunk_audio_if_needed",
+            return_value=(chunk_paths, fake_temp_dir),
+        ),
+        patch(
+            "app.services.transcription.get_chunk_offsets",
+            return_value=[0.0, 600.0],
+        ),
+        patch(
+            "app.services.transcription.transcribe_with_openai",
+            side_effect=_fake_transcribe,
+        ) as mock_transcribe,
+    ):
         segments = transcribe_audio_with_chunking(
             str(audio_path),
             language="en",

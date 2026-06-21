@@ -221,11 +221,7 @@ def transcribe_with_openai(
         end = float(end) + time_offset
 
         # Apply the authoritative first-word timestamp to the first segment only.
-        if (
-            idx == 0
-            and first_word_start is not None
-            and first_word_start > start
-        ):
+        if idx == 0 and first_word_start is not None and first_word_start > start:
             start = first_word_start
 
         segments.append(
