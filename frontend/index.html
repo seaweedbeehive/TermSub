@@ -24,6 +24,7 @@
       tailwind.config = { darkMode: 'class' };
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.6.1/dist/css/tom-select.css">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="bg-slate-50 dark:bg-[#121214] min-h-screen">
@@ -40,10 +41,15 @@
                         <p class="text-sm text-slate-500 dark:text-[#8A8F98]">Video Translation & Terminology Management</p>
                     </div>
                 </div>
-                <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="Toggle theme">
-                    <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
-                    <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button id="howToUseBtn" type="button" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="How to use TermSub">
+                        <i class="fa-solid fa-circle-info text-slate-600 dark:text-[#8A8F98]"></i>
+                    </button>
+                    <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="Toggle theme">
+                        <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
+                        <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -68,15 +74,6 @@
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Source Language</label>
                             <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
                                 <option value="auto">Auto-detect</option>
-                                <option value="en">English</option>
-                                <option value="fa">Persian (Farsi)</option>
-                                <option value="ar">Arabic</option>
-                                <option value="de">German</option>
-                                <option value="fr">French</option>
-                                <option value="es">Spanish</option>
-                                <option value="it">Italian</option>
-                                <option value="ja">Japanese</option>
-                                <option value="zh">Chinese</option>
                             </select>
 
                         </div>
@@ -85,15 +82,6 @@
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Target Language</label>
                             <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
                                 <option value="" disabled selected>Select target language...</option>
-                                <option value="en">English</option>
-                                <option value="es">Spanish</option>
-                                <option value="fr">French</option>
-                                <option value="de">German</option>
-                                <option value="ar">Arabic</option>
-                                <option value="it">Italian</option>
-                                <option value="ja">Japanese</option>
-                                <option value="zh">Chinese</option>
-                                <option value="fa">Persian (Farsi)</option>
                             </select>
                             <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
                         </div>
@@ -296,6 +284,11 @@
                 </div>
             </div>
         </div>
+
+        <!-- Version footer -->
+        <div class="mt-8 text-center">
+            <span id="versionIndicator" class="text-xs text-slate-400 dark:text-[#6B7280]">TermSub</span>
+        </div>
     </div>
 
     <!-- API Key Help Modal -->
@@ -316,9 +309,28 @@
         </div>
     </div>
 
+    <!-- How to Use Modal -->
+    <div id="howToUseModal" class="hidden fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm" aria-hidden="true">
+        <div class="bg-white dark:bg-[#1A1A1E] border border-slate-200 dark:border-[#2A2A30] rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 relative">
+            <button id="howToUseModalClose" type="button" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-[#E2E2E8] transition-colors" aria-label="Close modal">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-[#E2E2E8] mb-4">How to Use TermSub</h3>
+            <ul class="list-disc list-inside text-sm text-slate-600 dark:text-[#8A8F98] space-y-2">
+                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Upload</strong> – drag &amp; drop a video, audio, or <code>.txt</code>/<code>.srt</code> file (or click the upload area). Max file size is 500 MB.</li>
+                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Choose languages</strong> – pick a source language (or Auto-detect) and a target language. Type in the dropdown to search 59 languages by English or native name.</li>
+                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Enter your OpenAI API key</strong> – paste your key in the field; it is saved only in your browser.</li>
+                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Click Start</strong> – TermSub uploads the file and runs transcription, terminology analysis, and translation in the background. Monitor progress in the Activity Log.</li>
+                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Review &amp; refine</strong> – edit extracted terms for consistency, then tweak subtitles in the timeline (edit text, split/add/remove segments, or use Find &amp; Replace).</li>
+                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Export</strong> – download SRT, VTT, TXT, or JSON files when you are done.</li>
+            </ul>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.6.1/dist/js/tom-select.complete.min.js"></script>
     <script src="/static/js/main.js" defer></script>
 </body>
 </html>

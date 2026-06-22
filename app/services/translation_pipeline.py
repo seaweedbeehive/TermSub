@@ -274,15 +274,9 @@ class TranslationPipeline:
             )
             print(f"[DirectorAgent] Total segments: {len(segments)}")
 
-            lang_names = {
-                "fa": "Persian (Farsi)",
-                "en": "English",
-                "de": "German",
-                "fr": "French",
-                "es": "Spanish",
-                "ar": "Arabic",
-            }
-            target_lang_name = lang_names.get(target_language, target_language)
+            from app.core.languages import LANGUAGE_NAMES
+
+            target_lang_name = LANGUAGE_NAMES.get(target_language, target_language)
 
             prompt = f"""You are a Director Agent analyzing video content for translation.
 
@@ -467,16 +461,10 @@ Consider:
             print("\n[GlossaryAgent] Extracting glossary terms...")
             print(f"[GlossaryAgent] Analyzing {len(segments)} segments")
 
-            lang_names = {
-                "fa": "Persian (Farsi)",
-                "en": "English",
-                "de": "German",
-                "fr": "French",
-                "es": "Spanish",
-                "ar": "Arabic",
-            }
-            target_lang_name = lang_names.get(target_language, target_language)
-            source_lang_name = lang_names.get(source_language, source_language)
+            from app.core.languages import LANGUAGE_NAMES
+
+            target_lang_name = LANGUAGE_NAMES.get(target_language, target_language)
+            source_lang_name = LANGUAGE_NAMES.get(source_language, source_language)
 
             prompt = f"""You are a Glossary Agent extracting key terms for translation.
 

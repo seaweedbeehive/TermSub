@@ -183,6 +183,74 @@
 
         const TIMECODE_REGEX = /^(\d{2}):(\d{2}):(\d{2}),(\d{3})$/;
 
+        // Supported languages for source/target dropdowns (ISO-639-1 codes).
+        // Covers the OpenAI Audio API supported languages plus legacy app languages.
+        const SUPPORTED_LANGUAGES = [
+            // Pinned: 9 most common languages + Persian
+            { code: 'en', name: 'English', nativeName: 'English', group: 'common' },
+            { code: 'zh', name: 'Chinese (Mandarin)', nativeName: '中文', group: 'common' },
+            { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी', group: 'common' },
+            { code: 'es', name: 'Spanish', nativeName: 'Español', group: 'common' },
+            { code: 'fr', name: 'French', nativeName: 'Français', group: 'common' },
+            { code: 'ar', name: 'Arabic', nativeName: 'العربية', group: 'common' },
+            { code: 'bn', name: 'Bengali', nativeName: 'বাংলা', group: 'common' },
+            { code: 'pt', name: 'Portuguese', nativeName: 'Português', group: 'common' },
+            { code: 'ru', name: 'Russian', nativeName: 'Русский', group: 'common' },
+            { code: 'fa', name: 'Persian (Farsi)', nativeName: 'فارسی', group: 'common' },
+            // All other supported languages (alphabetical by English name)
+            { code: 'af', name: 'Afrikaans', nativeName: 'Afrikaans', group: 'all' },
+            { code: 'hy', name: 'Armenian', nativeName: 'Հայերեն', group: 'all' },
+            { code: 'az', name: 'Azerbaijani', nativeName: 'Azərbaycan', group: 'all' },
+            { code: 'be', name: 'Belarusian', nativeName: 'Беларуская', group: 'all' },
+            { code: 'bs', name: 'Bosnian', nativeName: 'Bosanski', group: 'all' },
+            { code: 'bg', name: 'Bulgarian', nativeName: 'Български', group: 'all' },
+            { code: 'ca', name: 'Catalan', nativeName: 'Català', group: 'all' },
+            { code: 'hr', name: 'Croatian', nativeName: 'Hrvatski', group: 'all' },
+            { code: 'cs', name: 'Czech', nativeName: 'Čeština', group: 'all' },
+            { code: 'da', name: 'Danish', nativeName: 'Dansk', group: 'all' },
+            { code: 'nl', name: 'Dutch', nativeName: 'Nederlands', group: 'all' },
+            { code: 'et', name: 'Estonian', nativeName: 'Eesti', group: 'all' },
+            { code: 'fi', name: 'Finnish', nativeName: 'Suomi', group: 'all' },
+            { code: 'gl', name: 'Galician', nativeName: 'Galego', group: 'all' },
+            { code: 'de', name: 'German', nativeName: 'Deutsch', group: 'all' },
+            { code: 'el', name: 'Greek', nativeName: 'Ελληνικά', group: 'all' },
+            { code: 'he', name: 'Hebrew', nativeName: 'עברית', group: 'all' },
+            { code: 'hu', name: 'Hungarian', nativeName: 'Magyar', group: 'all' },
+            { code: 'is', name: 'Icelandic', nativeName: 'Íslenska', group: 'all' },
+            { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia', group: 'all' },
+            { code: 'it', name: 'Italian', nativeName: 'Italiano', group: 'all' },
+            { code: 'ja', name: 'Japanese', nativeName: '日本語', group: 'all' },
+            { code: 'kn', name: 'Kannada', nativeName: 'ಕನ್ನಡ', group: 'all' },
+            { code: 'kk', name: 'Kazakh', nativeName: 'Қазақ', group: 'all' },
+            { code: 'ko', name: 'Korean', nativeName: '한국어', group: 'all' },
+            { code: 'lv', name: 'Latvian', nativeName: 'Latviešu', group: 'all' },
+            { code: 'lt', name: 'Lithuanian', nativeName: 'Lietuvių', group: 'all' },
+            { code: 'mk', name: 'Macedonian', nativeName: 'Македонски', group: 'all' },
+            { code: 'ms', name: 'Malay', nativeName: 'Bahasa Melayu', group: 'all' },
+            { code: 'mr', name: 'Marathi', nativeName: 'मराठी', group: 'all' },
+            { code: 'mi', name: 'Maori', nativeName: 'Māori', group: 'all' },
+            { code: 'ne', name: 'Nepali', nativeName: 'नेपाली', group: 'all' },
+            { code: 'no', name: 'Norwegian', nativeName: 'Norsk', group: 'all' },
+            { code: 'pl', name: 'Polish', nativeName: 'Polski', group: 'all' },
+            { code: 'ro', name: 'Romanian', nativeName: 'Română', group: 'all' },
+            { code: 'sr', name: 'Serbian', nativeName: 'Српски', group: 'all' },
+            { code: 'sk', name: 'Slovak', nativeName: 'Slovenčina', group: 'all' },
+            { code: 'sl', name: 'Slovenian', nativeName: 'Slovenščina', group: 'all' },
+            { code: 'sw', name: 'Swahili', nativeName: 'Kiswahili', group: 'all' },
+            { code: 'sv', name: 'Swedish', nativeName: 'Svenska', group: 'all' },
+            { code: 'tl', name: 'Tagalog (Filipino)', nativeName: 'Tagalog', group: 'all' },
+            { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்', group: 'all' },
+            { code: 'te', name: 'Telugu', nativeName: 'తెలుగు', group: 'all' },
+            { code: 'th', name: 'Thai', nativeName: 'ไทย', group: 'all' },
+            { code: 'tr', name: 'Turkish', nativeName: 'Türkçe', group: 'all' },
+            { code: 'uk', name: 'Ukrainian', nativeName: 'Українська', group: 'all' },
+            { code: 'ur', name: 'Urdu', nativeName: 'اردو', group: 'all' },
+            { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt', group: 'all' },
+            { code: 'cy', name: 'Welsh', nativeName: 'Cymraeg', group: 'all' },
+        ];
+
+        const PINNED_LANGUAGE_CODES = new Set(['en', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'fa']);
+
         function formatTimecode(seconds) {
             const totalMillis = Math.max(0, Math.round(seconds * 1000));
             const ms = (totalMillis % 1000).toString().padStart(3, '0');
@@ -1400,6 +1468,137 @@
                 });
             }
 
+            // Version indicator
+            const versionIndicator = document.getElementById('versionIndicator');
+            if (versionIndicator) {
+                fetch('/api/version')
+                    .then((response) => response.json())
+                    .then((data) => {
+                        if (data.version) {
+                            versionIndicator.textContent = `TermSub v${data.version}`;
+                        }
+                    })
+                    .catch(() => {
+                        // Leave the static fallback text if the version endpoint is unreachable.
+                    });
+            }
+
+            // Language dropdown population with Tom Select
+            const sourceLanguageSelect = document.getElementById('sourceLanguage');
+            const targetLanguageSelect = document.getElementById('targetLanguage');
+
+            function buildNativeLanguageOptions() {
+                const common = SUPPORTED_LANGUAGES.filter((l) => l.group === 'common');
+                const all = SUPPORTED_LANGUAGES.filter((l) => l.group === 'all');
+                const formatOption = (lang) =>
+                    `<option value="${lang.code}">${lang.name} — ${lang.nativeName}</option>`;
+
+                return (
+                    `<optgroup label="Common languages">` +
+                    common.map(formatOption).join('') +
+                    `</optgroup>` +
+                    `<optgroup label="All languages">` +
+                    all.map(formatOption).join('') +
+                    `</optgroup>`
+                );
+            }
+
+            function initLanguageDropdown(selectElement, firstOption, initialValue) {
+                if (!selectElement) return null;
+
+                const nativeOptions = buildNativeLanguageOptions();
+                const disabledAttr = firstOption.disabled ? 'disabled' : '';
+                const selectedAttr = firstOption.selected ? 'selected' : '';
+                selectElement.innerHTML =
+                    `<option value="${firstOption.value}" ${disabledAttr} ${selectedAttr}>${firstOption.label}</option>` +
+                    nativeOptions;
+                selectElement.value = initialValue;
+
+                if (typeof TomSelect === 'undefined') {
+                    // Fallback to native select if Tom Select is not loaded.
+                    return selectElement;
+                }
+
+                const options = [];
+                const optgroups = [];
+
+                // First option (Auto-detect / placeholder)
+                options.push({
+                    code: firstOption.value,
+                    display: firstOption.label,
+                    name: firstOption.label,
+                    nativeName: '',
+                    group: 'top',
+                });
+                optgroups.push({ value: 'top', label: '' });
+
+                // Common languages
+                SUPPORTED_LANGUAGES.filter((l) => l.group === 'common').forEach((lang) => {
+                    options.push({
+                        code: lang.code,
+                        display: `${lang.name} — ${lang.nativeName}`,
+                        name: lang.name,
+                        nativeName: lang.nativeName,
+                        group: 'common',
+                    });
+                });
+                optgroups.push({ value: 'common', label: 'Common languages' });
+
+                // All other languages
+                SUPPORTED_LANGUAGES.filter((l) => l.group === 'all').forEach((lang) => {
+                    options.push({
+                        code: lang.code,
+                        display: `${lang.name} — ${lang.nativeName}`,
+                        name: lang.name,
+                        nativeName: lang.nativeName,
+                        group: 'all',
+                    });
+                });
+                optgroups.push({ value: 'all', label: 'All languages' });
+
+                const tom = new TomSelect(selectElement, {
+                    options,
+                    optgroups,
+                    optgroupField: 'group',
+                    valueField: 'code',
+                    labelField: 'display',
+                    searchField: ['name', 'nativeName'],
+                    placeholder: firstOption.label,
+                    allowEmptyOption: true,
+                    sortField: [{ field: '$order' }],
+                    render: {
+                        option: (data, escape) =>
+                            `<div class="py-1 px-2">${escape(data.display)}</div>`,
+                        item: (data, escape) => `<div>${escape(data.display)}</div>`,
+                    },
+                });
+
+                tom.setValue(initialValue);
+
+                // Keep the underlying native select synchronized so legacy
+                // code that reads selectElement.value continues to work.
+                tom.on('change', (value) => {
+                    selectElement.value = value || '';
+                });
+
+                return tom;
+            }
+
+            const sourceTom = initLanguageDropdown(
+                sourceLanguageSelect,
+                { value: 'auto', label: 'Auto-detect' },
+                'auto'
+            );
+            const targetTom = initLanguageDropdown(
+                targetLanguageSelect,
+                { value: '', label: 'Select target language...', disabled: true, selected: true },
+                ''
+            );
+
+            // Expose the underlying selects for code that expects them.
+            window.termsubSourceLanguage = sourceLanguageSelect;
+            window.termsubTargetLanguage = targetLanguageSelect;
+
             // --- OpenAI API Key Vault (localStorage) ---
             const apiKeyInput = document.getElementById('openaiApiKey');
             const savedKey = localStorage.getItem('termsub_openai_api_key');
@@ -1438,6 +1637,40 @@
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape' && !apiKeyModal.classList.contains('hidden')) {
                         closeApiKeyModal();
+                    }
+                });
+            }
+
+            // --- How to Use Modal ---
+            const howToUseModal = document.getElementById('howToUseModal');
+            const howToUseBtn = document.getElementById('howToUseBtn');
+            const howToUseModalClose = document.getElementById('howToUseModalClose');
+
+            function openHowToUseModal() {
+                if (howToUseModal) {
+                    howToUseModal.classList.remove('hidden');
+                    howToUseModal.setAttribute('aria-hidden', 'false');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function closeHowToUseModal() {
+                if (howToUseModal) {
+                    howToUseModal.classList.add('hidden');
+                    howToUseModal.setAttribute('aria-hidden', 'true');
+                    document.body.style.overflow = '';
+                }
+            }
+
+            if (howToUseBtn) howToUseBtn.addEventListener('click', openHowToUseModal);
+            if (howToUseModalClose) howToUseModalClose.addEventListener('click', closeHowToUseModal);
+            if (howToUseModal) {
+                howToUseModal.addEventListener('click', (e) => {
+                    if (e.target === howToUseModal) closeHowToUseModal();
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && howToUseModal && !howToUseModal.classList.contains('hidden')) {
+                        closeHowToUseModal();
                     }
                 });
             }

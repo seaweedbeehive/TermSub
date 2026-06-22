@@ -4,7 +4,16 @@
 
 TermSub is a production-ready FastAPI application that transcribes, translates, and manages terminology for video content. It features a **multi-agent translation pipeline**, **OpenAI cloud-native transcription and translation**, a **built-in web UI with light/dark theme toggle**, and **real-time progress tracking via WebSocket** — all designed to produce consistent, high-quality subtitles with standardized terminology.
 
-Built with a focus on **Persian (Farsi)** and other RTL languages, but supports any language pair OpenAI models can handle.
+Supports **59 languages** for source and target, with a searchable dropdown and pinned quick-access languages. Built with particular strength for **Persian (Farsi)** and other RTL languages.
+
+---
+
+## What's New in This Release
+
+- **59 source & target languages** — full coverage of the OpenAI Audio API supported language set, plus legacy languages already used by the app.
+- **Searchable language dropdown** — type to find any language by English or native name (e.g., "Español" or "Spanish").
+- **Pinned common languages** — the 9 most spoken languages plus Persian (Farsi) appear at the top of the dropdown for one-click access.
+- **Native-name display** — each language is shown as `English — English`, `Arabic — العربية`, `Persian (Farsi) — فارسی`.
 
 ---
 
@@ -41,7 +50,7 @@ After translation, review and refine subtitles directly in the browser:
 ### Built-In Web UI
 A complete single-page interface served at `http://localhost:8000/` with:
 - Drag-and-drop file upload (video, audio, or text)
-- Source/target language selection
+- Searchable source/target language dropdown with 59 languages, pinned common languages, and native-name display
 - Real-time activity log with WebSocket live updates and color-coded badges
 - Term review table with inline editing
 - **Subtitle review timeline** with editable cards, split/add/remove, and global find & replace

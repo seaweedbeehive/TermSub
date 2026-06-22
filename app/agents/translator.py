@@ -243,21 +243,9 @@ def create_sliding_windows(
 
 def build_system_instruction(batch: TranslationBatch, target_language: str = "") -> str:
     """Build the system instruction containing mandatory glossary rules."""
-    lang_names = {
-        "fa": "Persian (Farsi)",
-        "en": "English",
-        "de": "German",
-        "fr": "French",
-        "es": "Spanish",
-        "it": "Italian",
-        "ja": "Japanese",
-        "ko": "Korean",
-        "zh": "Chinese",
-        "ar": "Arabic",
-        "ru": "Russian",
-        "tr": "Turkish",
-    }
-    target_lang_name = lang_names.get(target_language, target_language)
+    from app.core.languages import LANGUAGE_NAMES
+
+    target_lang_name = LANGUAGE_NAMES.get(target_language, target_language)
 
     lines = [
         "You are a professional subtitle translator.",
@@ -296,21 +284,9 @@ def build_translation_prompt(
     style_guide: str = "",
 ) -> str:
     """Build the translation prompt with context and constraints."""
-    lang_names = {
-        "fa": "Persian (Farsi)",
-        "en": "English",
-        "de": "German",
-        "fr": "French",
-        "es": "Spanish",
-        "it": "Italian",
-        "ja": "Japanese",
-        "ko": "Korean",
-        "zh": "Chinese",
-        "ar": "Arabic",
-        "ru": "Russian",
-        "tr": "Turkish",
-    }
-    target_lang_name = lang_names.get(target_language, target_language)
+    from app.core.languages import LANGUAGE_NAMES
+
+    target_lang_name = LANGUAGE_NAMES.get(target_language, target_language)
 
     context_before_section = ""
     if batch.context_before:

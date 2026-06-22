@@ -62,12 +62,14 @@ Begin by opening the TermSub web interface in your browser.
 
 ### 2. Configure Your Language Pair
 
-Before starting, tell TermSub which languages you are working with:
+Before starting, tell TermSub which languages you are working with. TermSub supports **59 source and target languages**.
 
-- **Source Language**: Choose the language spoken in your video, or select **Auto-detect** to let the AI identify it automatically.
-- **Target Language**: Select the language you want your subtitles translated into.
+- **Source Language**: Click the dropdown and start typing to search, or scroll to browse. Choose the language spoken in your video, or select **Auto-detect** to let the AI identify it automatically.
+- **Target Language**: Click the dropdown and select the language you want your subtitles translated into.
 
-> **Tip:** TermSub is built with particular strength for **Persian (Farsi)**, **Arabic**, and other **right-to-left (RTL)** languages, including automatic punctuation fixes during export.
+The dropdown puts the most common languages — **English, Chinese (Mandarin), Hindi, Spanish, French, Arabic, Bengali, Portuguese, Russian, and Persian (Farsi)** — at the top under **Common languages**. All remaining languages are listed below under **All languages** and can be found instantly by typing the English or native name (for example, type "Español" or "Spanish").
+
+> **Tip:** TermSub is built with particular strength for **Persian (Farsi)**, **Arabic**, **Urdu**, **Hebrew**, and other **right-to-left (RTL)** languages, including automatic punctuation fixes during export.
 
 ### 3. Enter Your OpenAI API Key
 

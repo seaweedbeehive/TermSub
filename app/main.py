@@ -258,6 +258,12 @@ def health_check() -> dict[str, str]:
     return {"status": "healthy"}
 
 
+@app.get("/api/version")
+def get_version() -> dict[str, str]:
+    """Return the current application version."""
+    return {"version": settings.VERSION}
+
+
 @app.websocket("/ws/videos/{video_id}")
 async def websocket_endpoint(websocket: WebSocket, video_id: str) -> None:
     """WebSocket endpoint for real-time video progress updates.

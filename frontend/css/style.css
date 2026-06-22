@@ -31,3 +31,30 @@
             scrollbar-width: thin;
             scrollbar-color: #475569 transparent;
         }
+
+        /* Tom Select dark-mode overrides */
+        .dark .ts-control,
+        .dark .ts-control input,
+        .dark .ts-dropdown {
+            background-color: #0F0F12;
+            color: #E2E2E8;
+            border-color: #2A2A30;
+        }
+        .dark .ts-dropdown .option {
+            color: #E2E2E8;
+        }
+        .dark .ts-dropdown .option:hover,
+        .dark .ts-dropdown .active {
+            background-color: #2A2A30;
+            color: #E2E2E8;
+        }
+        .dark .ts-dropdown .selected {
+            background-color: #1A1A1E;
+        }
+        .dark .ts-control .item,
+        .dark .ts-control .ts-input {
+            color: #E2E2E8;
+        }
+        .dark .ts-control input::placeholder {
+            color: #8A8F98;
+        }
