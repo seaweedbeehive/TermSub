@@ -30,9 +30,7 @@ def parse_timestamp(value: str) -> float:
 
     match = _TIMECODE_REGEX.match(value.strip())
     if not match:
-        raise ValueError(
-            "Timestamp must be in HH:MM:SS,mmm format (e.g. 00:05:12,340)"
-        )
+        raise ValueError("Timestamp must be in HH:MM:SS,mmm format (e.g. 00:05:12,340)")
 
     hours = int(match.group("hours"))
     minutes = int(match.group("minutes"))
