@@ -6,13 +6,13 @@ The broker URL and backend URL default to the Docker Compose service name.
 
 from celery import Celery
 
-# Default Redis URL points to the Docker Compose redis service
-REDIS_URL = "redis://redis:6379/0"
+from app.core.config import settings
 
+# Redis URL from settings so it can be overridden via env var for local dev
 celery_app = Celery(
     "termsub",
-    broker=REDIS_URL,
-    backend=REDIS_URL,
+    broker=settings.REDIS_URL,
+    backend=settings.REDIS_URL,
     include=["app.worker.tasks"],
 )
 

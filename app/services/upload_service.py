@@ -1,14 +1,14 @@
 """Upload service - handles video and text file uploads with security validation."""
 
 import re
+import uuid
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import UploadFile
-from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.video import ContentType, Video, VideoStatus
+from app.models.video import ContentType
 
 # Allowed file extensions
 ALLOWED_VIDEO_EXTENSIONS = {
@@ -290,25 +290,21 @@ def validate_upload(file: UploadFile) -> tuple[str, str]:
 
 
 async def save_uploaded_file(
-    file: UploadFile,
-    target_language: str,
-    source_language: str,
-    db: Session,
-) -> Video:
-    """Save uploaded file to disk with security validation and create database record.
+    file: UploadFile, *, use_temp: bool = False
+) -> tuple[str, str, Path]:
+    """Validate and save an uploaded file to disk.
 
     Args:
-        file: The uploaded file
-        target_language: Target language for translation (e.g., "en", "fa")
-        source_language: Source language (e.g., "en", "fa", or "auto")
-        db: Database session
+        file: The uploaded file.
+        use_temp: If True, save to a temporary file in the upload directory
+            instead of the final unique filename. The caller is responsible
+            for moving or deleting the temp file.
 
     Returns:
-        Created Video record
+        Tuple of (safe_filename, content_type, file_path).
 
     Raises:
-        UploadValidationError: If file validation fails
-        ValueError: If database operation fails
+        UploadValidationError: If file validation or saving fails.
     """
     # Validate file (security checks)
     safe_filename, content_type = validate_upload(file)
@@ -317,8 +313,11 @@ async def save_uploaded_file(
     upload_dir = Path(settings.UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate unique filename
-    unique_filename = generate_unique_filename(safe_filename)
+    # Generate filename
+    if use_temp:
+        unique_filename = f"tmp_{uuid.uuid4().hex}{Path(safe_filename).suffix}"
+    else:
+        unique_filename = generate_unique_filename(safe_filename)
     file_path = upload_dir / unique_filename
 
     # Save file to disk with size tracking
@@ -356,35 +355,8 @@ async def save_uploaded_file(
     finally:
         await file.close()
 
-    # Convert "auto" to None for database (Whisper will auto-detect)
-    db_source_language = None if source_language == "auto" else source_language
-
-    # For text files, auto-detect doesn't make sense, so default to "en" if auto
-    if content_type == ContentType.TEXT.value and db_source_language is None:
-        db_source_language = "en"
-
-    # Create database record
-    try:
-        video = Video(
-            filename=safe_filename,  # Store sanitized name
-            file_path=str(file_path),
-            content_type=content_type,
-            status=VideoStatus.UPLOADED.value,
-            target_language=target_language,
-            source_language=db_source_language,
-        )
-        db.add(video)
-        db.commit()
-        db.refresh(video)
-
-        print(f"[Upload] Saved '{safe_filename}' ({content_type}) as {unique_filename}")
-        return video
-
-    except Exception as e:
-        # Clean up file if DB fails
-        if file_path.exists():
-            file_path.unlink(missing_ok=True)
-        raise ValueError(f"Failed to create database record: {str(e)}") from e
+    print(f"[Upload] Saved '{safe_filename}' ({content_type}) as {unique_filename}")
+    return safe_filename, content_type, file_path
 
 
 # Keep old function name for backward compatibility

@@ -28,7 +28,217 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="bg-slate-50 dark:bg-[#121214] min-h-screen">
-    <div class="max-w-6xl mx-auto p-6">
+    <!-- Authentication modal -->
+    <div id="authView" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-[4px]">
+        <div class="relative w-full max-w-md bg-white dark:bg-[#1A1A1E] rounded-xl shadow-2xl p-6 border border-slate-200 dark:border-[#2A2A30]">
+            <button id="authCloseBtn" type="button" class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-[#999] hover:text-[#333] dark:hover:text-[#E2E2E8] transition-colors" aria-label="Close">
+                <span class="text-[20px] leading-none">&times;</span>
+            </button>
+
+            <div class="flex justify-center mb-4">
+                <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-closed-captioning text-white text-xl"></i>
+                </div>
+            </div>
+            <h2 class="text-xl font-bold text-center text-slate-900 dark:text-[#E2E2E8] mb-6">Get started with TermSub</h2>
+
+            <div class="flex rounded-lg bg-slate-100 dark:bg-[#2A2A30] p-1 mb-6">
+                <button id="authTabStandard" type="button" class="flex-1 py-1.5 text-sm font-medium rounded-md bg-white dark:bg-[#1A1A1E] text-slate-900 dark:text-[#E2E2E8] shadow-sm transition-colors">
+                    Standard (incl. free trial)
+                </button>
+                <button id="authTabByok" type="button" class="flex-1 py-1.5 text-sm font-medium rounded-md text-slate-600 dark:text-[#8A8F98] hover:text-slate-900 dark:hover:text-[#E2E2E8] transition-colors">
+                    Advanced (BYOK)
+                </button>
+            </div>
+
+            <!-- Standard form -->
+            <form id="standardAuthForm" class="space-y-4">
+                <div>
+                    <label for="authEmail" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Email</label>
+                    <input type="email" id="authEmail" required autocomplete="email" placeholder="you@example.com"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                </div>
+                <div>
+                    <label for="authPassword" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Password</label>
+                    <input type="password" id="authPassword" required minlength="8" autocomplete="current-password" placeholder="••••••••"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                </div>
+                <div id="wantsUpdatesContainer" class="flex items-start gap-2">
+                    <input type="checkbox" id="authWantsUpdates" checked class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-[#2A2A30] text-blue-600 focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
+                    <label for="authWantsUpdates" class="text-sm text-slate-600 dark:text-[#8A8F98]">Keep me updated on new releases</label>
+                </div>
+                <div id="authError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
+                <button type="submit" id="authSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                    Create Free Account
+                </button>
+                <p class="text-center text-xs text-slate-500 dark:text-[#8A8F98]">
+                    <span id="authModeToggleText">Already have an account?</span>
+                    <button id="authModeToggleBtn" type="button" class="ml-1 text-blue-600 dark:text-[#00F0FF] hover:underline font-medium bg-transparent border-none p-0">Sign in</button>
+                </p>
+            </form>
+
+            <!-- BYOK form -->
+            <form id="byokAuthForm" class="hidden space-y-4">
+                <div class="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3">
+                    <p class="text-xs text-blue-700 dark:text-blue-300">
+                        <i class="fa-solid fa-circle-info mr-1"></i>
+                        We never store your API key.
+                    </p>
+                </div>
+                <div>
+                    <label for="byokApiKey" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">OpenAI API Key</label>
+                    <input type="password" id="byokApiKey" required minlength="20" placeholder="sk-..."
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                </div>
+                <div>
+                    <label for="byokEmail" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Want product updates? (optional)</label>
+                    <input type="email" id="byokEmail" autocomplete="email" placeholder="you@example.com"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                </div>
+                <div id="byokError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
+                <button type="submit" id="byokSubmitBtn" class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-900 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] text-white dark:text-[#E2E2E8] text-sm font-medium rounded-lg transition-colors">
+                    Start Using TermSub
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Email Verification Screen -->
+    <div id="verifyView" class="hidden fixed inset-0 z-[9996] flex items-center justify-center p-4 bg-slate-50 dark:bg-[#121214]">
+        <div class="w-full max-w-md bg-white dark:bg-[#1A1A1E] rounded-xl shadow-2xl p-8 border border-slate-200 dark:border-[#2A2A30] text-center">
+            <div class="flex justify-center mb-4">
+                <div class="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-envelope text-white text-2xl"></i>
+                </div>
+            </div>
+            <h2 class="text-xl font-bold text-slate-900 dark:text-[#E2E2E8] mb-2">Verify your email</h2>
+            <p class="text-sm text-slate-600 dark:text-[#8A8F98] mb-2">
+                We've sent a verification link to<br>
+                <span id="verifyEmailDisplay" class="font-semibold text-slate-900 dark:text-[#E2E2E8]">your email</span>
+            </p>
+            <p class="text-xs text-slate-500 dark:text-[#8A8F98] mb-6">
+                Check your inbox and click the link to activate your account.
+            </p>
+            <div id="verifyMessage" class="hidden text-xs mb-4 p-2 rounded border"></div>
+            <div class="space-y-3">
+                <button id="resendVerifyBtn" type="button" class="w-full py-2.5 px-4 bg-white dark:bg-[#2A2A30] border border-slate-300 dark:border-[#3A3A40] text-slate-700 dark:text-[#E2E2E8] text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-[#3A3A40] transition-colors">
+                    <i class="fa-solid fa-paper-plane mr-2"></i>Resend Email
+                </button>
+                <button id="recheckVerifyBtn" type="button" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                    <i class="fa-solid fa-rotate-right mr-2"></i>I've verified — Continue
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard View -->
+    <div id="adminView" class="hidden max-w-7xl mx-auto p-6">
+        <!-- Admin Header -->
+        <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+                        <i class="fa-solid fa-shield-halved text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-slate-900 dark:text-[#E2E2E8]">Admin Dashboard</h1>
+                        <p class="text-sm text-slate-500 dark:text-[#8A8F98]">Platform overview and user management</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="adminRefreshBtn" type="button" class="px-3 py-2 text-sm font-medium rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] text-slate-700 dark:text-[#E2E2E8] transition-colors">
+                        <i class="fa-solid fa-rotate-right mr-1"></i>Refresh
+                    </button>
+                    <button id="adminHomeBtn" type="button" class="px-3 py-2 text-sm font-medium rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] text-slate-700 dark:text-[#E2E2E8] transition-colors">
+                        <i class="fa-solid fa-home mr-1"></i>Home
+                    </button>
+                </div>
+            </div>
+            <div id="adminError" class="hidden mt-4 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-5 border border-slate-200 dark:border-[#2A2A30]">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-500 dark:text-[#8A8F98] uppercase tracking-wider">Total Users</span>
+                    <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                        <i class="fa-solid fa-users text-blue-600 dark:text-blue-400 text-sm"></i>
+                    </div>
+                </div>
+                <div id="adminStatTotalUsers" class="text-2xl font-bold text-slate-900 dark:text-[#E2E2E8]">-</div>
+            </div>
+            <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-5 border border-slate-200 dark:border-[#2A2A30]">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-500 dark:text-[#8A8F98] uppercase tracking-wider">New Users Today</span>
+                    <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+                        <i class="fa-solid fa-user-plus text-emerald-600 dark:text-emerald-400 text-sm"></i>
+                    </div>
+                </div>
+                <div id="adminStatNewUsers" class="text-2xl font-bold text-slate-900 dark:text-[#E2E2E8]">-</div>
+            </div>
+            <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-5 border border-slate-200 dark:border-[#2A2A30]">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-500 dark:text-[#8A8F98] uppercase tracking-wider">Newsletter Subscribers</span>
+                    <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
+                        <i class="fa-solid fa-envelope-open-text text-amber-600 dark:text-amber-400 text-sm"></i>
+                    </div>
+                </div>
+                <div id="adminStatNewsletter" class="text-2xl font-bold text-slate-900 dark:text-[#E2E2E8]">-</div>
+            </div>
+            <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-5 border border-slate-200 dark:border-[#2A2A30]">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-500 dark:text-[#8A8F98] uppercase tracking-wider">Uploads Today</span>
+                    <div class="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
+                        <i class="fa-solid fa-cloud-arrow-up text-purple-600 dark:text-purple-400 text-sm"></i>
+                    </div>
+                </div>
+                <div id="adminStatUploads" class="text-2xl font-bold text-slate-900 dark:text-[#E2E2E8]">-</div>
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm border border-slate-200 dark:border-[#2A2A30] mb-6">
+            <div class="p-5 border-b border-slate-200 dark:border-[#2A2A30]">
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Users</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 dark:bg-[#121214] text-slate-600 dark:text-[#8A8F98]">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium">Email</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium">Joined</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium">Mode</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium">Minutes Used</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium">Admin</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminUsersTable" class="divide-y divide-slate-100 dark:divide-white/10">
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-slate-400 dark:text-[#6B7280]">
+                                Enter an admin key and click Refresh to load users.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Newsletter Subscribers -->
+        <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm border border-slate-200 dark:border-[#2A2A30]">
+            <div class="p-5 border-b border-slate-200 dark:border-[#2A2A30]">
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Newsletter Subscribers</h2>
+            </div>
+            <div class="p-5">
+                <div id="adminNewsletterList" class="flex flex-wrap gap-2">
+                    <span class="text-sm text-slate-400 dark:text-[#6B7280]">No subscribers loaded.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="mainApp" class="max-w-6xl mx-auto p-6">
         <!-- App Header -->
         <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 mb-6">
             <div class="flex items-center justify-between">
@@ -41,14 +251,31 @@
                         <p class="text-sm text-slate-500 dark:text-[#8A8F98]">Video Translation & Terminology Management</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button id="howToUseBtn" type="button" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="How to use TermSub">
-                        <i class="fa-solid fa-circle-info text-slate-600 dark:text-[#8A8F98]"></i>
+                <div class="flex items-center gap-3">
+                    <div id="userInfo" class="hidden flex items-center gap-3">
+                        <div id="quotaWidgetHeader" class="hidden rounded-lg bg-slate-50 dark:bg-[#121214] border border-slate-200 dark:border-[#2A2A30] px-3 py-1.5">
+                            <p class="text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#6B7280]">Trial Remaining</p>
+                            <div class="text-xs text-slate-700 dark:text-[#E2E2E8]">
+                                <span id="quotaMinutesHeader" title="Audio minutes remaining in trial">- min</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div id="userEmail" class="text-xs font-medium text-slate-700 dark:text-[#E2E2E8] max-w-[160px] truncate">-</div>
+                            <button id="logoutBtn" type="button" class="text-[10px] text-slate-500 dark:text-[#8A8F98] hover:text-red-600 dark:hover:text-red-400 transition-colors">Log out</button>
+                        </div>
+                    </div>
+                    <button id="loginBtn" type="button" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">
+                        Log in / Sign up
                     </button>
-                    <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="Toggle theme">
-                        <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
-                        <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button id="howToUseBtn" type="button" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="How to use TermSub">
+                            <i class="fa-solid fa-circle-info text-slate-600 dark:text-[#8A8F98]"></i>
+                        </button>
+                        <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="Toggle theme">
+                            <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
+                            <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -70,34 +297,20 @@
                         </div>
 
                         <div id="setupConfigPanel" class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Source Language</label>
-                            <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
-                                <option value="auto">Auto-detect</option>
-                            </select>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Source Language</label>
+                                <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                    <option value="auto">Auto-detect</option>
+                                </select>
+                            </div>
 
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Target Language</label>
-                            <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
-                                <option value="" disabled selected>Select target language...</option>
-                            </select>
-                            <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
-                        </div>
-
-                        <!-- OpenAI API Key Vault -->
-                        <!-- OpenAI API Key Vault -->
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1" for="openaiApiKey">OpenAI API Key</label>
-                            <input type="password" id="openaiApiKey" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]" placeholder="Paste your OpenAI API key here">
-                            <p class="text-[10px] text-slate-500 dark:text-[#8A8F98] mt-1">
-                                <button id="apiKeyHelpBtn" type="button" class="text-cyan-400 hover:text-cyan-300 hover:underline font-medium cursor-pointer bg-transparent border-none p-0">
-                                    Get an API key at OpenAI Platform
-                                </button>
-                            </p>
-                        </div>
-
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Target Language</label>
+                                <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                    <option value="" disabled selected>Select target language...</option>
+                                </select>
+                                <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
+                            </div>
                         </div>
 
                         <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
@@ -288,24 +501,6 @@
         <!-- Version footer -->
         <div class="mt-8 text-center">
             <span id="versionIndicator" class="text-xs text-slate-400 dark:text-[#6B7280]">TermSub</span>
-        </div>
-    </div>
-
-    <!-- API Key Help Modal -->
-    <div id="apiKeyModal" class="hidden fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm" aria-hidden="true">
-        <div class="bg-[#1A1A1E] border border-[#2A2A30] rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 relative">
-            <button id="apiKeyModalClose" type="button" class="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors" aria-label="Close modal">
-                <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-            <h3 class="text-lg font-semibold text-white mb-2">How to get an OpenAI API Key</h3>
-            <p class="text-sm text-gray-300 mb-4">You can get an OpenAI API key through the OpenAI Platform. A valid payment method is required, but you only pay for what you use.</p>
-            <ol class="list-decimal list-inside text-sm text-gray-300 space-y-2 mb-4">
-                <li>Navigate to <a href="https://platform.openai.com/" target="_blank" class="text-cyan-400 hover:underline font-medium">OpenAI Platform</a> and sign in with your account.</li>
-                <li>Go to <strong>Settings &rarr; Billing</strong> and add a payment method.</li>
-                <li>Click <strong>"API keys"</strong> in the left-hand navigation menu.</li>
-                <li>Select <strong>"Create new secret key"</strong> and copy it immediately (it will not be shown again).</li>
-            </ol>
-            <p class="text-xs text-gray-400 italic">Note: whisper-1 and gpt-5.4-mini are billed per token / per minute of audio. Costs are typically very low for prototyping and personal projects. Always monitor your usage dashboard.</p>
         </div>
     </div>
 

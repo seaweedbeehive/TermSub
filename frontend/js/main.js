@@ -11,6 +11,316 @@
         let currentTimelineSegments = []; // Last rendered segment state
         const MAX_TIMELINE_HISTORY = 20;
 
+        // ------------------------------------------------------------------
+        // Authentication
+        // ------------------------------------------------------------------
+        const TOKEN_KEY = 'termsub_token';
+        const API_KEY_KEY = 'termsub_api_key';
+        const EMAIL_KEY = 'termsub_email';
+        let currentUser = null;
+        let currentAuthTab = 'standard';
+        let currentStandardMode = 'signup';
+
+        function getToken() {
+            return localStorage.getItem(TOKEN_KEY) || '';
+        }
+
+        function setToken(token) {
+            localStorage.setItem(TOKEN_KEY, token);
+        }
+
+        function clearToken() {
+            localStorage.removeItem(TOKEN_KEY);
+        }
+
+        function getApiKey() {
+            return localStorage.getItem(API_KEY_KEY) || '';
+        }
+
+        function setApiKey(apiKey) {
+            localStorage.setItem(API_KEY_KEY, apiKey);
+        }
+
+        function clearApiKey() {
+            localStorage.removeItem(API_KEY_KEY);
+        }
+
+        function getStoredEmail() {
+            return localStorage.getItem(EMAIL_KEY) || '';
+        }
+
+        function setStoredEmail(email) {
+            if (email) localStorage.setItem(EMAIL_KEY, email);
+        }
+
+        function clearStoredEmail() {
+            localStorage.removeItem(EMAIL_KEY);
+        }
+
+        function maskEmail(email) {
+            if (!email || !email.includes('@')) return 'your email';
+            const [localPart, domain] = email.split('@');
+            const maskedLocal = localPart.length > 1
+                ? localPart[0] + '*'.repeat(localPart.length - 1)
+                : '*';
+            return `${maskedLocal}@${domain}`;
+        }
+
+        function isStandardLoggedIn() {
+            return !!getToken();
+        }
+
+        function isByokMode() {
+            return !!getApiKey() && !getToken();
+        }
+
+        function isAuthenticated() {
+            return isStandardLoggedIn() || isByokMode();
+        }
+
+        function getAuthHeaders() {
+            const token = getToken();
+            if (token) {
+                return { 'Authorization': `Bearer ${token}` };
+            }
+            const apiKey = getApiKey();
+            if (apiKey) {
+                return { 'X-API-Key': apiKey };
+            }
+            return {};
+        }
+
+        // Patch global fetch to attach the Bearer token or BYOK API key to same-origin API calls.
+        (function patchFetch() {
+            const originalFetch = window.fetch;
+            window.fetch = async function(input, init) {
+                const url = typeof input === 'string' ? input : input.url || input.toString();
+                const isSameOrigin = url.startsWith('/') || url.startsWith(window.location.origin);
+                if (isSameOrigin) {
+                    init = init || {};
+                    const headers = new Headers(init.headers || {});
+                    const token = getToken();
+                    if (token) {
+                        if (!headers.has('Authorization')) {
+                            headers.set('Authorization', `Bearer ${token}`);
+                        }
+                    } else {
+                        const apiKey = getApiKey();
+                        if (apiKey && !headers.has('X-API-Key')) {
+                            headers.set('X-API-Key', apiKey);
+                        }
+                    }
+                    init.headers = headers;
+                }
+                return originalFetch(input, init);
+            };
+        })();
+
+        // ------------------------------------------------------------------
+        // Admin Dashboard
+        // ------------------------------------------------------------------
+        let adminData = { stats: null, users: [], subscribers: [] };
+
+        function showAdminError(message) {
+            const el = document.getElementById('adminError');
+            if (!el) return;
+            el.textContent = message;
+            el.classList.remove('hidden');
+        }
+
+        function hideAdminError() {
+            const el = document.getElementById('adminError');
+            if (!el) return;
+            el.classList.add('hidden');
+        }
+
+        function minutesProgressColor(minutes) {
+            if (minutes < 20) return 'bg-emerald-500';
+            if (minutes <= 27) return 'bg-amber-500';
+            return 'bg-red-500';
+        }
+
+        function renderAdminStats() {
+            const stats = adminData.stats || {};
+            const totalUsersEl = document.getElementById('adminStatTotalUsers');
+            const newUsersEl = document.getElementById('adminStatNewUsers');
+            const newsletterEl = document.getElementById('adminStatNewsletter');
+            const uploadsEl = document.getElementById('adminStatUploads');
+            if (totalUsersEl) totalUsersEl.textContent = stats.total_users ?? '-';
+            if (newUsersEl) newUsersEl.textContent = stats.new_users_today ?? '-';
+            if (newsletterEl) newsletterEl.textContent = stats.newsletter_subscribers ?? '-';
+            if (uploadsEl) uploadsEl.textContent = stats.uploads_today ?? '-';
+        }
+
+        function renderAdminUsers() {
+            const tbody = document.getElementById('adminUsersTable');
+            if (!tbody) return;
+            if (!adminData.users.length) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400 dark:text-[#6B7280]">No users found.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = adminData.users.map(user => {
+                const minutes = user.minutes_used ?? 0;
+                const pct = Math.min(100, Math.max(0, (minutes / 30) * 100));
+                const barColor = minutesProgressColor(minutes);
+                const joined = user.created_at
+                    ? new Date(user.created_at).toLocaleDateString()
+                    : '-';
+                const adminBadge = user.is_admin
+                    ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">Admin</span>'
+                    : '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-[#2A2A30] text-slate-600 dark:text-[#8A8F98]">User</span>';
+                const modeClass = user.api_key_mode === 'byok'
+                    ? 'bg-slate-800 text-white dark:bg-[#2A2A30] dark:text-[#E2E2E8]'
+                    : 'bg-blue-600 text-white dark:bg-blue-600 dark:text-white';
+                return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-[#121214] transition-colors">
+                        <td class="px-4 py-3 text-slate-900 dark:text-[#E2E2E8] font-medium">${escapeHtml(user.email)}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-[#8A8F98]">${joined}</td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium uppercase ${modeClass}">${user.api_key_mode}</span>
+                        </td>
+                        <td class="px-4 py-3 w-48">
+                            <div class="flex items-center gap-2">
+                                <div class="flex-1 h-2 bg-slate-100 dark:bg-[#2A2A30] rounded-full overflow-hidden">
+                                    <div class="h-full ${barColor} rounded-full" style="width: ${pct}%"></div>
+                                </div>
+                                <span class="text-xs text-slate-600 dark:text-[#8A8F98] whitespace-nowrap">${minutes.toFixed(1)}/30</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">${adminBadge}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-2">
+                                <button data-admin-action="reset-quota" data-user-id="${user.id}" class="px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] text-slate-700 dark:text-[#E2E2E8] transition-colors">Reset Quota</button>
+                                <button data-admin-action="toggle-mode" data-user-id="${user.id}" class="px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] text-slate-700 dark:text-[#E2E2E8] transition-colors">Toggle Mode</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderAdminSubscribers() {
+            const container = document.getElementById('adminNewsletterList');
+            if (!container) return;
+            if (!adminData.subscribers.length) {
+                container.innerHTML = '<span class="text-sm text-slate-400 dark:text-[#6B7280]">No subscribers found.</span>';
+                return;
+            }
+            container.innerHTML = adminData.subscribers.map(sub => `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#121214] border border-slate-200 dark:border-[#2A2A30] text-xs text-slate-700 dark:text-[#E2E2E8]">
+                    ${escapeHtml(sub.email)}
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 dark:text-[#6B7280]">${sub.source}</span>
+                </span>
+            `).join('');
+        }
+
+        async function loadAdminDashboard() {
+            hideAdminError();
+
+            try {
+                const [statsRes, usersRes, subsRes] = await Promise.all([
+                    fetch('/api/admin/stats'),
+                    fetch('/api/admin/users'),
+                    fetch('/api/auth/newsletter-signups')
+                ]);
+
+                if (statsRes.status === 401 || statsRes.status === 403 ||
+                    usersRes.status === 401 || usersRes.status === 403 ||
+                    subsRes.status === 401 || subsRes.status === 403) {
+                    redirectToHome('Admin access denied');
+                    return;
+                }
+
+                if (!statsRes.ok || !usersRes.ok || !subsRes.ok) {
+                    const detail = await statsRes.text().catch(() => 'Admin request failed');
+                    throw new Error(detail || 'Admin request failed');
+                }
+
+                adminData.stats = await statsRes.json();
+                adminData.users = await usersRes.json();
+                adminData.subscribers = await subsRes.json();
+
+                renderAdminStats();
+                renderAdminUsers();
+                renderAdminSubscribers();
+            } catch (err) {
+                showAdminError('Failed to load admin data: ' + err.message);
+            }
+        }
+
+        async function handleAdminAction(action, userId) {
+            hideAdminError();
+            const endpoint = action === 'reset-quota'
+                ? `/api/admin/users/${userId}/reset-quota`
+                : `/api/admin/users/${userId}/toggle-mode`;
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (response.status === 401 || response.status === 403) {
+                    redirectToHome('Admin access denied');
+                    return;
+                }
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Action failed');
+                }
+                showToast(action === 'reset-quota' ? 'Quota reset' : 'Mode toggled', 'success');
+                await loadAdminDashboard();
+            } catch (err) {
+                showAdminError('Action failed: ' + err.message);
+            }
+        }
+
+        function redirectToHome(message) {
+            const adminView = document.getElementById('adminView');
+            const mainApp = document.getElementById('mainApp');
+            if (adminView) adminView.classList.add('hidden');
+            if (mainApp) mainApp.classList.remove('hidden');
+            window.history.pushState({}, '', '/');
+            showToast(message, 'error');
+        }
+
+        async function showAdminView() {
+            const adminView = document.getElementById('adminView');
+            const mainApp = document.getElementById('mainApp');
+            const authView = document.getElementById('authView');
+            const verifyView = document.getElementById('verifyView');
+            if (adminView) adminView.classList.remove('hidden');
+            if (mainApp) mainApp.classList.add('hidden');
+            if (authView) authView.classList.add('hidden');
+            if (verifyView) verifyView.classList.add('hidden');
+
+            if (!isStandardLoggedIn()) {
+                redirectToHome('Please log in as an admin');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/me');
+                if (!response.ok) {
+                    redirectToHome('Admin access denied');
+                    return;
+                }
+                const user = await response.json();
+                if (!user.is_admin) {
+                    redirectToHome('Admin access required');
+                    return;
+                }
+                loadAdminDashboard();
+            } catch (err) {
+                redirectToHome('Could not verify admin access');
+            }
+        }
+
+        function hideAdminView() {
+            const adminView = document.getElementById('adminView');
+            const mainApp = document.getElementById('mainApp');
+            if (adminView) adminView.classList.add('hidden');
+            if (mainApp) mainApp.classList.remove('hidden');
+        }
+
         // Status config with colors
         const statusConfig = {
             uploaded: { label: 'Uploaded', color: 'bg-slate-100 dark:bg-cyan-500/20 text-slate-700 dark:text-cyan-300', dotColor: 'bg-slate-400 dark:bg-cyan-400' },
@@ -74,6 +384,377 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // ------------------------------------------------------------------
+        // Auth UI helpers
+        // ------------------------------------------------------------------
+        function showAuthView(tab = 'standard', mode = 'signup') {
+            currentAuthTab = tab;
+            currentStandardMode = mode;
+            updateAuthUI();
+            const authView = document.getElementById('authView');
+            if (authView) authView.classList.remove('hidden');
+            const verifyView = document.getElementById('verifyView');
+            if (verifyView) verifyView.classList.add('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function showMainApp() {
+            const authView = document.getElementById('authView');
+            if (authView) authView.classList.add('hidden');
+            const verifyView = document.getElementById('verifyView');
+            if (verifyView) verifyView.classList.add('hidden');
+            const mainApp = document.getElementById('mainApp');
+            if (mainApp) mainApp.classList.remove('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function showVerifyView() {
+            const authView = document.getElementById('authView');
+            if (authView) authView.classList.add('hidden');
+            const verifyView = document.getElementById('verifyView');
+            if (verifyView) {
+                const emailDisplay = document.getElementById('verifyEmailDisplay');
+                if (emailDisplay) emailDisplay.textContent = maskEmail(getStoredEmail());
+                verifyView.classList.remove('hidden');
+            }
+            const mainApp = document.getElementById('mainApp');
+            if (mainApp) mainApp.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function setAuthTab(tab) {
+            currentAuthTab = tab;
+            updateAuthUI();
+        }
+
+        function setStandardMode(mode) {
+            currentStandardMode = mode;
+            updateAuthUI();
+        }
+
+        function updateAuthUI() {
+            const standardTab = document.getElementById('authTabStandard');
+            const byokTab = document.getElementById('authTabByok');
+            const standardForm = document.getElementById('standardAuthForm');
+            const byokForm = document.getElementById('byokAuthForm');
+            const submitBtn = document.getElementById('authSubmitBtn');
+            const toggleText = document.getElementById('authModeToggleText');
+            const toggleBtn = document.getElementById('authModeToggleBtn');
+            const wantsUpdatesContainer = document.getElementById('wantsUpdatesContainer');
+            const passwordInput = document.getElementById('authPassword');
+            const authError = document.getElementById('authError');
+            const byokError = document.getElementById('byokError');
+
+            if (authError) authError.classList.add('hidden');
+            if (byokError) byokError.classList.add('hidden');
+
+            const activeTabClass = 'bg-white dark:bg-[#1A1A1E] text-slate-900 dark:text-[#E2E2E8] shadow-sm';
+            const inactiveTabClass = 'text-slate-600 dark:text-[#8A8F98] hover:text-slate-900 dark:hover:text-[#E2E2E8]';
+            if (standardTab) {
+                standardTab.className = `flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${currentAuthTab === 'standard' ? activeTabClass : inactiveTabClass}`;
+            }
+            if (byokTab) {
+                byokTab.className = `flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${currentAuthTab === 'byok' ? activeTabClass : inactiveTabClass}`;
+            }
+
+            if (standardForm) standardForm.classList.toggle('hidden', currentAuthTab !== 'standard');
+            if (byokForm) byokForm.classList.toggle('hidden', currentAuthTab !== 'byok');
+
+            const isLogin = currentStandardMode === 'login';
+            if (submitBtn) submitBtn.textContent = isLogin ? 'Sign In' : 'Create Free Account';
+            if (wantsUpdatesContainer) wantsUpdatesContainer.classList.toggle('hidden', isLogin);
+            if (passwordInput) passwordInput.setAttribute('autocomplete', isLogin ? 'current-password' : 'new-password');
+            if (toggleText) toggleText.textContent = isLogin ? "Don't have an account?" : 'Already have an account?';
+            if (toggleBtn) toggleBtn.textContent = isLogin ? 'Create Free Account' : 'Sign in';
+        }
+
+        function updateUserDisplay() {
+            const userInfo = document.getElementById('userInfo');
+            const userEmailEl = document.getElementById('userEmail');
+            const loginBtn = document.getElementById('loginBtn');
+            const quotaWidget = document.getElementById('quotaWidgetHeader');
+
+            if (currentUser && userInfo && userEmailEl) {
+                userEmailEl.textContent = currentUser.email;
+                userInfo.classList.remove('hidden');
+                if (loginBtn) loginBtn.classList.add('hidden');
+            } else if (isByokMode() && userInfo && userEmailEl) {
+                userEmailEl.textContent = 'Using your OpenAI key';
+                userInfo.classList.remove('hidden');
+                if (quotaWidget) quotaWidget.classList.add('hidden');
+                if (loginBtn) loginBtn.classList.add('hidden');
+            } else {
+                if (userInfo) userInfo.classList.add('hidden');
+                if (loginBtn) loginBtn.classList.remove('hidden');
+                if (quotaWidget) quotaWidget.classList.add('hidden');
+            }
+        }
+
+        function updateQuotaDisplay(quota) {
+            const widget = document.getElementById('quotaWidgetHeader');
+            const minutesEl = document.getElementById('quotaMinutesHeader');
+            if (!widget || !minutesEl || !quota) return;
+            if (quota.is_unlimited) {
+                widget.classList.add('hidden');
+                return;
+            }
+            minutesEl.textContent = `${quota.minutes_remaining ?? 0} min remaining`;
+            widget.classList.remove('hidden');
+        }
+
+        async function loadUser() {
+            try {
+                const response = await fetch('/api/auth/me');
+                if (response.status === 403) {
+                    console.warn('Email not verified');
+                    currentUser = null;
+                    showVerifyView();
+                    return false;
+                }
+                if (!response.ok) throw new Error('Session expired');
+                currentUser = await response.json();
+                updateUserDisplay();
+                await loadQuota();
+                return true;
+            } catch (err) {
+                console.error('Failed to load user:', err);
+                clearToken();
+                clearStoredEmail();
+                currentUser = null;
+                return false;
+            }
+        }
+
+        async function loadQuota() {
+            try {
+                const response = await fetch('/api/quota');
+                if (!response.ok) throw new Error('Quota unavailable');
+                const quota = await response.json();
+                updateQuotaDisplay(quota);
+                return quota;
+            } catch (err) {
+                console.error('Failed to load quota:', err);
+                return null;
+            }
+        }
+
+        async function logout() {
+            const token = getToken();
+            if (token) {
+                try {
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                    });
+                } catch (err) {
+                    console.error('Logout API call failed:', err);
+                }
+            }
+            clearToken();
+            clearApiKey();
+            clearStoredEmail();
+            currentUser = null;
+            updateUserDisplay();
+            const widget = document.getElementById('quotaWidgetHeader');
+            if (widget) widget.classList.add('hidden');
+            showAuthView('standard', 'signup');
+            log('Logged out', 'info');
+        }
+
+        async function handleStandardAuthSubmit(event) {
+            event.preventDefault();
+            const emailInput = document.getElementById('authEmail');
+            const passwordInput = document.getElementById('authPassword');
+            const wantsUpdatesInput = document.getElementById('authWantsUpdates');
+            const errorEl = document.getElementById('authError');
+            const submitBtn = document.getElementById('authSubmitBtn');
+
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            const wantsUpdates = currentStandardMode === 'signup' ? wantsUpdatesInput.checked : undefined;
+
+            if (errorEl) errorEl.classList.add('hidden');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = currentStandardMode === 'login' ? 'Signing in...' : 'Creating account...';
+            }
+
+            const endpoint = currentStandardMode === 'login' ? '/api/auth/login' : '/api/auth/signup';
+            const body = { email, password };
+            if (currentStandardMode === 'signup') body.wants_updates = wantsUpdates;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) {
+                    let detail = currentStandardMode === 'login' ? 'Invalid email or password.' : 'Sign up failed.';
+                    try {
+                        const data = await response.json();
+                        if (data.detail) detail = data.detail;
+                    } catch (e) { /* ignore */ }
+                    throw new Error(detail);
+                }
+
+                const data = await response.json();
+                if (!data.access_token) throw new Error('No token received from server.');
+                clearApiKey();
+                setToken(data.access_token);
+                setStoredEmail(email);
+
+                if (currentStandardMode === 'signup') {
+                    // New accounts start unverified; show the verification screen immediately.
+                    showVerifyView();
+                    log('Account created — please verify your email', 'info');
+                } else {
+                    const loaded = await loadUser();
+                    if (!loaded) {
+                        if (getStoredEmail()) {
+                            showVerifyView();
+                        } else {
+                            throw new Error('Could not load your account.');
+                        }
+                    } else {
+                        showMainApp();
+                        log(`Logged in as ${currentUser.email}`, 'success');
+                    }
+                }
+
+                emailInput.value = '';
+                passwordInput.value = '';
+                if (wantsUpdatesInput) wantsUpdatesInput.checked = true;
+            } catch (err) {
+                if (errorEl) {
+                    errorEl.textContent = err.message;
+                    errorEl.classList.remove('hidden');
+                }
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = currentStandardMode === 'login' ? 'Sign In' : 'Create Free Account';
+                }
+            }
+        }
+
+        async function handleByokSubmit(event) {
+            event.preventDefault();
+            const apiKeyInput = document.getElementById('byokApiKey');
+            const emailInput = document.getElementById('byokEmail');
+            const errorEl = document.getElementById('byokError');
+            const submitBtn = document.getElementById('byokSubmitBtn');
+
+            const apiKey = apiKeyInput.value.trim();
+            const email = emailInput.value.trim() || undefined;
+
+            if (errorEl) errorEl.classList.add('hidden');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Validating key...';
+            }
+
+            try {
+                const response = await fetch('/api/auth/byok-start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: apiKey, email })
+                });
+
+                if (!response.ok) {
+                    let detail = 'The provided API key could not be validated.';
+                    try {
+                        const data = await response.json();
+                        if (data.detail) detail = data.detail;
+                    } catch (e) { /* ignore */ }
+                    throw new Error(detail);
+                }
+
+                clearToken();
+                setApiKey(apiKey);
+                updateUserDisplay();
+                showMainApp();
+                log('Using your own OpenAI API key', 'success');
+                apiKeyInput.value = '';
+                emailInput.value = '';
+            } catch (err) {
+                if (errorEl) {
+                    errorEl.textContent = err.message;
+                    errorEl.classList.remove('hidden');
+                }
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Start Using TermSub';
+                }
+            }
+        }
+
+        async function resendVerificationEmail() {
+            const email = getStoredEmail();
+            if (!email) {
+                showVerifyMessage('Please log in again to resend the verification email.', 'error');
+                showAuthView('standard', 'login');
+                return;
+            }
+            const btn = document.getElementById('resendVerifyBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Sending...';
+            }
+            try {
+                const response = await fetch('/api/auth/resend-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                if (!response.ok) throw new Error('Request failed');
+                showVerifyMessage('Verification email sent. Please check your inbox.', 'success');
+            } catch (err) {
+                console.error('Failed to resend verification email:', err);
+                showVerifyMessage('Could not resend email. Please try again later.', 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-paper-plane mr-2"></i>Resend Email';
+                }
+            }
+        }
+
+        async function recheckVerification() {
+            const btn = document.getElementById('recheckVerifyBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Checking...';
+            }
+            const loaded = await loadUser();
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-rotate-right mr-2"></i>I\'ve Verified My Email';
+            }
+            if (loaded) {
+                showMainApp();
+                log('Email verified — welcome to TermSub', 'success');
+            } else {
+                showVerifyMessage('Your email is not verified yet. Please click the link in the email.', 'warning');
+            }
+        }
+
+        function showVerifyMessage(message, type = 'info') {
+            const el = document.getElementById('verifyMessage');
+            if (!el) return;
+            const colors = {
+                info: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+                success: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+                warning: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+                error: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
+            };
+            el.className = `text-xs mb-4 p-2 rounded border ${colors[type] || colors.info}`;
+            el.textContent = message;
+            el.classList.remove('hidden');
         }
 
         function showToast(message, type = 'info') {
@@ -597,15 +1278,34 @@
                 ws.close();
                 ws = null;
             }
-            
+
+            const token = getToken();
+            const apiKey = getApiKey();
+            let protocols = null;
+            let authMode = 'none';
+
+            if (token) {
+                protocols = ['termsub-auth', token];
+                authMode = 'standard';
+            } else if (apiKey) {
+                protocols = ['termsub-byok', apiKey];
+                authMode = 'byok';
+            }
+
+            if (!protocols) {
+                log('WebSocket connection skipped: not authenticated', 'warning');
+                fallbackToPolling(videoId);
+                return;
+            }
+
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/videos/${videoId}`;
-            
+
             log('Connecting to WebSocket...');
-            console.log(`[WebSocket] Connecting to ${wsUrl}`);
-            
+            console.log(`[WebSocket] Connecting to ${wsUrl} (${authMode})`);
+
             try {
-                ws = new WebSocket(wsUrl);
+                ws = new WebSocket(wsUrl, protocols);
                 
                 ws.onopen = () => {
                     console.log('[WebSocket] Connected');
@@ -659,6 +1359,7 @@
             } catch (err) {
                 console.error('[WebSocket] Failed to create connection:', err);
                 log('WebSocket connection failed', 'error');
+                fallbackToPolling(videoId);
             }
         }
         
@@ -1097,6 +1798,13 @@
 
         // Upload handler
         async function uploadFile() {
+            if (!isAuthenticated()) {
+                showAuthView('standard', 'signup');
+                log('Please log in, sign up, or provide an API key to upload a file.', 'warning');
+                showToast('Please log in or provide an API key to upload', 'warning');
+                return;
+            }
+
             const fileInput = document.getElementById('fileInput');
             const targetLangSelect = document.getElementById('targetLanguage');
             const sourceLangSelect = document.getElementById('sourceLanguage');
@@ -1209,7 +1917,7 @@
             if (setupPanel) setupPanel.classList.add('hidden');
             
             // Reset state for new job
-            currentJobId = `transcribe-${currentVideoId}-${Date.now()}`;
+            currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
             
@@ -1219,15 +1927,8 @@
             log(isTextFile ? 'Starting text parsing...' : 'Starting OpenAI Cloud transcription...');
             
             try {
-                const requestHeaders = {};
-                const apiKey = localStorage.getItem('termsub_openai_api_key') || document.getElementById('openaiApiKey').value || '';
-                if (apiKey.trim()) {
-                    requestHeaders['X-OpenAI-API-Key'] = apiKey.trim();
-                }
-                
                 const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=openai`, {
-                    method: 'POST',
-                    headers: requestHeaders
+                    method: 'POST'
                 });
                 
                 if (!response.ok) {
@@ -1242,6 +1943,9 @@
                 }
                 
                 const data = await response.json();
+                if (data.job_id) {
+                    currentJobId = data.job_id;
+                }
                 
                 // Update UI silently — completion will be logged via WebSocket
                 updateStatus({ status: 'transcribed', total_segments: data.total_segments ?? 0 });
@@ -1264,7 +1968,7 @@
             if (!currentVideoId) return;
             
             // Reset state for new job
-            currentJobId = `analyze-${currentVideoId}-${Date.now()}`;
+            currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
             
@@ -1282,6 +1986,9 @@
                 }
                 
                 const data = await response.json();
+                if (data.job_id) {
+                    currentJobId = data.job_id;
+                }
                 
                 // Update UI silently — completion will be logged via WebSocket
                 updateStatus({ status: 'terms_ready' });
@@ -1300,7 +2007,7 @@
             if (!currentVideoId) return;
             
             // Reset state for new job
-            currentJobId = `translate-${currentVideoId}-${Date.now()}`;
+            currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
             
@@ -1317,6 +2024,10 @@
                     throw new Error(err.detail || 'Translation failed');
                 }
                 
+                const data = await response.json();
+                if (data.job_id) {
+                    currentJobId = data.job_id;
+                }
                 
                 // Update UI silently — completion will be logged via WebSocket
                 updateStatus({ status: 'completed' });
@@ -1331,7 +2042,7 @@
             if (!currentVideoId) return;
             
             // Reset state for new job
-            currentJobId = `translate-${currentVideoId}-${Date.now()}`;
+            currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
             
@@ -1345,6 +2056,11 @@
                 if (!response.ok) {
                     const err = await response.json();
                     throw new Error(err.detail || 'Translation failed');
+                }
+                
+                const data = await response.json();
+                if (data.job_id) {
+                    currentJobId = data.job_id;
                 }
                 
                 // Update UI silently — completion will be logged via WebSocket
@@ -1459,6 +2175,105 @@
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', () => {
+            // Auth: wire up modal UI
+            const standardAuthForm = document.getElementById('standardAuthForm');
+            const byokAuthForm = document.getElementById('byokAuthForm');
+            const standardTab = document.getElementById('authTabStandard');
+            const byokTab = document.getElementById('authTabByok');
+            const authCloseBtn = document.getElementById('authCloseBtn');
+            const authModeToggleBtn = document.getElementById('authModeToggleBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+
+            if (standardTab) standardTab.addEventListener('click', () => setAuthTab('standard'));
+            if (byokTab) byokTab.addEventListener('click', () => setAuthTab('byok'));
+            if (standardAuthForm) standardAuthForm.addEventListener('submit', handleStandardAuthSubmit);
+            if (byokAuthForm) byokAuthForm.addEventListener('submit', handleByokSubmit);
+            if (authModeToggleBtn) authModeToggleBtn.addEventListener('click', () => {
+                setStandardMode(currentStandardMode === 'login' ? 'signup' : 'login');
+            });
+            if (authCloseBtn) authCloseBtn.addEventListener('click', showMainApp);
+            if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+            const loginBtn = document.getElementById('loginBtn');
+            if (loginBtn) loginBtn.addEventListener('click', () => {
+                showAuthView('standard', 'signup');
+            });
+
+            const resendVerifyBtn = document.getElementById('resendVerifyBtn');
+            const recheckVerifyBtn = document.getElementById('recheckVerifyBtn');
+            if (resendVerifyBtn) resendVerifyBtn.addEventListener('click', resendVerificationEmail);
+            if (recheckVerifyBtn) recheckVerifyBtn.addEventListener('click', recheckVerification);
+
+            // Close modal when clicking the backdrop
+            const authView = document.getElementById('authView');
+            if (authView) {
+                authView.addEventListener('click', (e) => {
+                    if (e.target === authView) showMainApp();
+                });
+            }
+
+            // Close modal with Escape key.
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && authView && !authView.classList.contains('hidden')) {
+                    showMainApp();
+                }
+            });
+
+            // Handle email verification links clicked from the user's inbox.
+            // Supports both legacy ?token= and welcome-email ?verify_token= params.
+            (async () => {
+                const params = new URLSearchParams(window.location.search);
+                const verifyToken = params.get('verify_token') || params.get('token');
+                if (verifyToken) {
+                    try {
+                        const response = await fetch(`/api/auth/verify?token=${encodeURIComponent(verifyToken)}`);
+                        if (response.ok) {
+                            showToast('Email verified successfully', 'success');
+                            // If the user has a stored session, refresh it and show the app.
+                            if (isStandardLoggedIn()) {
+                                const loaded = await loadUser();
+                                if (loaded) {
+                                    showMainApp();
+                                    window.history.replaceState({}, '', '/');
+                                    return;
+                                }
+                            }
+                            // Otherwise fall through to login prompt.
+                            showAuthView('standard', 'login');
+                        } else {
+                            const data = await response.json().catch(() => ({}));
+                            showToast(data.detail || 'Verification link is invalid or expired', 'error');
+                            showAuthView('standard', 'login');
+                        }
+                    } catch (err) {
+                        console.error('Verification failed:', err);
+                        showToast('Verification failed. Please try logging in.', 'error');
+                        showAuthView('standard', 'login');
+                    }
+                    // Remove token params from URL so a refresh doesn't re-verify.
+                    params.delete('verify_token');
+                    params.delete('token');
+                    const newUrl = params.toString()
+                        ? `${window.location.pathname}?${params.toString()}`
+                        : window.location.pathname;
+                    window.history.replaceState({}, '', newUrl);
+                }
+            })();
+
+            // Determine initial view based on stored token or API key
+            (async () => {
+                if (isStandardLoggedIn()) {
+                    const loaded = await loadUser();
+                    if (!loaded) {
+                        updateUserDisplay();
+                    }
+                } else if (isByokMode()) {
+                    updateUserDisplay();
+                } else {
+                    updateUserDisplay();
+                }
+            })();
+
             // Theme toggle handler
             const themeToggleBtn = document.getElementById('themeToggleBtn');
             if (themeToggleBtn) {
@@ -1598,48 +2413,6 @@
             // Expose the underlying selects for code that expects them.
             window.termsubSourceLanguage = sourceLanguageSelect;
             window.termsubTargetLanguage = targetLanguageSelect;
-
-            // --- OpenAI API Key Vault (localStorage) ---
-            const apiKeyInput = document.getElementById('openaiApiKey');
-            const savedKey = localStorage.getItem('termsub_openai_api_key');
-            if (savedKey) {
-                apiKeyInput.value = savedKey;
-            }
-            apiKeyInput.addEventListener('input', () => {
-                localStorage.setItem('termsub_openai_api_key', apiKeyInput.value);
-            });
-
-            // --- API Key Help Modal ---
-            const apiKeyModal = document.getElementById('apiKeyModal');
-            const apiKeyHelpBtn = document.getElementById('apiKeyHelpBtn');
-            const apiKeyModalClose = document.getElementById('apiKeyModalClose');
-
-            function openApiKeyModal() {
-                if (apiKeyModal) {
-                    apiKeyModal.classList.remove('hidden');
-                    document.body.style.overflow = 'hidden';
-                }
-            }
-
-            function closeApiKeyModal() {
-                if (apiKeyModal) {
-                    apiKeyModal.classList.add('hidden');
-                    document.body.style.overflow = '';
-                }
-            }
-
-            if (apiKeyHelpBtn) apiKeyHelpBtn.addEventListener('click', openApiKeyModal);
-            if (apiKeyModalClose) apiKeyModalClose.addEventListener('click', closeApiKeyModal);
-            if (apiKeyModal) {
-                apiKeyModal.addEventListener('click', (e) => {
-                    if (e.target === apiKeyModal) closeApiKeyModal();
-                });
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape' && !apiKeyModal.classList.contains('hidden')) {
-                        closeApiKeyModal();
-                    }
-                });
-            }
 
             // --- How to Use Modal ---
             const howToUseModal = document.getElementById('howToUseModal');
@@ -1795,11 +2568,46 @@
             document.getElementById('exportSrtBtn').addEventListener('click', () => exportFormat('srt'));
             document.getElementById('exportVttBtn').addEventListener('click', () => exportFormat('vtt'));
             document.getElementById('exportTxtBtn').addEventListener('click', () => exportFormat('txt'));
-            document.getElementById('exportJsonBtn').addEventListener('click', () => exportFormat('json'));   
+            document.getElementById('exportJsonBtn').addEventListener('click', () => exportFormat('json'));
 
-            // Check for video ID in URL
-            const videoId = new URLSearchParams(window.location.search).get('video');
-            if (videoId) {
+            // Admin dashboard handlers
+            const adminRefreshBtn = document.getElementById('adminRefreshBtn');
+            if (adminRefreshBtn) {
+                adminRefreshBtn.addEventListener('click', loadAdminDashboard);
+            }
+
+            const adminHomeBtn = document.getElementById('adminHomeBtn');
+            if (adminHomeBtn) {
+                adminHomeBtn.addEventListener('click', () => {
+                    hideAdminView();
+                    history.pushState(null, '', '/');
+                });
+            }
+
+            const adminUsersTable = document.getElementById('adminUsersTable');
+            if (adminUsersTable) {
+                adminUsersTable.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-admin-action]');
+                    if (!btn) return;
+                    const action = btn.getAttribute('data-admin-action');
+                    const userId = btn.getAttribute('data-user-id');
+                    if (action && userId) handleAdminAction(action, userId);
+                });
+            }
+
+            // Route handling
+            function handleRoute() {
+                const path = window.location.pathname;
+                const params = new URLSearchParams(window.location.search);
+                const videoId = params.get('video');
+
+                if (path === '/admin') {
+                    showAdminView();
+                    return;
+                }
+
+                hideAdminView();
+                if (videoId) {
                 currentVideoId = videoId;
                 const videoIdShortEl = document.getElementById('videoIdShort');
                 if (videoIdShortEl) videoIdShortEl.textContent = videoId.substring(0, 8);
@@ -1834,5 +2642,9 @@
                             renderSubtitleTimeline(data.segments);
                         }
                     });
+                }
             }
+
+            window.addEventListener('popstate', handleRoute);
+            handleRoute();
         });

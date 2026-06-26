@@ -8,6 +8,7 @@ separate Celery task with automatic retry and error handling.
 import logging
 import os
 import tempfile
+import threading
 import traceback
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ from celery.exceptions import (
 )
 
 from app.core.celery_app import celery_app
+from app.core.openai_key_context import byok_api_key
+from app.core.quota import QuotaManager
 from app.core.redis_pubsub import publish_progress
 from app.core.task_tracker import update_task_status
 from app.db.session_utils import get_db_session
@@ -73,19 +76,45 @@ def _send_progress(video_id: str, data: dict[str, Any]) -> None:
     time_limit=1800,  # 30 minutes
 )
 def transcribe_video_task(
-    self: Any, video_id: str, api_key: str | None = None
+    self: Any,
+    video_id: str,
+    api_key: str | None = None,
+    user_id: str | None = None,
+    is_byok: bool = False,
 ) -> dict[str, Any]:
     """Celery task: transcribe a video using OpenAI Whisper.
 
     Args:
         video_id: The video ID to transcribe.
         api_key: Optional per-request OpenAI API key.
+        user_id: Owner user id (standard) or BYOK key hash.
+        is_byok: Whether the owner is a BYOK user.
 
     Returns:
         Dictionary with segment count and audio path.
     """
     logger.info(f"[Task] Starting transcription for {video_id}")
     update_task_status(self.request.id, JobStatus.RUNNING.value)
+
+    quota = QuotaManager()
+    heartbeat_thread = None
+    stop_heartbeat = threading.Event()
+    ctx_token = None
+
+    def _heartbeat_loop() -> None:
+        while not stop_heartbeat.wait(60):
+            try:
+                quota.refresh_byok_job(user_id, self.request.id)
+            except Exception as exc:
+                logger.warning(f"[Task] BYOK heartbeat failed for {video_id}: {exc}")
+
+    if api_key:
+        ctx_token = byok_api_key.set(api_key)
+
+    if is_byok and user_id:
+        quota.register_byok_job(user_id, self.request.id)
+        heartbeat_thread = threading.Thread(target=_heartbeat_loop, daemon=True)
+        heartbeat_thread.start()
 
     _send_progress(
         video_id,
@@ -129,6 +158,7 @@ def transcribe_video_task(
 
         # Verify segments were created
         segment_count = 0
+        actual_minutes = 0.0
         with get_db_session() as db:
             segment_count = (
                 db.query(Segment).filter(Segment.video_id == video_id).count()
@@ -136,9 +166,32 @@ def transcribe_video_task(
             if segment_count == 0:
                 raise RuntimeError("No segments were created")
 
+            max_end = (
+                db.query(Segment)
+                .filter(Segment.video_id == video_id)
+                .with_entities(Segment.end_time)
+                .order_by(Segment.end_time.desc())
+                .first()
+            )
+            if max_end:
+                actual_minutes = max_end[0] / 60.0
+
             video = db.query(Video).filter(Video.id == video_id).first()
             if video:
                 video.status = VideoStatus.TRANSCRIBED.value
+
+        # Adjust the quota minutes estimate with the actual duration
+        if not is_byok and user_id:
+            try:
+                owner, byok_flag, estimated_minutes = quota.get_video_owner(video_id)
+                if owner == user_id and not byok_flag:
+                    quota.record_actual_minutes(
+                        user_id, estimated_minutes, actual_minutes
+                    )
+            except Exception as exc:
+                logger.warning(
+                    f"[Task] Failed to record actual minutes for {video_id}: {exc}"
+                )
 
         _send_progress(
             video_id,
@@ -213,6 +266,21 @@ def transcribe_video_task(
             raise
 
     finally:
+        if is_byok and user_id:
+            stop_heartbeat.set()
+            if heartbeat_thread is not None:
+                heartbeat_thread.join(timeout=5)
+            try:
+                quota.unregister_byok_job(user_id, self.request.id)
+            except Exception as exc:
+                logger.warning(
+                    f"[Task] Failed to unregister BYOK job for {video_id}: {exc}"
+                )
+        if ctx_token is not None:
+            try:
+                byok_api_key.reset(ctx_token)
+            except Exception as exc:
+                logger.warning(f"[Task] Failed to reset BYOK context for {video_id}: {exc}")
         # Always clean up media files after transcription attempt
         _cleanup_media_files(video_id)
 
@@ -224,17 +292,26 @@ def transcribe_video_task(
     soft_time_limit=1500,
     time_limit=1800,
 )
-def analyze_video_task(self: Any, video_id: str) -> dict[str, Any]:
+def analyze_video_task(
+    self: Any,
+    video_id: str,
+    api_key: str | None = None,
+) -> dict[str, Any]:
     """Celery task: analyze video context and extract glossary terms.
 
     Args:
         video_id: The video ID to analyze.
+        api_key: Optional per-request OpenAI API key (BYOK).
 
     Returns:
         Dictionary with term count and video status.
     """
     logger.info(f"[Task] Starting analysis for {video_id}")
     update_task_status(self.request.id, JobStatus.RUNNING.value)
+
+    ctx_token = None
+    if api_key:
+        ctx_token = byok_api_key.set(api_key)
 
     _send_progress(
         video_id,
@@ -390,6 +467,13 @@ def analyze_video_task(self: Any, video_id: str) -> dict[str, Any]:
             update_task_status(self.request.id, JobStatus.ERROR.value, full_error)
             raise
 
+    finally:
+        if ctx_token is not None:
+            try:
+                byok_api_key.reset(ctx_token)
+            except Exception as exc:
+                logger.warning(f"[Task] Failed to reset BYOK context for {video_id}: {exc}")
+
 
 @celery_app.task(  # type: ignore[untyped-decorator]
     bind=True,
@@ -398,17 +482,26 @@ def analyze_video_task(self: Any, video_id: str) -> dict[str, Any]:
     soft_time_limit=1500,
     time_limit=1800,
 )
-def translate_video_task(self: Any, video_id: str) -> dict[str, Any]:
+def translate_video_task(
+    self: Any,
+    video_id: str,
+    api_key: str | None = None,
+) -> dict[str, Any]:
     """Celery task: translate video segments using the multi-agent pipeline.
 
     Args:
         video_id: The video ID to translate.
+        api_key: Optional per-request OpenAI API key (BYOK).
 
     Returns:
         Dictionary with segment counts and video status.
     """
     logger.info(f"[Task] Starting translation for {video_id}")
     update_task_status(self.request.id, JobStatus.RUNNING.value)
+
+    ctx_token = None
+    if api_key:
+        ctx_token = byok_api_key.set(api_key)
 
     _send_progress(
         video_id,
@@ -558,6 +651,13 @@ def translate_video_task(self: Any, video_id: str) -> dict[str, Any]:
             _mark_video_error(video_id, full_error)
             update_task_status(self.request.id, JobStatus.ERROR.value, full_error)
             raise
+
+    finally:
+        if ctx_token is not None:
+            try:
+                byok_api_key.reset(ctx_token)
+            except Exception as exc:
+                logger.warning(f"[Task] Failed to reset BYOK context for {video_id}: {exc}")
 
 
 def _mark_video_error(video_id: str, error_message: str) -> None:

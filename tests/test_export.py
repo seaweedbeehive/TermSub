@@ -11,7 +11,9 @@ client = TestClient(app)
 
 
 def _mock_video(
-    status: str = "completed", filename: str = "test_video.mp4"
+    status: str = "completed",
+    filename: str = "test_video.mp4",
+    user_id: str | None = None,
 ) -> MagicMock:
     """Create a minimal mock Video object for export tests."""
     video = MagicMock()
@@ -21,6 +23,7 @@ def _mock_video(
     video.source_language = "en"
     video.target_language = "fa"
     video.status = status
+    video.user_id = user_id
     video.created_at.isoformat.return_value = "2024-01-01T00:00:00"
     return video
 
@@ -57,17 +60,18 @@ def _patch_export_db(
     return mock_db, patcher
 
 
-def test_export_srt_uses_live_db_timecodes() -> None:
+def test_export_srt_uses_live_db_timecodes(authenticated_user) -> None:
     """SRT output must reflect the mocked database timestamps with a comma separator."""
-    video = _mock_video()
+    video = _mock_video(user_id=authenticated_user["user_id"])
     segments = [
         _mock_segment(1, 1.5, 4.0, "Hello", "Hello"),
         _mock_segment(2, 5.25, 7.999, "World", "World"),
     ]
     mock_db, patcher = _patch_export_db(video, segments)
+    headers = authenticated_user["headers"]
 
     try:
-        response = client.get("/export/vid-1/srt")
+        response = client.get("/export/vid-1/srt", headers=headers)
     finally:
         patcher.stop()
 
@@ -82,17 +86,18 @@ def test_export_srt_uses_live_db_timecodes() -> None:
     assert "World\u200f" in body
 
 
-def test_export_vtt_uses_live_db_timecodes() -> None:
+def test_export_vtt_uses_live_db_timecodes(authenticated_user) -> None:
     """VTT output must reflect mocked DB timestamps with a period separator."""
-    video = _mock_video()
+    video = _mock_video(user_id=authenticated_user["user_id"])
     segments = [
         _mock_segment(1, 0.0, 2.5, "First cue", "First cue"),
         _mock_segment(2, 3.75, 6.0, "Second cue", "Second cue"),
     ]
     mock_db, patcher = _patch_export_db(video, segments)
+    headers = authenticated_user["headers"]
 
     try:
-        response = client.get("/export/vid-1/vtt")
+        response = client.get("/export/vid-1/vtt", headers=headers)
     finally:
         patcher.stop()
 
@@ -106,14 +111,15 @@ def test_export_vtt_uses_live_db_timecodes() -> None:
     assert "First cue\u200f" in body
 
 
-def test_export_srt_requires_completed_video() -> None:
+def test_export_srt_requires_completed_video(authenticated_user) -> None:
     """SRT export for a non-completed video returns HTTP 400."""
-    video = _mock_video(status="transcribed")
+    video = _mock_video(status="transcribed", user_id=authenticated_user["user_id"])
     segments = [_mock_segment(1, 0.0, 1.0, "Hello", "Hello")]
     mock_db, patcher = _patch_export_db(video, segments)
+    headers = authenticated_user["headers"]
 
     try:
-        response = client.get("/export/vid-1/srt")
+        response = client.get("/export/vid-1/srt", headers=headers)
     finally:
         patcher.stop()
 
@@ -121,12 +127,13 @@ def test_export_srt_requires_completed_video() -> None:
     assert "Translation is still in progress" in response.json()["detail"]
 
 
-def test_export_srt_video_not_found() -> None:
+def test_export_srt_video_not_found(authenticated_user) -> None:
     """Export for a missing video returns HTTP 404."""
     mock_db, patcher = _patch_export_db(None, [])
+    headers = authenticated_user["headers"]
 
     try:
-        response = client.get("/export/missing/srt")
+        response = client.get("/export/missing/srt", headers=headers)
     finally:
         patcher.stop()
 
@@ -143,6 +150,7 @@ def test_export_srt_with_real_sqlalchemy_session() -> None:
     from sqlalchemy.orm import Session, sessionmaker
 
     from app.api.export import export_srt
+    from app.core.auth import RequestIdentity
     from app.db.base import Base
     from app.models.video import Segment, Video, VideoStatus
 
@@ -166,6 +174,7 @@ def test_export_srt_with_real_sqlalchemy_session() -> None:
             file_path="/tmp/real_video.mp4",
             status=VideoStatus.COMPLETED.value,
             target_language="fa",
+            user_id="user-test",
         )
         segment = Segment(
             id="seg-real",
@@ -181,8 +190,9 @@ def test_export_srt_with_real_sqlalchemy_session() -> None:
         db.commit()
 
     # Patch the export route to use the in-memory session factory.
+    fake_identity = RequestIdentity(user_id="user-test", is_byok=False)
     with patch("app.api.export.get_db_session", new=_in_memory_session):
-        response = export_srt("vid-real")
+        response = export_srt("vid-real", identity=fake_identity)
 
     assert response.status_code == 200
     body = bytes(response.body).decode("utf-8")

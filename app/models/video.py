@@ -63,6 +63,9 @@ class Video(Base):
     status: Mapped[str] = mapped_column(
         String(32), default=VideoStatus.UPLOADED.value, nullable=False
     )
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     source_language: Mapped[str | None] = mapped_column(String(10), nullable=True)
     target_language: Mapped[str] = mapped_column(
         String(10), default="en", nullable=False

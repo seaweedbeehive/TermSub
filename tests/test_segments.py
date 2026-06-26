@@ -10,6 +10,13 @@ from app.main import app
 client = TestClient(app)
 
 
+def _mock_video(user_id: str | None = None) -> MagicMock:
+    """Create a mock video object for ownership checks."""
+    video = MagicMock()
+    video.user_id = user_id
+    return video
+
+
 def _mock_segment(start_time: float = 10.0, end_time: float = 20.0) -> MagicMock:
     """Create a mock segment object for PATCH endpoint tests."""
     segment = MagicMock()
@@ -19,24 +26,33 @@ def _mock_segment(start_time: float = 10.0, end_time: float = 20.0) -> MagicMock
     return segment
 
 
-def _patch_db_session(segment: MagicMock | None) -> tuple[MagicMock, Any]:
-    """Patch ``get_db_session`` in the videos router to return a controlled session."""
+def _patch_db_session(
+    video: MagicMock | None, segment: MagicMock | None
+) -> tuple[MagicMock, Any]:
+    """Patch ``get_db_session`` in the videos router to return a controlled session.
+
+    The first query is for the video (ownership check), the second for the segment.
+    """
     mock_db = MagicMock()
-    mock_db.query.return_value.filter.return_value.first.return_value = segment
+    # update_segment queries Video first, then Segment. List side_effect returns
+    # items sequentially and avoids MagicMock wrapping the returned objects.
+    mock_db.query.return_value.filter.return_value.first.side_effect = [video, segment]
     patcher = patch("app.api.videos.get_db_session")
     mock_cm = patcher.start()
     mock_cm.return_value.__enter__.return_value = mock_db
     return mock_db, patcher
 
 
-def test_update_segment_with_valid_timecodes_and_text() -> None:
+def test_update_segment_with_valid_timecodes_and_text(authenticated_user) -> None:
     """Valid payload updates text and timecodes and returns 200."""
+    video = _mock_video(user_id=authenticated_user["user_id"])
     segment = _mock_segment()
-    mock_db, patcher = _patch_db_session(segment)
+    mock_db, patcher = _patch_db_session(video, segment)
 
     try:
         response = client.patch(
             "/videos/vid1/segments/seg1",
+            headers=authenticated_user["headers"],
             json={
                 "translated_text": "updated translation",
                 "start_time": "00:00:15,000",
@@ -53,14 +69,16 @@ def test_update_segment_with_valid_timecodes_and_text() -> None:
     assert segment.end_time == 25.0
 
 
-def test_update_segment_invalid_timecode_format() -> None:
+def test_update_segment_invalid_timecode_format(authenticated_user) -> None:
     """Malformed timecode strings return HTTP 422."""
+    video = _mock_video(user_id=authenticated_user["user_id"])
     segment = _mock_segment()
-    mock_db, patcher = _patch_db_session(segment)
+    mock_db, patcher = _patch_db_session(video, segment)
 
     try:
         response = client.patch(
             "/videos/vid1/segments/seg1",
+            headers=authenticated_user["headers"],
             json={"start_time": "not-a-timecode"},
         )
     finally:
@@ -70,14 +88,16 @@ def test_update_segment_invalid_timecode_format() -> None:
     assert "Invalid start_time" in response.json()["detail"]
 
 
-def test_update_segment_start_after_end() -> None:
+def test_update_segment_start_after_end(authenticated_user) -> None:
     """start_time >= end_time returns HTTP 422."""
+    video = _mock_video(user_id=authenticated_user["user_id"])
     segment = _mock_segment()
-    mock_db, patcher = _patch_db_session(segment)
+    mock_db, patcher = _patch_db_session(video, segment)
 
     try:
         response = client.patch(
             "/videos/vid1/segments/seg1",
+            headers=authenticated_user["headers"],
             json={
                 "start_time": "00:00:30,000",
                 "end_time": "00:00:20,000",
@@ -90,13 +110,15 @@ def test_update_segment_start_after_end() -> None:
     assert "start_time must be strictly before end_time" in response.json()["detail"]
 
 
-def test_update_segment_not_found() -> None:
+def test_update_segment_not_found(authenticated_user) -> None:
     """Request for a non-existent segment returns HTTP 404."""
-    mock_db, patcher = _patch_db_session(None)
+    video = _mock_video(user_id=authenticated_user["user_id"])
+    mock_db, patcher = _patch_db_session(video, None)
 
     try:
         response = client.patch(
             "/videos/vid1/segments/missing",
+            headers=authenticated_user["headers"],
             json={"translated_text": "irrelevant"},
         )
     finally:
@@ -106,7 +128,7 @@ def test_update_segment_not_found() -> None:
     assert response.json()["detail"] == "Segment not found"
 
 
-def test_update_segment_persists_to_real_database() -> None:
+def test_update_segment_persists_to_real_database(authenticated_user) -> None:
     """Regression: PATCH must actually commit changes so exports see them."""
     import tempfile
     from collections.abc import Generator
@@ -142,6 +164,7 @@ def test_update_segment_persists_to_real_database() -> None:
             file_path="/tmp/real.mp4",
             status=VideoStatus.COMPLETED.value,
             target_language="fa",
+            user_id=authenticated_user["user_id"],
         )
         segment = Segment(
             id="seg-real",
@@ -158,6 +181,7 @@ def test_update_segment_persists_to_real_database() -> None:
     with patch("app.api.videos.get_db_session", new=_in_memory_session):
         response = client.patch(
             "/videos/vid-real/segments/seg-real",
+            headers=authenticated_user["headers"],
             json={
                 "translated_text": "Updated text",
                 "start_time": "00:00:05,500",

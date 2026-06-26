@@ -1,5 +1,4 @@
         body { font-family: 'Inter', system-ui, sans-serif; }
-        .progress-bar { transition: width 0.3s ease; }
         .rtl-text {
             direction: rtl;
             text-align: right;

@@ -89,11 +89,19 @@ IMPORTANT: The original term MUST be written exactly as it appears in the transc
 }
 
 
-def _get_openai_client() -> OpenAI:
-    """Initialize a sync OpenAI client."""
-    if not settings.OPENAI_API_KEY:
+def _get_openai_client(api_key: str | None = None) -> OpenAI:
+    """Initialize a sync OpenAI client.
+
+    Args:
+        api_key: Optional per-request API key. Falls back to the active BYOK
+            context, then to settings.OPENAI_API_KEY.
+    """
+    from app.core.openai_key_context import get_effective_openai_key
+
+    effective_key = get_effective_openai_key(api_key)
+    if not effective_key:
         raise RuntimeError("OPENAI_API_KEY not configured")
-    return OpenAI(api_key=settings.OPENAI_API_KEY)
+    return OpenAI(api_key=effective_key)
 
 
 def build_context_analysis_prompt(

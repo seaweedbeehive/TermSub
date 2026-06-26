@@ -1,15 +1,45 @@
 import json
+import threading
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api.videos import require_video_owner
+from app.core.analytics import log_usage_event
+from app.core.auth import RequestIdentity, get_current_user_or_byok
 from app.db.session_utils import get_db_session
 from app.models.video import Segment, Video, VideoStatus
 from app.utils.timecode import format_timestamp, format_timestamp_vtt
 
 router = APIRouter(prefix="/export", tags=["export"])
+
+
+def _log_export(
+    identity: RequestIdentity,
+    video_id: str,
+    filename: str,
+    source_language: str | None,
+    target_language: str,
+    export_format: str,
+    extra_metadata: dict[str, Any] | None = None,
+) -> None:
+    """Fire-and-forget a usage event for an export download."""
+    metadata: dict[str, Any] = {
+        "video_id": video_id,
+        "filename": filename,
+        "format": export_format,
+        "target_language": target_language,
+        "source_language": source_language,
+    }
+    if extra_metadata:
+        metadata.update(extra_metadata)
+    threading.Thread(
+        target=log_usage_event,
+        args=(None if identity.is_byok else identity.user_id, "export", metadata),
+        daemon=True,
+    ).start()
 
 
 def sanitize_filename(filename: str) -> str:
@@ -108,12 +138,15 @@ def generate_json(video: Video, segments: list[Segment]) -> dict[str, Any]:
     }
 
 
-def get_segments_or_404(video_id: str, db: Session) -> tuple[Video, list[Segment]]:
+def get_segments_or_404(
+    video_id: str, db: Session, identity: RequestIdentity
+) -> tuple[Video, list[Segment]]:
     """Get video and segments, raising 404 if not found or 400 if incomplete."""
     # Check if video exists in database
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
 
     # Check if translation is complete
     if video.status != VideoStatus.COMPLETED.value:
@@ -145,15 +178,26 @@ def get_segments_or_404(video_id: str, db: Session) -> tuple[Video, list[Segment
 
 
 @router.get("/{video_id}/srt")
-def export_srt(video_id: str) -> Response:
+def export_srt(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
     """Export the final SRT file with consistent terminology."""
     with get_db_session() as db:
-        video, segments = get_segments_or_404(video_id, db)
+        video, segments = get_segments_or_404(video_id, db, identity)
 
         # Generate SRT content while the session is still open so segment
         # attributes remain accessible.
         srt_content = generate_srt(segments)
         download_name = sanitize_filename(video.filename) + ".srt"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "srt",
+        )
 
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
@@ -164,14 +208,25 @@ def export_srt(video_id: str) -> Response:
 
 
 @router.get("/{video_id}/vtt")
-def export_vtt(video_id: str) -> Response:
+def export_vtt(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
     """Export the final WebVTT file."""
     with get_db_session() as db:
-        video, segments = get_segments_or_404(video_id, db)
+        video, segments = get_segments_or_404(video_id, db, identity)
 
         # Generate VTT content while the session is still open.
         vtt_content = generate_vtt(segments)
         download_name = sanitize_filename(video.filename) + ".vtt"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "vtt",
+        )
 
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
@@ -182,14 +237,25 @@ def export_vtt(video_id: str) -> Response:
 
 
 @router.get("/{video_id}/txt")
-def export_txt(video_id: str) -> Response:
+def export_txt(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
     """Export plain translated text only."""
     with get_db_session() as db:
-        video, segments = get_segments_or_404(video_id, db)
+        video, segments = get_segments_or_404(video_id, db, identity)
 
         # Generate TXT content while the session is still open.
         txt_content = generate_txt(segments)
         download_name = sanitize_filename(video.filename) + ".txt"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "txt",
+        )
 
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
@@ -200,14 +266,25 @@ def export_txt(video_id: str) -> Response:
 
 
 @router.get("/{video_id}/json")
-def export_json(video_id: str) -> Response:
+def export_json(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
     """Export full JSON with metadata and all segments."""
     with get_db_session() as db:
-        video, segments = get_segments_or_404(video_id, db)
+        video, segments = get_segments_or_404(video_id, db, identity)
 
         # Generate JSON content while the session is still open.
         json_data = generate_json(video, segments)
         download_name = sanitize_filename(video.filename) + ".json"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "json",
+        )
 
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',
@@ -239,12 +316,16 @@ def generate_original_srt(segments: list[Segment]) -> str:
 
 
 @router.get("/{video_id}/transcription")
-def export_original_transcription(video_id: str) -> Response:
+def export_original_transcription(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
     """Export the ORIGINAL transcription (before translation) as SRT."""
     with get_db_session() as db:
         video = db.query(Video).filter(Video.id == video_id).first()
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
+        require_video_owner(video, identity)
 
         # Get all segments for this video
         segments = (
@@ -263,6 +344,14 @@ def export_original_transcription(video_id: str) -> Response:
         # Generate SRT from original text while the session is still open.
         srt_content = generate_original_srt(segments)
         download_name = sanitize_filename(video.filename) + "_transcription.srt"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "transcription",
+        )
 
     headers = {
         "Content-Disposition": f'attachment; filename="{download_name}"',

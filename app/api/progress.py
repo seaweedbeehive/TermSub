@@ -11,6 +11,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.videos import require_video_owner
+from app.core.auth import RequestIdentity, get_current_user_or_byok
 from app.db.session import get_db
 from app.models.video import ProcessingLog, Video
 from app.schemas.video import ProcessingLogEntry, VideoProgress, VideoProgressDetail
@@ -42,7 +44,11 @@ async def send_progress_update(video_id: str, data: dict[str, Any]) -> None:
 
 # DEPRECATED: Use WebSocket /ws/videos/{video_id} instead
 @router.get("/{video_id}", response_model=VideoProgress, deprecated=True)
-def get_video_progress(video_id: str, db: Session = Depends(get_db)) -> VideoProgress:
+def get_video_progress(
+    video_id: str,
+    db: Session = Depends(get_db),
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> VideoProgress:
     """DEPRECATED: Get current progress for a video.
 
     Use WebSocket /ws/videos/{video_id} for real-time updates instead.
@@ -51,6 +57,7 @@ def get_video_progress(video_id: str, db: Session = Depends(get_db)) -> VideoPro
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
 
     # Calculate estimated time remaining
     tracker = get_progress_tracker(video_id, db)
@@ -74,7 +81,9 @@ def get_video_progress(video_id: str, db: Session = Depends(get_db)) -> VideoPro
 # DEPRECATED: Use WebSocket /ws/videos/{video_id} instead
 @router.get("/{video_id}/detail", response_model=VideoProgressDetail, deprecated=True)
 def get_video_progress_detail(
-    video_id: str, db: Session = Depends(get_db)
+    video_id: str,
+    db: Session = Depends(get_db),
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
 ) -> VideoProgressDetail:
     """DEPRECATED: Get detailed progress with recent logs.
 
@@ -83,6 +92,7 @@ def get_video_progress_detail(
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
 
     # Get recent logs
     tracker = get_progress_tracker(video_id, db)
@@ -121,12 +131,16 @@ def get_video_progress_detail(
 
 @router.get("/{video_id}/logs")
 def get_video_logs(
-    video_id: str, limit: int = 100, db: Session = Depends(get_db)
+    video_id: str,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
 ) -> dict[str, Any]:
     """Get processing logs for a video."""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
 
     logs = (
         db.query(ProcessingLog)

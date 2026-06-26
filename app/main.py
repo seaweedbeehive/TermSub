@@ -4,21 +4,28 @@ This is the main FastAPI application entry point.
 """
 
 import asyncio
+import hashlib
 import json
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import export, progress, terms, videos
+from app.api import admin, auth, export, progress, quota, terms, videos
+from app.core.analytics import log_page_view
+from app.core.auth import RequestIdentity, decode_access_token
 from app.core.config import settings
+from app.core.quota import QuotaManager
 from app.db.base import Base
-from app.db.session import engine
+from app.db.session import SessionLocal, engine
+from app.models.user import User
 
 
 class ConnectionManager:
@@ -34,14 +41,20 @@ class ConnectionManager:
     def __init__(self) -> None:
         self.active_connections: dict[str, list[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, video_id: str) -> None:
+    async def connect(
+        self,
+        websocket: WebSocket,
+        video_id: str,
+        subprotocol: str | None = None,
+    ) -> None:
         """Accept a new WebSocket connection for a video.
 
         Args:
             websocket: The WebSocket connection object
             video_id: The video ID this connection is watching
+            subprotocol: The negotiated subprotocol to return to the client.
         """
-        await websocket.accept()
+        await websocket.accept(subprotocol=subprotocol)
 
         if video_id not in self.active_connections:
             self.active_connections[video_id] = []
@@ -117,6 +130,55 @@ class ConnectionManager:
 
 # Global connection manager instance
 manager = ConnectionManager()
+
+
+class AnalyticsMiddleware(BaseHTTPMiddleware):
+    """Log incoming requests to the PageView analytics table.
+
+    Skips static assets and dispatches the DB write to a background thread
+    so the response is not blocked.
+    """
+
+    SKIP_PREFIXES = ("/static", "/assets", "/favicon")
+
+    @staticmethod
+    def _extract_user_id(authorization: str | None) -> str | None:
+        if not authorization or not authorization.lower().startswith("bearer "):
+            return None
+        token = authorization[7:].strip()
+        try:
+            payload = decode_access_token(token)
+            return payload.get("sub")
+        except Exception:
+            return None
+
+    @staticmethod
+    def _hash_ip(ip: str | None) -> str | None:
+        if not ip:
+            return None
+        return hashlib.sha256(ip.encode("utf-8")).hexdigest()[:16]
+
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        path = request.url.path
+        if path.startswith(self.SKIP_PREFIXES):
+            return await call_next(request)
+
+        authorization = request.headers.get("authorization")
+        user_id = self._extract_user_id(authorization)
+        ip_hash = self._hash_ip(request.client.host if request.client else None)
+        user_agent = request.headers.get("user-agent")
+        session_id = request.headers.get("x-session-id")
+
+        response = await call_next(request)
+
+        # Fire-and-forget the DB write so analytics never blocks the response.
+        threading.Thread(
+            target=log_page_view,
+            args=(user_id, path, session_id, ip_hash, user_agent),
+            daemon=True,
+        ).start()
+
+        return response
 
 
 def check_database_schema() -> None:
@@ -210,15 +272,24 @@ app = FastAPI(
 )
 
 # CORS middleware
+# Restrict to the configured frontend origin and do not allow credentials.
+# TermSub currently uses JWT/API-key auth in headers, not cookies, so
+# allow_credentials stays False to prevent cross-origin credential attacks.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[settings.FRONTEND_BASE_URL],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Analytics middleware — logs page views in the background
+app.add_middleware(AnalyticsMiddleware)
+
 # Include routers
+app.include_router(auth.router, prefix="/api")
+app.include_router(quota.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 app.include_router(videos.router)
 app.include_router(terms.router)
 app.include_router(export.router)
@@ -239,6 +310,13 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 @app.get("/")
 async def root() -> FileResponse:
     """Root endpoint - serve the frontend HTML interface."""
+    return FileResponse(str(_FRONTEND_DIR / "index.html"))
+
+
+@app.get("/admin")
+@app.get("/admin/{path:path}")
+async def admin_page(path: str | None = None) -> FileResponse:
+    """Admin dashboard frontend route - serve the SPA for /admin deep links."""
     return FileResponse(str(_FRONTEND_DIR / "index.html"))
 
 
@@ -264,9 +342,65 @@ def get_version() -> dict[str, str]:
     return {"version": settings.VERSION}
 
 
+def _extract_ws_identity(
+    websocket: WebSocket,
+) -> tuple[str | None, RequestIdentity | None]:
+    """Resolve a WebSocket identity from the Sec-WebSocket-Protocol header.
+
+    Standard users send ``["termsub-auth", <jwt>]``.
+    BYOK users send ``["termsub-byok", <openai-api-key>]``.
+    This avoids putting credentials in the URL query string where they can leak
+    into proxy logs.
+
+    Returns:
+        Tuple of (negotiated_subprotocol, RequestIdentity | None).
+    """
+    subprotocols = websocket.scope.get("subprotocols", [])
+    if len(subprotocols) >= 2:
+        protocol = subprotocols[0]
+        credential = subprotocols[1]
+
+        if protocol == "termsub-auth":
+            try:
+                payload = decode_access_token(credential)
+                user_id = payload.get("sub")
+                if not user_id:
+                    return None, None
+
+                db = SessionLocal()
+                try:
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if not user or not user.is_active or not user.is_email_verified:
+                        return None, None
+                    return protocol, RequestIdentity(
+                        user_id=user_id, is_byok=False, user=user
+                    )
+                finally:
+                    db.close()
+            except Exception:
+                return None, None
+
+        if protocol == "termsub-byok":
+            api_key = credential.strip()
+            if api_key:
+                return protocol, RequestIdentity(
+                    user_id=QuotaManager.byok_user_id(api_key),
+                    is_byok=True,
+                    api_key=api_key,
+                )
+
+    return None, None
+
+
 @app.websocket("/ws/videos/{video_id}")
-async def websocket_endpoint(websocket: WebSocket, video_id: str) -> None:
+async def websocket_endpoint(
+    websocket: WebSocket,
+    video_id: str,
+) -> None:
     """WebSocket endpoint for real-time video progress updates.
+
+    Supports both standard JWT users (``["termsub-auth", token]``) and BYOK
+    users (``["termsub-byok", api_key]``) via the WebSocket subprotocol.
 
     Connect to this endpoint to receive real-time updates during:
     - Transcription
@@ -286,7 +420,12 @@ async def websocket_endpoint(websocket: WebSocket, video_id: str) -> None:
         websocket: The WebSocket connection
         video_id: The video ID to watch
     """
-    await manager.connect(websocket, video_id)
+    subprotocol, identity = _extract_ws_identity(websocket)
+    if not identity:
+        await websocket.close(code=1008, reason="Missing or invalid credentials")
+        return
+
+    await manager.connect(websocket, video_id, subprotocol=subprotocol)
 
     try:
         # Send initial connection confirmation

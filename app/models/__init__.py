@@ -1,5 +1,9 @@
 from app.db.base import Base as Base
+from app.models.analytics import PageView as PageView
+from app.models.analytics import UsageEvent as UsageEvent
 from app.models.job_queue import JobQueue as JobQueue
+from app.models.user import User as User
+from app.models.user import UserSession as UserSession
 from app.models.video import (
     ProcessingLog as ProcessingLog,
 )
@@ -22,10 +26,14 @@ from app.models.video import (
 __all__ = [
     "Base",
     "JobQueue",
+    "PageView",
     "ProcessingLog",
     "Segment",
     "Term",
     "TermOccurrence",
+    "UsageEvent",
+    "User",
+    "UserSession",
     "Video",
     "VideoStatus",
 ]

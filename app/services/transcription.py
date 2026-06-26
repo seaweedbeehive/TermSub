@@ -37,13 +37,15 @@ def get_openai_client(api_key: str | None = None) -> OpenAI:
     """Initialize and return an OpenAI client.
 
     Args:
-        api_key: Optional per-request API key. Falls back to
-            settings.OPENAI_API_KEY.
+        api_key: Optional per-request API key. Falls back to the active BYOK
+            context, then to settings.OPENAI_API_KEY.
 
     Raises:
         TranscriptionError: If no API key is available.
     """
-    effective_key = api_key or settings.OPENAI_API_KEY
+    from app.core.openai_key_context import get_effective_openai_key
+
+    effective_key = get_effective_openai_key(api_key)
     if not effective_key:
         raise TranscriptionError(
             "OPENAI_API_KEY not configured. Please enter your API key in the UI."

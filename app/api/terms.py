@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.videos import require_video_owner
+from app.core.auth import RequestIdentity, get_current_user_or_byok
 from app.db.session import get_db
 from app.models.video import Term, TermSource, Video
 
@@ -44,11 +46,16 @@ class TermOut(BaseModel):
 
 
 @router.get("/video/{video_id}")
-def list_terms(video_id: str, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+def list_terms(
+    video_id: str,
+    db: Session = Depends(get_db),
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> list[dict[str, Any]]:
     """List all extracted terms for a video, including translation variants."""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
 
     terms = db.query(Term).filter(Term.video_id == video_id).all()
 
@@ -81,12 +88,21 @@ def list_terms(video_id: str, db: Session = Depends(get_db)) -> list[dict[str, A
 
 @router.patch("/{term_id}", response_model=TermOut)
 def update_term(
-    term_id: str, update: TermUpdate, db: Session = Depends(get_db)
+    term_id: str,
+    update: TermUpdate,
+    db: Session = Depends(get_db),
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
 ) -> Term:
     """Standardize a term (set standardized_term and is_standardized)."""
     term = db.query(Term).filter(Term.id == term_id).first()
     if not term:
         raise HTTPException(status_code=404, detail="Term not found")
+
+    video = db.query(Video).filter(Video.id == term.video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
+
     if update.standardized_term is not None:
         term.standardized_term = update.standardized_term
     if update.is_standardized is not None:
@@ -98,12 +114,16 @@ def update_term(
 
 @router.post("/video/{video_id}/custom", response_model=TermOut)
 def add_custom_term(
-    video_id: str, term_data: CustomTermCreate, db: Session = Depends(get_db)
+    video_id: str,
+    term_data: CustomTermCreate,
+    db: Session = Depends(get_db),
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
 ) -> Term:
     """Add a custom term (manual find & replace) for a video."""
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
 
     # Create manual term
     term = Term(
@@ -125,9 +145,17 @@ def add_custom_term(
 
 @router.delete("/video/{video_id}/custom/{term_id}")
 def delete_custom_term(
-    video_id: str, term_id: str, db: Session = Depends(get_db)
+    video_id: str,
+    term_id: str,
+    db: Session = Depends(get_db),
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
 ) -> dict[str, str]:
     """Delete a custom term. Only manual terms can be deleted."""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
+
     term = db.query(Term).filter(Term.id == term_id, Term.video_id == video_id).first()
     if not term:
         raise HTTPException(status_code=404, detail="Term not found")
