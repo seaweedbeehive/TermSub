@@ -47,3 +47,4 @@ htmlcov/
 
 # Git worktrees
 .git-worktrees/
+.env.local
