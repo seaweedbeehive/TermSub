@@ -19,26 +19,6 @@ services:
       - key: FRONTEND_BASE_URL
         value: https://termsub.eedbee.app
 
-  - type: worker
-    name: termsub-worker
-    runtime: docker
-    repo: https://github.com/seaweedbeehive/TermSub
-    plan: free
-    dockerfilePath: Dockerfile
-    dockerCommand: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: termsub-db
-          property: connectionString
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: JWT_SECRET_KEY
-        fromService:
-          type: web
-          name: termsub-web
-          envVarKey: JWT_SECRET_KEY
-
 databases:
   - name: termsub-db
     plan: free

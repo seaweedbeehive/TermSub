@@ -20,5 +20,5 @@ COPY . .
 # Expose the Uvicorn port
 EXPOSE 8000
 
-# Default command to run the FastAPI application
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default command runs the web server and Celery worker in the same container
+CMD ["sh", "start.sh"]
