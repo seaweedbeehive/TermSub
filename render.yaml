@@ -10,12 +10,16 @@ services:
         fromDatabase:
           name: termsub-db
           property: connectionString
+      - key: REDIS_URL
+        sync: false  # You'll set this manually after creating Redis
       - key: OPENAI_API_KEY
         sync: false
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: RESEND_API_KEY
         sync: false
+      - key: RESEND_FROM_EMAIL
+        value: hello@termsub.eedbee.app
       - key: FRONTEND_BASE_URL
         value: https://termsub.eedbee.app
 
