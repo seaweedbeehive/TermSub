@@ -321,11 +321,6 @@ async def admin_page(path: str | None = None) -> FileResponse:
     return FileResponse(str(_FRONTEND_DIR / "index.html"))
 
 
-@app.get("/reset-password")
-async def reset_password_page() -> FileResponse:
-    """Password reset frontend route - serve the SPA for reset-password deep links."""
-    return FileResponse(str(_FRONTEND_DIR / "index.html"))
-
 
 @app.get("/favicon.ico")
 async def favicon() -> Response:

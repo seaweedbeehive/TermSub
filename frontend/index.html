@@ -63,8 +63,11 @@
                         <label for="authPassword" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8]">Password</label>
                         <button id="authForgotPasswordBtn" type="button" class="text-[10px] text-blue-600 dark:text-[#00F0FF] hover:underline font-medium bg-transparent border-none p-0">Forgot password?</button>
                     </div>
-                    <input type="password" id="authPassword" required minlength="8" autocomplete="current-password" placeholder="••••••••"
-                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                    <div class="relative">
+                        <input type="password" id="authPassword" required minlength="8" autocomplete="current-password" placeholder="••••••••"
+                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        <button type="button" data-toggle-password="authPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                    </div>
                 </div>
                 <div id="wantsUpdatesContainer" class="flex items-start gap-2">
                     <input type="checkbox" id="authWantsUpdates" checked class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-[#2A2A30] text-blue-600 focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
@@ -103,13 +106,19 @@
                 <p class="text-sm text-slate-600 dark:text-[#8A8F98]">Choose a new password for your account.</p>
                 <div>
                     <label for="resetPasswordInput" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">New password</label>
-                    <input type="password" id="resetPasswordInput" required minlength="8" autocomplete="new-password" placeholder="••••••••"
-                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                    <div class="relative">
+                        <input type="password" id="resetPasswordInput" required minlength="8" autocomplete="new-password" placeholder="••••••••"
+                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        <button type="button" data-toggle-password="resetPasswordInput" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                    </div>
                 </div>
                 <div>
                     <label for="resetPasswordConfirm" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Confirm new password</label>
-                    <input type="password" id="resetPasswordConfirm" required minlength="8" autocomplete="new-password" placeholder="••••••••"
-                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                    <div class="relative">
+                        <input type="password" id="resetPasswordConfirm" required minlength="8" autocomplete="new-password" placeholder="••••••••"
+                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        <button type="button" data-toggle-password="resetPasswordConfirm" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                    </div>
                 </div>
                 <div id="resetPasswordError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
                 <div id="resetPasswordSuccess" class="hidden text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded border border-emerald-200 dark:border-emerald-800"></div>
@@ -128,8 +137,11 @@
                 </div>
                 <div>
                     <label for="byokApiKey" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">OpenAI API Key</label>
-                    <input type="password" id="byokApiKey" required minlength="20" placeholder="sk-..."
-                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                    <div class="relative">
+                        <input type="password" id="byokApiKey" required minlength="20" placeholder="sk-..."
+                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        <button type="button" data-toggle-password="byokApiKey" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                    </div>
                 </div>
                 <div>
                     <label for="byokEmail" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Want product updates? (optional)</label>
@@ -695,7 +707,10 @@
                         </div>
                         <div id="profileByokKeyContainer" class="hidden">
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">OpenAI API key</label>
-                            <input type="password" id="profileByokKeyInput" placeholder="sk-..." class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            <div class="relative">
+                                <input type="password" id="profileByokKeyInput" placeholder="sk-..." class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <button type="button" data-toggle-password="profileByokKeyInput" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                            </div>
                             <p class="text-xs text-slate-500 dark:text-[#8A8F98] mt-1">Your key is validated by OpenAI but never stored on our servers.</p>
                         </div>
                         <button id="profileSaveApiModeBtn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Update mode</button>
@@ -712,7 +727,10 @@
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Current password</label>
-                            <input type="password" id="profileEmailPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            <div class="relative">
+                                <input type="password" id="profileEmailPassword" required class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <button type="button" data-toggle-password="profileEmailPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                            </div>
                         </div>
                         <button type="submit" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Update email</button>
                     </form>
@@ -724,15 +742,24 @@
                     <form id="profilePasswordForm" class="space-y-3">
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Current password</label>
-                            <input type="password" id="profileCurrentPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            <div class="relative">
+                                <input type="password" id="profileCurrentPassword" required class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <button type="button" data-toggle-password="profileCurrentPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">New password</label>
-                            <input type="password" id="profileNewPassword" required minlength="8" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            <div class="relative">
+                                <input type="password" id="profileNewPassword" required minlength="8" class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <button type="button" data-toggle-password="profileNewPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Confirm new password</label>
-                            <input type="password" id="profileConfirmPassword" required minlength="8" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            <div class="relative">
+                                <input type="password" id="profileConfirmPassword" required minlength="8" class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <button type="button" data-toggle-password="profileConfirmPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                            </div>
                         </div>
                         <button type="submit" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Change password</button>
                     </form>
@@ -765,7 +792,10 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Password</label>
-                    <input type="password" id="deleteAccountPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                    <div class="relative">
+                        <input type="password" id="deleteAccountPassword" required class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                        <button type="button" data-toggle-password="deleteAccountPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
+                    </div>
                 </div>
                 <div class="flex gap-3 pt-2">
                     <button type="button" id="deleteAccountCancel" class="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-white dark:bg-[#2A2A30] border border-slate-300 dark:border-[#2A2A30] text-slate-700 dark:text-[#E2E2E8] hover:bg-slate-50 dark:hover:bg-[#3A3A40] transition-colors">Cancel</button>

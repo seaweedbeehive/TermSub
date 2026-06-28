@@ -113,7 +113,7 @@ def send_password_reset_email(
     reset_token: str,
 ) -> dict[str, Any] | None:
     """Send a password reset link."""
-    reset_url = f"{settings.FRONTEND_BASE_URL}/reset-password?token={reset_token}"
+    reset_url = f"{settings.FRONTEND_BASE_URL}/?reset_token={reset_token}"
     html = f"""
     <html>
       <body>

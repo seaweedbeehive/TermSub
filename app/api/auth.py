@@ -261,7 +261,7 @@ def reset_password(
 ) -> dict[str, str]:
     """Reset the user's password using a valid reset token."""
     user = (
-        db.query(User).filter(User.password_reset_token == payload.token).first()
+        db.query(User).filter(User.password_reset_token == payload.reset_token).first()
     )
     if not user:
         raise HTTPException(

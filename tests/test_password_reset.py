@@ -79,7 +79,7 @@ class TestResetPassword:
         response = client.post(
             "/api/auth/reset-password",
             json={
-                "token": "invalid-token",
+                "reset_token": "invalid-token",
                 "new_password": "newpass123",
                 "confirm_password": "newpass123",
             },
@@ -102,7 +102,7 @@ class TestResetPassword:
         response = client.post(
             "/api/auth/reset-password",
             json={
-                "token": "expired-token",
+                "reset_token": "expired-token",
                 "new_password": "newpass123",
                 "confirm_password": "newpass123",
             },
@@ -125,7 +125,7 @@ class TestResetPassword:
         response = client.post(
             "/api/auth/reset-password",
             json={
-                "token": "valid-token",
+                "reset_token": "valid-token",
                 "new_password": "newpass123",
                 "confirm_password": "newpass123",
             },
@@ -158,7 +158,7 @@ class TestResetPassword:
         response = client.post(
             "/api/auth/reset-password",
             json={
-                "token": "valid-token",
+                "reset_token": "valid-token",
                 "new_password": "newpass123",
                 "confirm_password": "different123",
             },

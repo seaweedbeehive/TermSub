@@ -68,6 +68,21 @@
             return `${maskedLocal}@${domain}`;
         }
 
+        function setupPasswordToggles() {
+            document.addEventListener('click', (event) => {
+                const toggleBtn = event.target.closest('[data-toggle-password]');
+                if (!toggleBtn) return;
+
+                const inputId = toggleBtn.getAttribute('data-toggle-password');
+                const input = document.getElementById(inputId);
+                if (!input) return;
+
+                const isHidden = input.type === 'password';
+                input.type = isHidden ? 'text' : 'password';
+                toggleBtn.textContent = isHidden ? 'Hide' : 'Show';
+            });
+        }
+
         function isStandardLoggedIn() {
             return !!getToken();
         }
@@ -1107,7 +1122,7 @@
                     throw new Error(data.detail || 'Failed to send reset email');
                 }
                 if (successEl) {
-                    successEl.textContent = 'If an account exists, a reset link has been sent.';
+                    successEl.textContent = 'Check your email for reset link';
                     successEl.classList.remove('hidden');
                 }
                 emailInput.value = '';
@@ -1158,7 +1173,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        token,
+                        reset_token: token,
                         new_password: newPassword,
                         confirm_password: confirmPassword
                     })
@@ -2748,6 +2763,9 @@
             if (forgotPasswordBackBtn) forgotPasswordBackBtn.addEventListener('click', () => setAuthSubview('form'));
             if (resetPasswordForm) resetPasswordForm.addEventListener('submit', handleResetPasswordSubmit);
 
+            // Show / hide password toggles
+            setupPasswordToggles();
+
             // User menu dropdown
             const userMenuBtn = document.getElementById('userMenuBtn');
             const userMenuDropdown = document.getElementById('userMenuDropdown');
@@ -2873,14 +2891,12 @@
                 const params = new URLSearchParams(window.location.search);
                 const path = window.location.pathname;
 
-                // Password reset links use /reset-password?token=...
-                if (path === '/reset-password') {
-                    const resetToken = params.get('token');
-                    if (resetToken) {
-                        showResetPassword(resetToken);
-                        window.history.replaceState({}, '', '/');
-                        return;
-                    }
+                // Password reset links use /?reset_token=...
+                const resetToken = params.get('reset_token');
+                if (resetToken) {
+                    showResetPassword(resetToken);
+                    window.history.replaceState({}, '', '/');
+                    return;
                 }
 
                 const verifyToken = params.get('verify_token') || params.get('token');
