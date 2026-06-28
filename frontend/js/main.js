@@ -21,6 +21,7 @@
         let currentUser = null;
         let currentAuthTab = 'standard';
         let currentStandardMode = 'signup';
+        let currentAuthSubview = 'form'; // 'form' | 'forgot' | 'reset'
 
         function getToken() {
             return localStorage.getItem(TOKEN_KEY) || '';
@@ -392,7 +393,9 @@
         function showAuthView(tab = 'standard', mode = 'signup') {
             currentAuthTab = tab;
             currentStandardMode = mode;
+            currentAuthSubview = 'form';
             updateAuthUI();
+            setAuthSubview('form');
             const authView = document.getElementById('authView');
             if (authView) authView.classList.remove('hidden');
             const verifyView = document.getElementById('verifyView');
@@ -468,6 +471,45 @@
             if (passwordInput) passwordInput.setAttribute('autocomplete', isLogin ? 'current-password' : 'new-password');
             if (toggleText) toggleText.textContent = isLogin ? "Don't have an account?" : 'Already have an account?';
             if (toggleBtn) toggleBtn.textContent = isLogin ? 'Create Free Account' : 'Sign in';
+        }
+
+        function setAuthSubview(subview) {
+            currentAuthSubview = subview;
+            const standardForm = document.getElementById('standardAuthForm');
+            const forgotForm = document.getElementById('forgotPasswordForm');
+            const resetForm = document.getElementById('resetPasswordForm');
+            const byokForm = document.getElementById('byokAuthForm');
+            const authTabs = document.getElementById('authTabStandard')?.parentElement;
+
+            if (standardForm) standardForm.classList.toggle('hidden', subview !== 'form' || currentAuthTab !== 'standard');
+            if (forgotForm) forgotForm.classList.toggle('hidden', subview !== 'forgot');
+            if (resetForm) resetForm.classList.toggle('hidden', subview !== 'reset');
+            if (byokForm) byokForm.classList.toggle('hidden', subview !== 'form' || currentAuthTab !== 'byok');
+            if (authTabs) authTabs.classList.toggle('hidden', subview !== 'form');
+
+            const authError = document.getElementById('authError');
+            const forgotError = document.getElementById('forgotPasswordError');
+            const forgotSuccess = document.getElementById('forgotPasswordSuccess');
+            const resetError = document.getElementById('resetPasswordError');
+            const resetSuccess = document.getElementById('resetPasswordSuccess');
+            if (authError) authError.classList.add('hidden');
+            if (forgotError) forgotError.classList.add('hidden');
+            if (forgotSuccess) forgotSuccess.classList.add('hidden');
+            if (resetError) resetError.classList.add('hidden');
+            if (resetSuccess) resetSuccess.classList.add('hidden');
+        }
+
+        function showForgotPassword() {
+            setAuthSubview('forgot');
+        }
+
+        function showResetPassword(token) {
+            setAuthSubview('reset');
+            const authView = document.getElementById('authView');
+            if (authView) authView.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            const resetForm = document.getElementById('resetPasswordForm');
+            if (resetForm) resetForm.dataset.token = token || '';
         }
 
         function updateUserDisplay() {
@@ -561,6 +603,352 @@
             if (widget) widget.classList.add('hidden');
             showAuthView('standard', 'signup');
             log('Logged out', 'info');
+        }
+
+        // ------------------------------------------------------------------
+        // Profile / Settings
+        // ------------------------------------------------------------------
+        let profileUsageSkip = 0;
+        const profileUsageLimit = 10;
+        let profileUsageTotal = 0;
+
+        function toggleUserMenu(show) {
+            const dropdown = document.getElementById('userMenuDropdown');
+            if (!dropdown) return;
+            dropdown.classList.toggle('hidden', !show);
+        }
+
+        function openProfileModal() {
+            const modal = document.getElementById('profileModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            loadProfile();
+            loadProfileQuota();
+            profileUsageSkip = 0;
+            loadProfileUsage();
+        }
+
+        function closeProfileModal() {
+            const modal = document.getElementById('profileModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
+        function openDeleteAccountModal() {
+            const modal = document.getElementById('deleteAccountModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeDeleteAccountModal() {
+            const modal = document.getElementById('deleteAccountModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            const form = document.getElementById('deleteAccountForm');
+            if (form) form.reset();
+        }
+
+        function formatDate(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            return isNaN(d) ? iso : d.toLocaleString();
+        }
+
+        async function loadProfile() {
+            try {
+                const response = await fetch('/api/profile/me');
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('Session expired. Please log in again.');
+                }
+                if (!response.ok) throw new Error('Failed to load profile');
+                const data = await response.json();
+
+                const emailEl = document.getElementById('profileEmail');
+                const displayNameEl = document.getElementById('profileDisplayName');
+                const createdAtEl = document.getElementById('profileCreatedAt');
+                const totalJobsEl = document.getElementById('profileTotalJobs');
+                const verificationEl = document.getElementById('profileVerificationStatus');
+                const displayNameInput = document.getElementById('profileDisplayNameInput');
+                const wantsUpdatesInput = document.getElementById('profileWantsUpdates');
+                const modeStandardInput = document.getElementById('profileModeStandard');
+                const modeByokInput = document.getElementById('profileModeByok');
+
+                if (emailEl) emailEl.textContent = data.email || '-';
+                if (displayNameEl) displayNameEl.textContent = data.display_name || '-';
+                if (createdAtEl) createdAtEl.textContent = formatDate(data.created_at);
+                if (totalJobsEl) totalJobsEl.textContent = data.total_jobs_processed ?? 0;
+                if (verificationEl) {
+                    verificationEl.textContent = data.is_email_verified ? 'Verified' : 'Unverified';
+                    verificationEl.className = `text-xs font-medium ${data.is_email_verified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`;
+                }
+                if (displayNameInput) displayNameInput.value = data.display_name || '';
+                if (wantsUpdatesInput) wantsUpdatesInput.checked = !!data.wants_updates;
+                if (modeStandardInput) modeStandardInput.checked = data.api_key_mode === 'standard';
+                if (modeByokInput) modeByokInput.checked = data.api_key_mode === 'byok';
+
+                const isByok = data.api_key_mode === 'byok';
+                const byokContainer = document.getElementById('profileByokKeyContainer');
+                if (byokContainer) byokContainer.classList.toggle('hidden', !isByok);
+
+                // BYOK users cannot use standard-only profile features.
+                const standardOnlySections = [
+                    'profilePreferencesSection',
+                    'profileApiKeyModeSection',
+                    'profileEmailSection',
+                    'profilePasswordSection',
+                    'profileSessionsSection',
+                    'profileDeleteSection'
+                ];
+                standardOnlySections.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.toggle('hidden', data.email === 'BYOK');
+                });
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function loadProfileQuota() {
+            try {
+                const response = await fetch('/api/quota');
+                if (!response.ok) throw new Error('Quota unavailable');
+                const data = await response.json();
+                const remainingEl = document.getElementById('profileQuotaRemaining');
+                const detailEl = document.getElementById('profileQuotaDetail');
+
+                if (data.is_unlimited) {
+                    if (remainingEl) remainingEl.textContent = 'Unlimited';
+                    if (detailEl) detailEl.textContent = 'You are using your own OpenAI API key.';
+                } else {
+                    if (remainingEl) remainingEl.textContent = `${data.minutes_remaining ?? 0} min`;
+                    if (detailEl) detailEl.textContent = `Used ${data.minutes_used ?? 0} of ${data.trial_minutes ?? 30} trial minutes.`;
+                }
+            } catch (err) {
+                console.error('Failed to load profile quota:', err);
+            }
+        }
+
+        function renderProfileUsage(data) {
+            const tbody = document.getElementById('profileUsageTable');
+            const pagination = document.getElementById('profileUsagePagination');
+            const prevBtn = document.getElementById('profileUsagePrev');
+            const nextBtn = document.getElementById('profileUsageNext');
+            const pageInfo = document.getElementById('profileUsagePageInfo');
+            if (!tbody) return;
+
+            profileUsageTotal = data.total ?? 0;
+
+            if (!data.items || !data.items.length) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-3 py-4 text-center text-slate-400 dark:text-[#6B7280]">No usage history yet.</td></tr>`;
+                if (pagination) pagination.classList.add('hidden');
+                return;
+            }
+
+            tbody.innerHTML = data.items.map(item => `
+                <tr class="hover:bg-slate-50 dark:hover:bg-[#121214] transition-colors">
+                    <td class="px-3 py-2 text-slate-700 dark:text-[#E2E2E8]">${formatDate(item.created_at)}</td>
+                    <td class="px-3 py-2 text-slate-700 dark:text-[#E2E2E8] max-w-[200px] truncate" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</td>
+                    <td class="px-3 py-2 text-slate-700 dark:text-[#E2E2E8]">${item.minutes_used ?? 0}</td>
+                    <td class="px-3 py-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-[#2A2A30] text-slate-700 dark:text-[#E2E2E8]">${escapeHtml(item.status)}</span>
+                    </td>
+                </tr>
+            `).join('');
+
+            if (pagination) pagination.classList.remove('hidden');
+            if (pageInfo) pageInfo.textContent = `${profileUsageSkip + 1}-${Math.min(profileUsageSkip + data.items.length, profileUsageTotal)} of ${profileUsageTotal}`;
+            if (prevBtn) prevBtn.disabled = profileUsageSkip === 0;
+            if (nextBtn) nextBtn.disabled = profileUsageSkip + data.items.length >= profileUsageTotal;
+        }
+
+        async function loadProfileUsage() {
+            try {
+                const response = await fetch(`/api/profile/usage?skip=${profileUsageSkip}&limit=${profileUsageLimit}`);
+                if (!response.ok) throw new Error('Failed to load usage history');
+                const data = await response.json();
+                renderProfileUsage(data);
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function savePreferences(event) {
+            event.preventDefault();
+            const displayNameInput = document.getElementById('profileDisplayNameInput');
+            const wantsUpdatesInput = document.getElementById('profileWantsUpdates');
+            const body = {
+                display_name: displayNameInput ? displayNameInput.value.trim() : null,
+                wants_updates: wantsUpdatesInput ? wantsUpdatesInput.checked : null
+            };
+
+            try {
+                const response = await fetch('/api/profile/preferences', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to save preferences');
+                }
+                showToast('Preferences saved.', 'success');
+                loadProfile();
+                if (currentUser) {
+                    currentUser.display_name = body.display_name;
+                    currentUser.wants_updates = body.wants_updates;
+                }
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function saveApiKeyMode(event) {
+            event.preventDefault();
+            const standardRadio = document.getElementById('profileModeStandard');
+            const byokKeyInput = document.getElementById('profileByokKeyInput');
+            const mode = standardRadio && standardRadio.checked ? 'standard' : 'byok';
+            const body = { mode };
+            if (mode === 'byok' && byokKeyInput) {
+                body.api_key = byokKeyInput.value.trim();
+            }
+
+            try {
+                const response = await fetch('/api/profile/api-key-mode', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to update API key mode');
+                }
+                showToast('API key mode updated.', 'success');
+                loadProfile();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function updateEmail(event) {
+            event.preventDefault();
+            const newEmailInput = document.getElementById('profileNewEmail');
+            const passwordInput = document.getElementById('profileEmailPassword');
+            const body = {
+                new_email: newEmailInput ? newEmailInput.value.trim() : '',
+                password: passwordInput ? passwordInput.value : ''
+            };
+
+            try {
+                const response = await fetch('/api/profile/email', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to update email');
+                }
+                showToast('Email updated. Please verify your new address.', 'success');
+                document.getElementById('profileEmailForm')?.reset();
+                loadProfile();
+                if (currentUser && newEmailInput) currentUser.email = newEmailInput.value.trim();
+                updateUserDisplay();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function changePassword(event) {
+            event.preventDefault();
+            const currentInput = document.getElementById('profileCurrentPassword');
+            const newInput = document.getElementById('profileNewPassword');
+            const confirmInput = document.getElementById('profileConfirmPassword');
+
+            if (newInput.value !== confirmInput.value) {
+                showToast('New passwords do not match.', 'error');
+                return;
+            }
+
+            const body = {
+                current_password: currentInput.value,
+                new_password: newInput.value,
+                confirm_password: confirmInput.value
+            };
+
+            try {
+                const response = await fetch('/api/profile/password', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to change password');
+                }
+                showToast('Password changed successfully.', 'success');
+                document.getElementById('profilePasswordForm')?.reset();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function logoutAllSessions() {
+            if (!confirm('Log out all other sessions? Your current session will remain active.')) return;
+            try {
+                const response = await fetch('/api/profile/sessions', { method: 'DELETE' });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to log out sessions');
+                }
+                showToast('All other sessions have been logged out.', 'success');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deleteAccount(event) {
+            event.preventDefault();
+            const confirmInput = document.getElementById('deleteAccountConfirm');
+            const passwordInput = document.getElementById('deleteAccountPassword');
+
+            if (confirmInput.value !== 'DELETE') {
+                showToast('Please type DELETE to confirm.', 'error');
+                return;
+            }
+
+            const body = {
+                password: passwordInput.value,
+                confirmation: confirmInput.value
+            };
+
+            try {
+                const response = await fetch('/api/profile/account', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to delete account');
+                }
+                showToast('Your account has been deleted.', 'info');
+                closeDeleteAccountModal();
+                closeProfileModal();
+                clearToken();
+                clearApiKey();
+                clearStoredEmail();
+                currentUser = null;
+                updateUserDisplay();
+                showAuthView('standard', 'signup');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
         }
 
         async function handleStandardAuthSubmit(event) {
@@ -689,6 +1077,115 @@
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Start Using TermSub';
+                }
+            }
+        }
+
+        async function handleForgotPasswordSubmit(event) {
+            event.preventDefault();
+            const emailInput = document.getElementById('forgotPasswordEmail');
+            const errorEl = document.getElementById('forgotPasswordError');
+            const successEl = document.getElementById('forgotPasswordSuccess');
+            const submitBtn = document.getElementById('forgotPasswordSubmitBtn');
+
+            const email = emailInput.value.trim();
+            if (errorEl) errorEl.classList.add('hidden');
+            if (successEl) successEl.classList.add('hidden');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Sending...';
+            }
+
+            try {
+                const response = await fetch('/api/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to send reset email');
+                }
+                if (successEl) {
+                    successEl.textContent = 'If an account exists, a reset link has been sent.';
+                    successEl.classList.remove('hidden');
+                }
+                emailInput.value = '';
+            } catch (err) {
+                if (errorEl) {
+                    errorEl.textContent = err.message;
+                    errorEl.classList.remove('hidden');
+                }
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Send reset link';
+                }
+            }
+        }
+
+        async function handleResetPasswordSubmit(event) {
+            event.preventDefault();
+            const resetForm = document.getElementById('resetPasswordForm');
+            const passwordInput = document.getElementById('resetPasswordInput');
+            const confirmInput = document.getElementById('resetPasswordConfirm');
+            const errorEl = document.getElementById('resetPasswordError');
+            const successEl = document.getElementById('resetPasswordSuccess');
+            const submitBtn = document.getElementById('resetPasswordSubmitBtn');
+
+            const token = resetForm ? resetForm.dataset.token : '';
+            const newPassword = passwordInput.value;
+            const confirmPassword = confirmInput.value;
+
+            if (errorEl) errorEl.classList.add('hidden');
+            if (successEl) successEl.classList.add('hidden');
+
+            if (newPassword !== confirmPassword) {
+                if (errorEl) {
+                    errorEl.textContent = 'Passwords do not match.';
+                    errorEl.classList.remove('hidden');
+                }
+                return;
+            }
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Resetting...';
+            }
+
+            try {
+                const response = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token,
+                        new_password: newPassword,
+                        confirm_password: confirmPassword
+                    })
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to reset password');
+                }
+                if (successEl) {
+                    successEl.textContent = 'Password reset successfully. You can now sign in.';
+                    successEl.classList.remove('hidden');
+                }
+                passwordInput.value = '';
+                confirmInput.value = '';
+                setTimeout(() => {
+                    setAuthSubview('form');
+                    setStandardMode('login');
+                }, 2000);
+            } catch (err) {
+                if (errorEl) {
+                    errorEl.textContent = err.message;
+                    errorEl.classList.remove('hidden');
+                }
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Reset password';
                 }
             }
         }
@@ -2241,6 +2738,101 @@
             if (authCloseBtn) authCloseBtn.addEventListener('click', showMainApp);
             if (logoutBtn) logoutBtn.addEventListener('click', logout);
 
+            // Forgot / reset password
+            const authForgotPasswordBtn = document.getElementById('authForgotPasswordBtn');
+            const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+            const forgotPasswordBackBtn = document.getElementById('forgotPasswordBackBtn');
+            const resetPasswordForm = document.getElementById('resetPasswordForm');
+            if (authForgotPasswordBtn) authForgotPasswordBtn.addEventListener('click', showForgotPassword);
+            if (forgotPasswordForm) forgotPasswordForm.addEventListener('submit', handleForgotPasswordSubmit);
+            if (forgotPasswordBackBtn) forgotPasswordBackBtn.addEventListener('click', () => setAuthSubview('form'));
+            if (resetPasswordForm) resetPasswordForm.addEventListener('submit', handleResetPasswordSubmit);
+
+            // User menu dropdown
+            const userMenuBtn = document.getElementById('userMenuBtn');
+            const userMenuDropdown = document.getElementById('userMenuDropdown');
+            if (userMenuBtn && userMenuDropdown) {
+                userMenuBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    userMenuDropdown.classList.toggle('hidden');
+                });
+                document.addEventListener('click', (e) => {
+                    if (!userMenuBtn.contains(e.target) && !userMenuDropdown.contains(e.target)) {
+                        userMenuDropdown.classList.add('hidden');
+                    }
+                });
+            }
+
+            // Profile modal
+            const profileBtn = document.getElementById('profileBtn');
+            const profileModal = document.getElementById('profileModal');
+            const profileModalClose = document.getElementById('profileModalClose');
+            if (profileBtn) profileBtn.addEventListener('click', openProfileModal);
+            if (profileModalClose) profileModalClose.addEventListener('click', closeProfileModal);
+            if (profileModal) {
+                profileModal.addEventListener('click', (e) => {
+                    if (e.target === profileModal) closeProfileModal();
+                });
+            }
+
+            // Profile forms
+            const profilePreferencesForm = document.getElementById('profileSavePreferencesBtn');
+            if (profilePreferencesForm) profilePreferencesForm.addEventListener('click', savePreferences);
+            const profileSaveApiModeBtn = document.getElementById('profileSaveApiModeBtn');
+            if (profileSaveApiModeBtn) profileSaveApiModeBtn.addEventListener('click', saveApiKeyMode);
+            const profileEmailForm = document.getElementById('profileEmailForm');
+            if (profileEmailForm) profileEmailForm.addEventListener('submit', updateEmail);
+            const profilePasswordForm = document.getElementById('profilePasswordForm');
+            if (profilePasswordForm) profilePasswordForm.addEventListener('submit', changePassword);
+            const profileLogoutAllBtn = document.getElementById('profileLogoutAllBtn');
+            if (profileLogoutAllBtn) profileLogoutAllBtn.addEventListener('click', logoutAllSessions);
+            const profileDeleteAccountBtn = document.getElementById('profileDeleteAccountBtn');
+            if (profileDeleteAccountBtn) profileDeleteAccountBtn.addEventListener('click', openDeleteAccountModal);
+
+            // API mode toggle shows/hides key input
+            const profileModeStandard = document.getElementById('profileModeStandard');
+            const profileModeByok = document.getElementById('profileModeByok');
+            const profileByokKeyContainer = document.getElementById('profileByokKeyContainer');
+            function updateByokKeyVisibility() {
+                if (profileByokKeyContainer) {
+                    profileByokKeyContainer.classList.toggle('hidden', !(profileModeByok && profileModeByok.checked));
+                }
+            }
+            if (profileModeStandard) profileModeStandard.addEventListener('change', updateByokKeyVisibility);
+            if (profileModeByok) profileModeByok.addEventListener('change', updateByokKeyVisibility);
+
+            // Delete account modal
+            const deleteAccountModal = document.getElementById('deleteAccountModal');
+            const deleteAccountCancel = document.getElementById('deleteAccountCancel');
+            const deleteAccountForm = document.getElementById('deleteAccountForm');
+            if (deleteAccountCancel) deleteAccountCancel.addEventListener('click', closeDeleteAccountModal);
+            if (deleteAccountForm) deleteAccountForm.addEventListener('submit', deleteAccount);
+            if (deleteAccountModal) {
+                deleteAccountModal.addEventListener('click', (e) => {
+                    if (e.target === deleteAccountModal) closeDeleteAccountModal();
+                });
+            }
+
+            // Usage pagination
+            const profileUsagePrev = document.getElementById('profileUsagePrev');
+            const profileUsageNext = document.getElementById('profileUsageNext');
+            if (profileUsagePrev) {
+                profileUsagePrev.addEventListener('click', () => {
+                    if (profileUsageSkip > 0) {
+                        profileUsageSkip -= profileUsageLimit;
+                        loadProfileUsage();
+                    }
+                });
+            }
+            if (profileUsageNext) {
+                profileUsageNext.addEventListener('click', () => {
+                    if (profileUsageSkip + profileUsageLimit < profileUsageTotal) {
+                        profileUsageSkip += profileUsageLimit;
+                        loadProfileUsage();
+                    }
+                });
+            }
+
             const loginBtn = document.getElementById('loginBtn');
             if (loginBtn) loginBtn.addEventListener('click', () => {
                 showAuthView('standard', 'signup');
@@ -2261,7 +2853,16 @@
 
             // Close modal with Escape key.
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && authView && !authView.classList.contains('hidden')) {
+                if (e.key !== 'Escape') return;
+                if (deleteAccountModal && !deleteAccountModal.classList.contains('hidden')) {
+                    closeDeleteAccountModal();
+                    return;
+                }
+                if (profileModal && !profileModal.classList.contains('hidden')) {
+                    closeProfileModal();
+                    return;
+                }
+                if (authView && !authView.classList.contains('hidden')) {
                     showMainApp();
                 }
             });
@@ -2270,6 +2871,18 @@
             // Supports both legacy ?token= and welcome-email ?verify_token= params.
             (async () => {
                 const params = new URLSearchParams(window.location.search);
+                const path = window.location.pathname;
+
+                // Password reset links use /reset-password?token=...
+                if (path === '/reset-password') {
+                    const resetToken = params.get('token');
+                    if (resetToken) {
+                        showResetPassword(resetToken);
+                        window.history.replaceState({}, '', '/');
+                        return;
+                    }
+                }
+
                 const verifyToken = params.get('verify_token') || params.get('token');
                 if (verifyToken) {
                     try {

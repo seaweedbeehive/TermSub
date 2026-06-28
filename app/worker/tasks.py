@@ -25,6 +25,7 @@ from app.core.redis_pubsub import publish_progress
 from app.core.task_tracker import update_task_status
 from app.db.session_utils import get_db_session
 from app.models.job_queue import JobStatus
+from app.models.user import User
 from app.models.video import Segment, Video, VideoStatus
 from app.services.whisper_service import transcribe_video
 
@@ -188,6 +189,13 @@ def transcribe_video_task(
                     quota.record_actual_minutes(
                         user_id, estimated_minutes, actual_minutes
                     )
+                    with get_db_session() as db:
+                        user = db.query(User).filter(User.id == user_id).first()
+                        if user:
+                            quota_status = quota.get_quota_status(user_id)
+                            user.total_minutes_used = max(
+                                0, int(round(quota_status["minutes_used"]))
+                            )
             except Exception as exc:
                 logger.warning(
                     f"[Task] Failed to record actual minutes for {video_id}: {exc}"

@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -44,6 +45,21 @@ class User(Base):
     )
     api_key_mode: Mapped[str] = mapped_column(
         String(50), nullable=False, default="standard"
+    )
+    display_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, default=None
+    )
+    total_minutes_used: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    sessions_invalidated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, default=None
+    )
+    password_reset_token: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True
+    )
+    password_reset_token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

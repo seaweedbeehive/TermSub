@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import admin, auth, export, progress, quota, terms, videos
+from app.api import admin, auth, export, profile, progress, quota, terms, videos
 from app.core.analytics import log_page_view
 from app.core.auth import RequestIdentity, decode_access_token
 from app.core.config import settings
@@ -290,6 +290,7 @@ app.add_middleware(AnalyticsMiddleware)
 app.include_router(auth.router, prefix="/api")
 app.include_router(quota.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(profile.router, prefix="/api")
 app.include_router(videos.router)
 app.include_router(terms.router)
 app.include_router(export.router)
@@ -317,6 +318,12 @@ async def root() -> FileResponse:
 @app.get("/admin/{path:path}")
 async def admin_page(path: str | None = None) -> FileResponse:
     """Admin dashboard frontend route - serve the SPA for /admin deep links."""
+    return FileResponse(str(_FRONTEND_DIR / "index.html"))
+
+
+@app.get("/reset-password")
+async def reset_password_page() -> FileResponse:
+    """Password reset frontend route - serve the SPA for reset-password deep links."""
     return FileResponse(str(_FRONTEND_DIR / "index.html"))
 
 

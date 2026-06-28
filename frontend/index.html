@@ -59,7 +59,10 @@
                         class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
                 </div>
                 <div>
-                    <label for="authPassword" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Password</label>
+                    <div class="flex items-center justify-between mb-1">
+                        <label for="authPassword" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8]">Password</label>
+                        <button id="authForgotPasswordBtn" type="button" class="text-[10px] text-blue-600 dark:text-[#00F0FF] hover:underline font-medium bg-transparent border-none p-0">Forgot password?</button>
+                    </div>
                     <input type="password" id="authPassword" required minlength="8" autocomplete="current-password" placeholder="••••••••"
                         class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
                 </div>
@@ -75,6 +78,44 @@
                     <span id="authModeToggleText">Already have an account?</span>
                     <button id="authModeToggleBtn" type="button" class="ml-1 text-blue-600 dark:text-[#00F0FF] hover:underline font-medium bg-transparent border-none p-0">Sign in</button>
                 </p>
+            </form>
+
+            <!-- Forgot Password form -->
+            <form id="forgotPasswordForm" class="hidden space-y-4">
+                <p class="text-sm text-slate-600 dark:text-[#8A8F98]">Enter your email and we'll send you a link to reset your password.</p>
+                <div>
+                    <label for="forgotPasswordEmail" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Email</label>
+                    <input type="email" id="forgotPasswordEmail" required autocomplete="email" placeholder="you@example.com"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                </div>
+                <div id="forgotPasswordError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
+                <div id="forgotPasswordSuccess" class="hidden text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded border border-emerald-200 dark:border-emerald-800"></div>
+                <button type="submit" id="forgotPasswordSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                    Send reset link
+                </button>
+                <p class="text-center text-xs text-slate-500 dark:text-[#8A8F98]">
+                    <button id="forgotPasswordBackBtn" type="button" class="text-blue-600 dark:text-[#00F0FF] hover:underline font-medium bg-transparent border-none p-0">Back to sign in</button>
+                </p>
+            </form>
+
+            <!-- Reset Password form -->
+            <form id="resetPasswordForm" class="hidden space-y-4">
+                <p class="text-sm text-slate-600 dark:text-[#8A8F98]">Choose a new password for your account.</p>
+                <div>
+                    <label for="resetPasswordInput" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">New password</label>
+                    <input type="password" id="resetPasswordInput" required minlength="8" autocomplete="new-password" placeholder="••••••••"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                </div>
+                <div>
+                    <label for="resetPasswordConfirm" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Confirm new password</label>
+                    <input type="password" id="resetPasswordConfirm" required minlength="8" autocomplete="new-password" placeholder="••••••••"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                </div>
+                <div id="resetPasswordError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
+                <div id="resetPasswordSuccess" class="hidden text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded border border-emerald-200 dark:border-emerald-800"></div>
+                <button type="submit" id="resetPasswordSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                    Reset password
+                </button>
             </form>
 
             <!-- BYOK form -->
@@ -259,9 +300,22 @@
                                 <span id="quotaMinutesHeader" title="Audio minutes remaining in trial">- min</span>
                             </div>
                         </div>
-                        <div class="text-right">
-                            <div id="userEmail" class="text-xs font-medium text-slate-700 dark:text-[#E2E2E8] max-w-[160px] truncate">-</div>
-                            <button id="logoutBtn" type="button" class="text-[10px] text-slate-500 dark:text-[#8A8F98] hover:text-red-600 dark:hover:text-red-400 transition-colors">Log out</button>
+                        <div class="relative">
+                            <button id="userMenuBtn" type="button" class="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] px-2 py-1.5 transition-colors">
+                                <div class="w-7 h-7 rounded-full bg-blue-100 dark:bg-[#1A1A1E] flex items-center justify-center">
+                                    <i class="fa-solid fa-user text-xs text-slate-600 dark:text-[#8A8F98]"></i>
+                                </div>
+                                <div id="userEmail" class="text-xs font-medium text-slate-700 dark:text-[#E2E2E8] max-w-[140px] truncate">-</div>
+                                <i class="fa-solid fa-chevron-down text-[10px] text-slate-500 dark:text-[#8A8F98]"></i>
+                            </button>
+                            <div id="userMenuDropdown" class="hidden absolute right-0 mt-2 w-44 bg-white dark:bg-[#1A1A1E] border border-slate-200 dark:border-[#2A2A30] rounded-lg shadow-xl py-1 z-[9995]">
+                                <button id="profileBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-[#E2E2E8] hover:bg-slate-50 dark:hover:bg-[#121214] transition-colors">
+                                    <i class="fa-solid fa-id-card w-5 text-slate-400 dark:text-[#6B7280]"></i> Profile
+                                </button>
+                                <button id="logoutBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-[#E2E2E8] hover:bg-slate-50 dark:hover:bg-[#121214] transition-colors">
+                                    <i class="fa-solid fa-arrow-right-from-bracket w-5 text-slate-400 dark:text-[#6B7280]"></i> Log out
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <button id="loginBtn" type="button" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">
@@ -530,6 +584,194 @@
                 <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Review &amp; refine</strong> – edit extracted terms for consistency, then tweak subtitles in the timeline (edit text, split/add/remove segments, or use Find &amp; Replace).</li>
                 <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Export</strong> – download SRT, VTT, TXT, or JSON files when you are done.</li>
             </ul>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="hidden fixed inset-0 z-[9997] flex items-center justify-center bg-black/60 backdrop-blur-sm" aria-hidden="true">
+        <div class="bg-white dark:bg-[#1A1A1E] border border-slate-200 dark:border-[#2A2A30] rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col relative">
+            <div class="p-6 border-b border-slate-200 dark:border-[#2A2A30] flex items-center justify-between shrink-0">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-[#E2E2E8]">Profile & Settings</h3>
+                <button id="profileModalClose" type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-[#E2E2E8] transition-colors" aria-label="Close modal">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div id="profileContent" class="overflow-y-auto p-6 space-y-8">
+                <!-- Account Overview -->
+                <div>
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">Account</h4>
+                    <div class="bg-slate-50 dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-[#2A2A30] p-4 space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-xs text-slate-500 dark:text-[#8A8F98]">Email</span>
+                            <span id="profileEmail" class="text-xs font-medium text-slate-900 dark:text-[#E2E2E8]">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-xs text-slate-500 dark:text-[#8A8F98]">Display name</span>
+                            <span id="profileDisplayName" class="text-xs font-medium text-slate-900 dark:text-[#E2E2E8]">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-xs text-slate-500 dark:text-[#8A8F98]">Member since</span>
+                            <span id="profileCreatedAt" class="text-xs font-medium text-slate-900 dark:text-[#E2E2E8]">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-xs text-slate-500 dark:text-[#8A8F98]">Total jobs</span>
+                            <span id="profileTotalJobs" class="text-xs font-medium text-slate-900 dark:text-[#E2E2E8]">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-xs text-slate-500 dark:text-[#8A8F98]">Verification status</span>
+                            <span id="profileVerificationStatus" class="text-xs font-medium text-slate-900 dark:text-[#E2E2E8]">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quota -->
+                <div id="profileQuotaSection">
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">Quota</h4>
+                    <div class="bg-slate-50 dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-[#2A2A30] p-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-slate-600 dark:text-[#8A8F98]">Audio minutes remaining</span>
+                            <span id="profileQuotaRemaining" class="text-lg font-semibold text-slate-900 dark:text-[#E2E2E8]">-</span>
+                        </div>
+                        <p id="profileQuotaDetail" class="text-xs text-slate-500 dark:text-[#8A8F98] mt-1">-</p>
+                    </div>
+                </div>
+
+                <!-- Usage History -->
+                <div>
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">Usage History</h4>
+                    <div class="overflow-hidden rounded-lg border border-slate-200 dark:border-[#2A2A30]">
+                        <table class="w-full text-xs">
+                            <thead class="bg-slate-50 dark:bg-[#121214]">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-medium text-slate-500 dark:text-[#8A8F98]">Date</th>
+                                    <th class="px-3 py-2 text-left font-medium text-slate-500 dark:text-[#8A8F98]">File</th>
+                                    <th class="px-3 py-2 text-left font-medium text-slate-500 dark:text-[#8A8F98]">Minutes</th>
+                                    <th class="px-3 py-2 text-left font-medium text-slate-500 dark:text-[#8A8F98]">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="profileUsageTable" class="divide-y divide-slate-200 dark:divide-[#2A2A30]">
+                                <tr>
+                                    <td colspan="4" class="px-3 py-4 text-center text-slate-400 dark:text-[#6B7280]">No usage history yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="profileUsagePagination" class="hidden flex items-center justify-between mt-2">
+                        <button id="profileUsagePrev" type="button" class="text-xs text-slate-600 dark:text-[#8A8F98] hover:text-slate-900 dark:hover:text-[#E2E2E8] disabled:opacity-50">Previous</button>
+                        <span id="profileUsagePageInfo" class="text-xs text-slate-500 dark:text-[#8A8F98]">-</span>
+                        <button id="profileUsageNext" type="button" class="text-xs text-slate-600 dark:text-[#8A8F98] hover:text-slate-900 dark:hover:text-[#E2E2E8] disabled:opacity-50">Next</button>
+                    </div>
+                </div>
+
+                <!-- Preferences -->
+                <div id="profilePreferencesSection">
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">Preferences</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Display name</label>
+                            <input type="text" id="profileDisplayNameInput" maxlength="255" placeholder="Your name" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        </div>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="profileWantsUpdates" class="w-4 h-4 rounded border-slate-300 dark:border-[#2A2A30] text-blue-600 dark:text-[#00F0FF] focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
+                            <span class="text-sm text-slate-700 dark:text-[#E2E2E8]">Send me product updates and tips</span>
+                        </label>
+                        <button id="profileSavePreferencesBtn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Save preferences</button>
+                    </div>
+                </div>
+
+                <!-- API Key Mode -->
+                <div id="profileApiKeyModeSection">
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">API Key Mode</h4>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="apiKeyMode" value="standard" id="profileModeStandard" class="w-4 h-4 border-slate-300 dark:border-[#2A2A30] text-blue-600 dark:text-[#00F0FF] focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
+                                <span class="text-sm text-slate-700 dark:text-[#E2E2E8]">Standard (trial minutes)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="apiKeyMode" value="byok" id="profileModeByok" class="w-4 h-4 border-slate-300 dark:border-[#2A2A30] text-blue-600 dark:text-[#00F0FF] focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
+                                <span class="text-sm text-slate-700 dark:text-[#E2E2E8]">BYOK (my OpenAI key)</span>
+                            </label>
+                        </div>
+                        <div id="profileByokKeyContainer" class="hidden">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">OpenAI API key</label>
+                            <input type="password" id="profileByokKeyInput" placeholder="sk-..." class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            <p class="text-xs text-slate-500 dark:text-[#8A8F98] mt-1">Your key is validated by OpenAI but never stored on our servers.</p>
+                        </div>
+                        <button id="profileSaveApiModeBtn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Update mode</button>
+                    </div>
+                </div>
+
+                <!-- Email Update -->
+                <div id="profileEmailSection">
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">Update Email</h4>
+                    <form id="profileEmailForm" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">New email</label>
+                            <input type="email" id="profileNewEmail" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Current password</label>
+                            <input type="password" id="profileEmailPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        </div>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Update email</button>
+                    </form>
+                </div>
+
+                <!-- Password Change -->
+                <div id="profilePasswordSection">
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">Change Password</h4>
+                    <form id="profilePasswordForm" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Current password</label>
+                            <input type="password" id="profileCurrentPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">New password</label>
+                            <input type="password" id="profileNewPassword" required minlength="8" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Confirm new password</label>
+                            <input type="password" id="profileConfirmPassword" required minlength="8" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        </div>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Change password</button>
+                    </form>
+                </div>
+
+                <!-- Session Management -->
+                <div id="profileSessionsSection">
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">Security</h4>
+                    <button id="profileLogoutAllBtn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-white dark:bg-[#2A2A30] border border-slate-300 dark:border-[#2A2A30] text-slate-700 dark:text-[#E2E2E8] hover:bg-slate-50 dark:hover:bg-[#3A3A40] transition-colors">Log out all other sessions</button>
+                </div>
+
+                <!-- Delete Account -->
+                <div id="profileDeleteSection">
+                    <h4 class="text-sm font-semibold text-red-600 dark:text-red-400 mb-3">Danger Zone</h4>
+                    <button id="profileDeleteAccountBtn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors">Delete my account</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Account Confirmation Modal -->
+    <div id="deleteAccountModal" class="hidden fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm" aria-hidden="true">
+        <div class="bg-white dark:bg-[#1A1A1E] border border-slate-200 dark:border-[#2A2A30] rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 relative">
+            <h3 class="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">Delete Account</h3>
+            <p class="text-sm text-slate-600 dark:text-[#8A8F98] mb-4">This action cannot be undone. Type <strong>DELETE</strong> below and enter your password to confirm.</p>
+            <form id="deleteAccountForm" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Confirmation</label>
+                    <input type="text" id="deleteAccountConfirm" required placeholder="DELETE" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Password</label>
+                    <input type="password" id="deleteAccountPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" id="deleteAccountCancel" class="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-white dark:bg-[#2A2A30] border border-slate-300 dark:border-[#2A2A30] text-slate-700 dark:text-[#E2E2E8] hover:bg-slate-50 dark:hover:bg-[#3A3A40] transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors">Delete</button>
+                </div>
+            </form>
         </div>
     </div>
 

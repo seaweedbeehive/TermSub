@@ -20,7 +20,11 @@ from app.core.auth import (
     verify_password,
 )
 from app.core.config import settings
-from app.core.email import send_verification_email, send_welcome_email
+from app.core.email import (
+    send_password_reset_email,
+    send_verification_email,
+    send_welcome_email,
+)
 from app.core.rate_limit import rate_limit
 from app.core.redis_pubsub import get_sync_redis_client
 from app.db.session import SessionLocal, get_db
@@ -31,8 +35,10 @@ logger = logging.getLogger(__name__)
 from app.schemas.auth import (
     BYOKStartRequest,
     BYOKStartResponse,
+    ForgotPasswordRequest,
     NewsletterSubscriberOut,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserLoginRequest,
     UserResponse,
@@ -216,6 +222,68 @@ def resend_verification(
         logger.warning("Failed to set resend cooldown for %s: %s", email, exc)
 
     return {"message": "If an unverified account exists, a verification email has been sent."}
+
+
+@router.post("/forgot-password")
+@rate_limit("forgot-password", limit=3, window=3600, identifier="ip")
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """Request a password reset email.
+
+    Always returns the same message to avoid disclosing whether an email
+    address is registered.
+    """
+    email = payload.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+
+    if user:
+        reset_token = generate_verification_token()
+        user.password_reset_token = reset_token
+        user.password_reset_token_expires_at = datetime.utcnow() + timedelta(hours=24)
+        db.commit()
+
+        threading.Thread(
+            target=send_password_reset_email,
+            args=(user.email, reset_token),
+            daemon=True,
+        ).start()
+
+    return {"message": "If an account exists, a password reset email has been sent."}
+
+
+@router.post("/reset-password")
+def reset_password(
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """Reset the user's password using a valid reset token."""
+    user = (
+        db.query(User).filter(User.password_reset_token == payload.token).first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token.",
+        )
+
+    if (
+        user.password_reset_token_expires_at is None
+        or user.password_reset_token_expires_at < datetime.utcnow()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset link expired.",
+        )
+
+    user.password_hash = hash_password(payload.new_password)
+    user.password_reset_token = None
+    user.password_reset_token_expires_at = None
+    db.commit()
+
+    return {"message": "Password reset successfully. You can now log in."}
 
 
 @router.get("/me", response_model=UserResponse)

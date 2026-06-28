@@ -49,9 +49,11 @@ def create_access_token(user_id: str) -> str:
     Returns:
         Encoded JWT token string.
     """
-    expire = datetime.now(UTC) + timedelta(days=settings.JWT_EXPIRE_DAYS)
+    now = datetime.now(UTC)
+    expire = now + timedelta(days=settings.JWT_EXPIRE_DAYS)
     payload: dict[str, Any] = {
         "sub": user_id,
+        "iat": now,
         "exp": expire,
         "jti": str(uuid.uuid4()),
     }
@@ -145,10 +147,25 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if (
+        user.sessions_invalidated_at is not None
+        and payload.get("iat") is not None
+        and datetime.fromtimestamp(payload["iat"], tz=UTC).replace(tzinfo=None)
+        < user.sessions_invalidated_at
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been invalidated. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if not user.is_email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email not verified. Please check your inbox or request a new verification email.",
+            detail=(
+                "Email not verified. Please check your inbox or request a new "
+                "verification email."
+            ),
         )
 
     return user
@@ -186,6 +203,7 @@ class RequestIdentity:
     is_byok: bool
     api_key: str | None = None
     user: User | None = None
+    token_issued_at: datetime | None = None
 
 
 def get_current_user_or_byok(
@@ -224,16 +242,38 @@ def get_current_user_or_byok(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        if (
+            user.sessions_invalidated_at is not None
+            and payload.get("iat") is not None
+            and datetime.fromtimestamp(payload["iat"], tz=UTC).replace(tzinfo=None)
+            < user.sessions_invalidated_at
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session has been invalidated. Please log in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         if not user.is_email_verified:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Email not verified. Please check your inbox or request a new verification email.",
+                detail=(
+                    "Email not verified. Please check your inbox or request a new "
+                    "verification email."
+                ),
             )
+
+        token_issued_at = None
+        if payload.get("iat") is not None:
+            token_issued_at = datetime.fromtimestamp(
+                payload["iat"], tz=UTC
+            ).replace(tzinfo=None)
 
         return RequestIdentity(
             user_id=user.id,
             is_byok=False,
             user=user,
+            token_issued_at=token_issued_at,
         )
 
     raise HTTPException(
