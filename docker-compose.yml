@@ -6,10 +6,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount the project root to enable hot-reloading of source code
       - .:/app
     env_file:
-      # Point to the existing .env inside the application directory
       - .env
     working_dir: /app
     command: >

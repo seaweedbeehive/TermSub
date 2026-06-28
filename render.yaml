@@ -1,5 +1,4 @@
 services:
-  # FastAPI web service
   - type: web
     name: termsub-web
     runtime: docker
@@ -12,52 +11,20 @@ services:
           name: termsub-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: termsub-redis
-          property: connectionString
+        sync: false  # You'll set this manually after creating Redis
       - key: OPENAI_API_KEY
-        sync: false  # Set manually in Render dashboard
+        sync: false
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: RESEND_API_KEY
         sync: false
+      - key: RESEND_FROM_EMAIL
+        value: hello@termsub.eedbee.app
       - key: FRONTEND_BASE_URL
-        value: https://termsub.onrender.com
-
-  # Celery worker — same Dockerfile, different command
-  - type: worker
-    name: termsub-worker
-    runtime: docker
-    repo: https://github.com/seaweedbeehive/TermSub
-    plan: free
-    dockerfilePath: Dockerfile
-    dockerCommand: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: termsub-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: termsub-redis
-          property: connectionString
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: JWT_SECRET_KEY
-        fromService:
-          type: web
-          name: termsub-web
-          envVarKey: JWT_SECRET_KEY
+        value: https://termsub.eedbee.app
 
 databases:
   - name: termsub-db
     plan: free
     databaseName: termsub
     postgresMajorVersion: "15"
-
-redis:
-  - name: termsub-redis
-    plan: free
-    maxmemoryPolicy: noeviction
