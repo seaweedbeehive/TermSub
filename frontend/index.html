@@ -313,9 +313,20 @@
                             </div>
                         </div>
 
-                        <button id="uploadBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
-                            <i class="fa-solid fa-upload mr-2"></i>Start
-                        </button>
+                        <div id="pipelineButtons" class="grid grid-cols-1 gap-3">
+                            <button id="translateSubtitlesBtn" data-mode="translate" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                                <i class="fa-solid fa-language mr-2"></i>Translate and Get Subtitles
+                            </button>
+                            <div class="flex items-start gap-2 px-1 -mt-1">
+                                <input type="checkbox" id="reviewTerminologyCheckbox" checked class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-[#2A2A30] text-indigo-600 focus:ring-indigo-500 dark:focus:ring-[#00F0FF]">
+                                <label for="reviewTerminologyCheckbox" class="text-xs text-slate-600 dark:text-[#8A8F98] cursor-pointer select-none">
+                                    Review terminology before getting subtitles
+                                </label>
+                            </div>
+                            <button id="originalSubtitlesBtn" data-mode="transcribe" class="w-full py-2 px-4 bg-slate-600 hover:bg-slate-700 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
+                                <i class="fa-solid fa-closed-captioning mr-2"></i>Get Subtitles in Original Language
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Post-upload compact state -->

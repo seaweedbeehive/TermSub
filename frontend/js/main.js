@@ -9,6 +9,7 @@
         let isSavingSegment = false; // Prevents concurrent blur / replace-all race conditions
         let timelineHistory = [];    // Stack of segment snapshots for undo
         let currentTimelineSegments = []; // Last rendered segment state
+        let targetPipelineMode = null; // 'transcribe' | 'terminology' | 'subtitles' | null
         const MAX_TIMELINE_HISTORY = 20;
 
         // ------------------------------------------------------------------
@@ -334,7 +335,6 @@
             terms_ready: { label: 'Terms Ready', color: 'bg-indigo-100 text-indigo-800', dotColor: 'bg-indigo-500' },
             translating: { label: 'Translating via OpenAI', color: 'bg-purple-100 text-purple-800', dotColor: 'bg-purple-500' },
             completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-800', dotColor: 'bg-emerald-500' },
-            awaiting_choice: { label: 'Awaiting Choice', color: 'bg-blue-100 text-blue-800', dotColor: 'bg-blue-500' },
             error: { label: 'Error', color: 'bg-rose-100 text-rose-800', dotColor: 'bg-rose-500' }
         };
 
@@ -1239,24 +1239,30 @@
             try {
                 const response = await fetch(`/videos/${currentVideoId}`);
                 const data = await response.json();
-                
+
+                // The backend reports "awaiting_choice" after transcription; treat it as
+                // "transcribed" everywhere the UI is refreshed from polling.
+                if (data.status === 'awaiting_choice') {
+                    data.status = 'transcribed';
+                }
+
                 // Guard: Don't update status if we have an active job and this is stale data
                 if (currentJobId && data.status === 'completed' && !loggedCompletions.has(currentJobId)) {
                     // This is likely stale data - wait for WebSocket confirmation
                     console.log('[fetchVideoStatus] Ignoring stale completion status');
                     return;
                 }
-                
+
                 updateStatus({
                     status: data.status,
                     progress_percent: data.progress_percent || 0,
                     total_segments: data.total_segments,
                     processed_segments: data.processed_segments
                 });
-                
+
                 updateButtonVisibility(data.status);
                 updateContextBrief(data);
-                if (data.status === 'completed' && data.segments) {
+                if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
                     renderSubtitleTimeline(data.segments);
                 }
             } catch (err) {
@@ -1374,7 +1380,13 @@
         function handleWebSocketMessage(data) {
             // Handle both direct status updates and job messages
             let status = data.status;
-            
+
+            // The backend emits "awaiting_choice" after transcription; treat it as
+            // "transcribed" so the correct pipeline UI (export or auto-advance) is shown.
+            if (status === 'awaiting_choice') {
+                status = 'transcribed';
+            }
+
             // Handle job_complete messages
             if (data.type === 'job_complete') {
                 const jobType = data.job_type || 'task';
@@ -1397,10 +1409,6 @@
                 
                 // Map job types to status and log appropriate completion message
                 if (jobType === 'transcribe') {
-                    if (!isJobRunning || !hasStartedProcessing) {
-                        console.log('[WebSocket] Ignoring stale transcribe complete');
-                        return;
-                    }
                     status = 'transcribed';
                     // Safe segment count extraction with nullish coalescing
                     const segmentCount = data.result?.total_segments ?? data.total_segments ?? 0;
@@ -1408,12 +1416,21 @@
                     log(`Transcription complete${segText}`, 'success');
                     isJobRunning = false;
                     hasStartedProcessing = false;
-                    updateButtonVisibility('transcribed');
-                } else if (jobType === 'analyze') {
-                    if (!isJobRunning || !hasStartedProcessing) {
-                        console.log('[WebSocket] Ignoring stale analyze complete');
-                        return;
+
+                    // Auto-advance through the selected pipeline
+                    if (targetPipelineMode === 'terminology') {
+                        log('Auto-advancing to terminology analysis...');
+                        updateButtonVisibility('transcribed');
+                        setTimeout(() => analyzeVideo(), 0);
+                    } else if (targetPipelineMode === 'subtitles') {
+                        log('Auto-advancing to translation...');
+                        updateButtonVisibility('transcribed');
+                        setTimeout(() => skipAndTranslate(), 0);
+                    } else {
+                        // Transcribe-only (or no mode): show export buttons
+                        updateButtonVisibility('transcribed');
                     }
+                } else if (jobType === 'analyze') {
                     status = 'terms_ready';
                     const termCount = data.result?.terms_extracted ?? data.terms_count ?? 0;
                     const termText = termCount > 0 ? `: ${termCount} terms extracted` : '';
@@ -1423,10 +1440,6 @@
                     renderTerms();
                     updateButtonVisibility('terms_ready');
                 } else if (jobType === 'translate') {
-                    if (!isJobRunning || !hasStartedProcessing) {
-                        console.log('[WebSocket] Ignoring stale translate complete');
-                        return;
-                    }
                     status = 'completed';
                     const translatedCount = data.result?.translated_segments ?? data.translated_count ?? 0;
                     const totalCount = data.result?.total_segments ?? data.total_segments ?? 0;
@@ -1509,14 +1522,11 @@
                 case 'transcribed':
                     if (isJobRunning && hasStartedProcessing) {
                         log('Transcription complete!', 'success');
-                        isJobRunning = false;
-                        hasStartedProcessing = false;
+                        // Do NOT reset isJobRunning/hasStartedProcessing here — that is the
+                        // job_complete handler's responsibility. Resetting early causes the
+                        // job_complete message to be treated as stale and breaks auto-advance.
                     }
                     updateButtonVisibility('transcribed');
-                    break;
-                    
-                case 'awaiting_choice':
-                    updateButtonVisibility('awaiting_choice');
                     break;
                     
                 case 'analyzing':
@@ -1538,8 +1548,6 @@
                 case 'terms_ready':
                     if (isJobRunning && hasStartedProcessing) {
                         log(`Glossary complete: ${data.terms_count ?? 0} terms`, 'success');
-                        isJobRunning = false;
-                        hasStartedProcessing = false;
                     }
                     renderTerms();
                     updateButtonVisibility('terms_ready');
@@ -1552,8 +1560,6 @@
                 case 'completed':
                     if (isJobRunning && hasStartedProcessing) {
                         log('Translation complete!', 'success');
-                        isJobRunning = false;
-                        hasStartedProcessing = false;
                     }
                     renderTerms();
                     updateButtonVisibility('completed');
@@ -1578,82 +1584,82 @@
             const exportGrid = document.getElementById('primaryExportGrid');
             const exportHeader = document.getElementById('exportHeader');
             const container = document.getElementById('primaryActionContainer');
-            
+            const termsPanel = document.getElementById('termsPanel');
+            const subtitleReviewPanel = document.getElementById('subtitleReviewPanel');
+
             if (!container) return;
-            
+
             // Reset all sub-elements
-            primaryBtn?.classList.remove('hidden');
+            if (primaryBtn) {
+                primaryBtn.classList.remove('hidden');
+                primaryBtn.disabled = false;
+            }
             helperText?.classList.add('hidden');
             ghostLink?.classList.add('hidden');
             exportGrid?.classList.add('hidden');
             exportHeader?.classList.add('hidden');
-            
-            // Configure primary action based on pipeline state
+
+            // Remove any stale post-transcribe choice container
+            const oldChoices = container.querySelector('#postTranscribeChoices');
+            if (oldChoices) oldChoices.remove();
+
+            // Configure UI based on pipeline state
             switch (status) {
                 case 'uploaded':
-                    primaryBtn.textContent = currentFileType === 'text' ? 'Parse Text' : 'Transcribe Audio';
-                    primaryBtn.className = 'w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
-                    primaryBtn.onclick = processFile;
-                    break;
-                    
-                case 'transcribed':
-                    primaryBtn.textContent = 'Extract Terminology';
-                    primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
-                    primaryBtn.onclick = analyzeVideo;
-                    ghostLink?.classList.remove('hidden');
-                    break;
-                    
-                case 'awaiting_choice':
                     primaryBtn?.classList.add('hidden');
-                    ghostLink?.classList.add('hidden');
-                    helperText?.classList.add('hidden');
-                    exportGrid?.classList.add('hidden');
-                    exportHeader?.classList.add('hidden');
-                    // Show two-choice helper
-                    const choiceContainer = document.createElement('div');
-                    choiceContainer.id = 'postTranscribeChoices';
-                    choiceContainer.className = 'grid grid-cols-1 gap-2';
-                    choiceContainer.innerHTML = `
-                        <button id="btnReviewTerms" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
-                            <i class="fa-solid fa-list-check mr-2"></i>Review Terminology
-                        </button>
-                        <button id="btnSkipTranslate" class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
-                            <i class="fa-solid fa-forward mr-2"></i>Skip & Translate Directly
-                        </button>
-                    `;
-                    // Only inject once
-                    if (!container.querySelector('#postTranscribeChoices')) {
-                        container.appendChild(choiceContainer);
-                        document.getElementById('btnReviewTerms').addEventListener('click', () => {
-                            choiceContainer.remove();
-                            analyzeVideo();
-                        });
-                        document.getElementById('btnSkipTranslate').addEventListener('click', () => {
-                            choiceContainer.remove();
-                            skipAndTranslate();
-                        });
+                    break;
+
+                case 'transcribed':
+                    if (targetPipelineMode === 'terminology' || targetPipelineMode === 'subtitles') {
+                        // Auto-advancing to the next pipeline step; don't show any action
+                        // button — the WebSocket-driven status updates will update the UI.
+                        primaryBtn?.classList.add('hidden');
+                    } else {
+                        // Transcribe-only (or no mode): transcribed is the final state
+                        primaryBtn.textContent = 'Download the subtitles in original language';
+                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                        primaryBtn.onclick = downloadTranscription;
+                        exportGrid?.classList.add('hidden');
+                        exportHeader?.classList.add('hidden');
+                        if (termsPanel) termsPanel.classList.add('hidden');
+                        if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                        // Load original transcription into the timeline so the user can review it
+                        fetch(`/videos/${currentVideoId}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.segments) renderSubtitleTimeline(data.segments);
+                            })
+                            .catch(err => console.error('Failed to load transcription:', err));
                     }
                     break;
-                    
+
                 case 'terms_ready':
-                    helperText?.classList.remove('hidden');
-                    primaryBtn.textContent = 'Translate Subtitles';
-                    primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
-                    primaryBtn.onclick = translateVideo;
+                    if (targetPipelineMode === 'terminology' || !targetPipelineMode) {
+                        helperText?.classList.remove('hidden');
+                        primaryBtn.textContent = 'Translate Subtitles';
+                        primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                        primaryBtn.onclick = translateVideo;
+                        if (termsPanel) termsPanel.classList.remove('hidden');
+                        if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+                        renderTerms();
+                    } else {
+                        primaryBtn?.classList.add('hidden');
+                    }
                     break;
-                    
+
                 case 'completed':
                     primaryBtn?.classList.add('hidden');
                     exportGrid?.classList.remove('hidden');
                     exportHeader?.classList.remove('hidden');
-                    document.getElementById('termsPanel').classList.add('hidden');
-                    document.getElementById('subtitleReviewPanel').classList.remove('hidden');
+                    if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
+                    if (termsPanel) termsPanel.classList.add('hidden');
+                    if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
                     break;
-                    
+
                 default:
                     primaryBtn?.classList.add('hidden');
-                    document.getElementById('termsPanel').classList.remove('hidden');
-                    document.getElementById('subtitleReviewPanel').classList.add('hidden');
+                    if (termsPanel) termsPanel.classList.remove('hidden');
+                    if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
             }
         }
         
@@ -1708,21 +1714,30 @@
                 try {
                     const response = await fetch(`/videos/${videoId}`);
                     const data = await response.json();
+                    // Treat the backend's "awaiting_choice" progress message as "transcribed"
+                    // so the correct pipeline UI is shown even when polling.
+                    if (data.status === 'awaiting_choice') {
+                        data.status = 'transcribed';
+                    }
                     updateStatus(data);
                     updateContextBrief(data);
                     fallbackPollCount++;
-                    
+
                     if (fallbackPollCount % 5 === 0) {
                         log(`Fallback poll #${fallbackPollCount}: status=${data.status}`);
                     }
-                    
-                    if (['terms_ready', 'completed', 'error'].includes(data.status)) {
+
+                    const terminalStatuses = ['terms_ready', 'completed', 'error'];
+                    if (targetPipelineMode === 'transcribe') {
+                        terminalStatuses.push('transcribed');
+                    }
+                    if (terminalStatuses.includes(data.status)) {
                         clearInterval(fallbackPollInterval);
                         fallbackPollInterval = null;
-                        if (data.status === 'terms_ready' || data.status === 'completed') {
+                        if (['terms_ready', 'completed'].includes(data.status)) {
                             renderTerms();
                         }
-                        if (data.status === 'completed' && data.segments) {
+                        if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
                             renderSubtitleTimeline(data.segments);
                         }
                     }
@@ -1741,6 +1756,7 @@
             isJobRunning = false;
             hasStartedProcessing = false;
             loggedCompletions.clear();
+            targetPipelineMode = null;
             
             // Reset upload form
             const fileInputEl = document.getElementById('fileInput');
@@ -1796,14 +1812,51 @@
             log('New project ready. Upload a file to begin.', 'success');
         }
 
-        // Upload handler
-        async function uploadFile() {
+        // Pipeline entry point: validate inputs, set mode, upload, then auto-start processing.
+        async function startPipeline(mode) {
+            const fileInput = document.getElementById('fileInput');
+            const targetLangSelect = document.getElementById('targetLanguage');
+
             if (!isAuthenticated()) {
                 showAuthView('standard', 'signup');
                 log('Please log in, sign up, or provide an API key to upload a file.', 'warning');
                 showToast('Please log in or provide an API key to upload', 'warning');
                 return;
             }
+
+            if (!fileInput.files || !fileInput.files[0]) {
+                showToast('Please select a file first', 'warning');
+                return;
+            }
+
+            // Transcribe-only does not need a target language
+            if (mode !== 'transcribe' && (!targetLangSelect || !targetLangSelect.value)) {
+                const warningEl = document.getElementById('languageWarning');
+                if (warningEl) warningEl.classList.remove('hidden');
+                if (targetLangSelect) {
+                    targetLangSelect.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                    targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                log('Upload blocked: target language is required.', 'warning');
+                return;
+            }
+
+            targetPipelineMode = mode;
+            log(`Starting ${mode} pipeline...`);
+            await uploadFile(mode);
+        }
+
+        // Upload handler
+        async function uploadFile(mode) {
+            if (!isAuthenticated()) {
+                showAuthView('standard', 'signup');
+                log('Please log in, sign up, or provide an API key to upload a file.', 'warning');
+                showToast('Please log in or provide an API key to upload', 'warning');
+                return;
+            }
+
+            // Ensure the requested pipeline mode is recorded
+            if (mode) targetPipelineMode = mode;
 
             const fileInput = document.getElementById('fileInput');
             const targetLangSelect = document.getElementById('targetLanguage');
@@ -1813,8 +1866,8 @@
                 return;
             }
             
-            // Client-side validation: target language is required
-            if (!targetLangSelect || !targetLangSelect.value) {
+            // Client-side validation: target language is required for translation pipelines only
+            if (targetPipelineMode !== 'transcribe' && (!targetLangSelect || !targetLangSelect.value)) {
                 const warningEl = document.getElementById('languageWarning');
                 if (warningEl) warningEl.classList.remove('hidden');
                 if (targetLangSelect) {
@@ -1827,7 +1880,12 @@
 
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
-            formData.append('target_language', targetLangSelect.value);
+            // Transcribe-only does not need a real target language, but the backend
+            // requires a non-empty value. Re-use the source language as a placeholder.
+            const effectiveTargetLanguage = targetPipelineMode === 'transcribe'
+                ? (sourceLangSelect.value || 'auto')
+                : targetLangSelect.value;
+            formData.append('target_language', effectiveTargetLanguage);
             formData.append('source_language', sourceLangSelect.value);
 
             log('Uploading file...');
@@ -1868,7 +1926,11 @@
                 const targetLangSel = document.getElementById('targetLanguage');
                 const targetLang = targetLangSel ? targetLangSel.value.toUpperCase() : '';
                 const projectLangsEl = document.getElementById('projectLangs');
-                if (projectLangsEl) projectLangsEl.textContent = `${sourceLang} → ${targetLang}`;
+                if (projectLangsEl) {
+                    projectLangsEl.textContent = targetPipelineMode === 'transcribe'
+                        ? `${sourceLang} (transcribe only)`
+                        : `${sourceLang} → ${targetLang}`;
+                }
                 
                 const projectIdEl = document.getElementById('projectId');
                 if (projectIdEl) projectIdEl.textContent = currentVideoId.substring(0, 8);
@@ -1887,9 +1949,12 @@
                 if (uploadedFilenameEl) uploadedFilenameEl.textContent = data.filename || 'Untitled Project';
                 
                 log('Upload complete: ' + data.filename, 'success');
-                
+
                 updateStatus({ status: 'uploaded', progress_percent: 0 });
-                
+
+                // Auto-start transcription for every pipeline path
+                processFile();
+
             } catch (err) {
                 const errorMsg = err.message || 'Upload failed';
                 log('Upload failed: ' + errorMsg, 'error');
@@ -1899,38 +1964,39 @@
         // Process file handler (handles both video transcription and text parsing)
         async function processFile() {
             if (!currentVideoId) return;
-            
-            // Validate target language is selected
-            const targetLangSelect = document.getElementById('targetLanguage');
-            if (!targetLangSelect || !targetLangSelect.value) {
-                const warningEl = document.getElementById('languageWarning');
-                if (warningEl) warningEl.classList.remove('hidden');
-                if (targetLangSelect) {
-                    targetLangSelect.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
-                    targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Target language is only required for pipelines that translate
+            if (targetPipelineMode !== 'transcribe') {
+                const targetLangSelect = document.getElementById('targetLanguage');
+                if (!targetLangSelect || !targetLangSelect.value) {
+                    const warningEl = document.getElementById('languageWarning');
+                    if (warningEl) warningEl.classList.remove('hidden');
+                    if (targetLangSelect) {
+                        targetLangSelect.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                        targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    return;
                 }
-                return;
             }
-            
+
             // Collapse setup config panel once processing starts
             const setupPanel = document.getElementById('setupConfigPanel');
             if (setupPanel) setupPanel.classList.add('hidden');
-            
+
             // Reset state for new job
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
-            
+
             const isTextFile = currentFileType === 'text';
-            const actionName = isTextFile ? 'parsing text' : 'transcription';
-            
+
             log(isTextFile ? 'Starting text parsing...' : 'Starting OpenAI Cloud transcription...');
-            
+
             try {
                 const response = await fetch(`/videos/${currentVideoId}/transcribe?method=whisper&provider=openai`, {
                     method: 'POST'
                 });
-                
+
                 if (!response.ok) {
                     let errorMessage = isTextFile ? 'Text parsing failed' : 'Transcription failed';
                     try {
@@ -1941,23 +2007,16 @@
                     }
                     throw new Error(errorMessage);
                 }
-                
+
                 const data = await response.json();
                 if (data.job_id) {
                     currentJobId = data.job_id;
                 }
-                
-                // Update UI silently — completion will be logged via WebSocket
-                updateStatus({ status: 'transcribed', total_segments: data.total_segments ?? 0 });
-                const segCountUpload = document.getElementById('segmentCount');
-                if (segCountUpload) segCountUpload.textContent = data.total_segments ?? 0;
-                
-                // Show analyze button
-                updateButtonVisibility('transcribed');
-                
-                // Connect WebSocket for future updates
+
+                // Do not update the UI to "transcribed" here. The real completion
+                // (and the next pipeline step) is driven by WebSocket job_complete.
                 connectWebSocket(currentVideoId);
-                
+
             } catch (err) {
                 log((isTextFile ? 'Parsing' : 'Transcription') + ' failed: ' + err.message, 'error');
             }
@@ -1989,14 +2048,8 @@
                 if (data.job_id) {
                     currentJobId = data.job_id;
                 }
-                
-                // Update UI silently — completion will be logged via WebSocket
-                updateStatus({ status: 'terms_ready' });
-                updateButtonVisibility('terms_ready');
-                
-                // Render terms
-                await renderTerms();
-                
+
+                // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
                 log('Analysis failed: ' + err.message, 'error');
             }
@@ -2028,11 +2081,8 @@
                 if (data.job_id) {
                     currentJobId = data.job_id;
                 }
-                
-                // Update UI silently — completion will be logged via WebSocket
-                updateStatus({ status: 'completed' });
-                updateButtonVisibility('completed');
-                
+
+                // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
                 log('Translation failed: ' + err.message, 'error');
             }
@@ -2062,11 +2112,8 @@
                 if (data.job_id) {
                     currentJobId = data.job_id;
                 }
-                
-                // Update UI silently — completion will be logged via WebSocket
-                updateStatus({ status: 'translating' });
-                updateButtonVisibility('translating');
-                
+
+                // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
                 log('Translation failed: ' + err.message, 'error');
             }
@@ -2509,8 +2556,13 @@
                 });
             }
 
-            // Buttons
-            document.getElementById('uploadBtn').addEventListener('click', uploadFile);
+            // Pipeline buttons
+            document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
+                const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
+                const mode = reviewTerms ? 'terminology' : 'subtitles';
+                startPipeline(mode);
+            });
+            document.getElementById('originalSubtitlesBtn').addEventListener('click', () => startPipeline('transcribe'));
             document.getElementById('startNewProjectBtn').addEventListener('click', resetApp);
 
             // Undo button click
@@ -2631,6 +2683,10 @@
                 fetch(`/videos/${videoId}`)
                     .then(r => r.json())
                     .then(data => {
+                        // Treat "awaiting_choice" as "transcribed" on direct page loads too
+                        if (data.status === 'awaiting_choice') {
+                            data.status = 'transcribed';
+                        }
                         updateStatus(data);
                         updateButtonVisibility(data.status);
                         updateContextBrief(data);
@@ -2638,7 +2694,7 @@
                             const segCountLoad = document.getElementById('segmentCount');
                             if (segCountLoad) segCountLoad.textContent = data.total_segments;
                         }
-                        if (data.status === 'completed' && data.segments) {
+                        if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
                             renderSubtitleTimeline(data.segments);
                         }
                     });

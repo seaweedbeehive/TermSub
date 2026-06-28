@@ -207,7 +207,7 @@ def transcribe_video_task(
             video_id,
             {
                 "status": "awaiting_choice",
-                "message": "Transcription complete. Choose your next step.",
+                "message": "Transcription complete.",
                 "total_segments": segment_count,
             },
         )
