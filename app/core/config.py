@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     # Email (Resend)
     RESEND_API_KEY: str | None = None
     RESEND_FROM_EMAIL: str = "TermSub <noreply@termsub.app>"
+    RESEND_VERIFY_TEMPLATE_ALIAS: str = "verification"
+    RESEND_WELCOME_TEMPLATE_ALIAS: str = "welcome"
     FRONTEND_BASE_URL: str = "http://localhost:8000"
 
     class Config:

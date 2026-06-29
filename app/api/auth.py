@@ -64,14 +64,14 @@ def _record_newsletter_signup(email: str, source: str) -> None:
         logger.error("Failed to record newsletter signup for %s: %s", email, exc)
 
 
-def _send_signup_emails(email: str, token: str, wants_updates: bool) -> None:
-    """Send welcome + verification emails and opt the user into product updates.
+def _send_signup_emails(email: str, verify_url: str, wants_updates: bool) -> None:
+    """Send the verification email and opt the user into product updates.
 
     Runs in a background thread so signup stays fast and never fails because
-    of an email/network issue.
+    of an email/network issue. The welcome email is sent later, after the user
+    verifies their email address.
     """
-    send_welcome_email(email, token)
-    send_verification_email(email, token)
+    send_verification_email(email, verify_url)
     if wants_updates:
         _record_newsletter_signup(email, source="signup")
 
@@ -107,10 +107,12 @@ def signup(
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    # Fire welcome + verification emails and optional newsletter signup in the background.
+    verify_url = f"{settings.FRONTEND_BASE_URL}/?token={verification_token}"
+
+    # Fire verification email and optional newsletter signup in the background.
     threading.Thread(
         target=_send_signup_emails,
-        args=(user.email, verification_token, user.wants_updates),
+        args=(user.email, verify_url, user.wants_updates),
         daemon=True,
     ).start()
 
@@ -165,10 +167,20 @@ def verify_email(token: str, db: Session = Depends(get_db)) -> dict[str, str]:
             detail="Verification link expired",
         )
 
+    was_already_verified = user.is_email_verified
     user.is_email_verified = True
     user.email_verification_token = None
     user.email_verification_token_expires_at = None
     db.commit()
+
+    # Send the welcome email only the first time the user verifies.
+    if not was_already_verified:
+        app_url = settings.FRONTEND_BASE_URL
+        threading.Thread(
+            target=send_welcome_email,
+            args=(user.email, app_url),
+            daemon=True,
+        ).start()
 
     return {"message": "Email verified successfully. You can now use TermSub."}
 
@@ -209,9 +221,10 @@ def resend_verification(
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
+    verify_url = f"{settings.FRONTEND_BASE_URL}/?token={verification_token}"
     threading.Thread(
         target=send_verification_email,
-        args=(user.email, verification_token),
+        args=(user.email, verify_url),
         daemon=True,
     ).start()
 

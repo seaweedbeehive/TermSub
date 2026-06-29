@@ -31,7 +31,12 @@ def _send_email(
     html_body: str,
     idempotency_key: str | None = None,
 ) -> dict[str, Any] | None:
-    """Send a single email via Resend, logging any errors."""
+    """Send a single HTML email via Resend, logging any errors.
+
+    Kept as a private fallback for non-templated flows (password reset,
+    product broadcasts). New user-facing flows should use Resend templates via
+    ``send_templated_email``.
+    """
     if not settings.RESEND_API_KEY:
         logger.warning("RESEND_API_KEY not configured; skipping email to %s", to_email)
         return None
@@ -55,56 +60,52 @@ def _send_email(
         return None
 
 
-def send_welcome_email(
+def send_templated_email(
     to_email: str,
-    verification_token: str,
+    subject: str,
+    template_alias: str,
+    data_dict: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Send the post-signup welcome email with a verification link."""
-    verify_url = f"{settings.FRONTEND_BASE_URL}/?verify_token={verification_token}"
-    html = f"""
-    <html>
-      <body style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1f2937; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px;">
-        <h1 style="color: #111827; font-size: 24px; margin-bottom: 16px;">Welcome to TermSub!</h1>
-        <p>Hi there,</p>
-        <p>Thanks for signing up. You now have <strong>30 free minutes</strong> of audio translation to get started.</p>
-        <p>Upload a video or text transcript, review the extracted terminology, and export subtitles in your target language.</p>
-        <p style="margin: 32px 0;">
-          <a href="{verify_url}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Verify your email</a>
-        </p>
-        <p style="font-size: 14px; color: #6b7280;">If the button doesn't work, paste this link into your browser:<br><a href="{verify_url}" style="color: #2563eb;">{verify_url}</a></p>
-        <p style="margin-top: 32px;">Happy translating!<br>The TermSub Team</p>
-      </body>
-    </html>
-    """
-    return _send_email(
+    """Send a single templated email via Resend, logging any errors."""
+    if not settings.RESEND_API_KEY:
+        logger.warning(
+            "RESEND_API_KEY not configured; skipping templated email to %s", to_email
+        )
+        return None
+
+    try:
+        params: dict[str, Any] = {
+            "from": _from_email(),
+            "to": [to_email],
+            "subject": subject,
+            "template": template_alias,
+            "data": data_dict,
+        }
+        return resend.Emails.send(params)
+    except Exception as exc:
+        logger.error(
+            "Failed to send templated email to %s: %s", to_email, exc, exc_info=True
+        )
+        return None
+
+
+def send_verification_email(to_email: str, verify_url: str) -> dict[str, Any] | None:
+    """Send an email verification link using the configured Resend template."""
+    return send_templated_email(
         to_email,
-        "Welcome to TermSub!",
-        html,
-        idempotency_key=f"welcome/{to_email}",
+        "Verify your email for TermSub",
+        settings.RESEND_VERIFY_TEMPLATE_ALIAS,
+        {"verify_url": verify_url},
     )
 
 
-def send_verification_email(
-    to_email: str,
-    verification_token: str,
-) -> dict[str, Any] | None:
-    """Send an email verification link."""
-    verify_url = f"{settings.FRONTEND_BASE_URL}/?token={verification_token}"
-    html = f"""
-    <html>
-      <body>
-        <h1>Verify your TermSub email</h1>
-        <p>Please click the link below to verify your email address and activate your account:</p>
-        <p><a href="{verify_url}">{verify_url}</a></p>
-        <p>If you did not create a TermSub account, you can safely ignore this email.</p>
-      </body>
-    </html>
-    """
-    return _send_email(
+def send_welcome_email(to_email: str, app_url: str) -> dict[str, Any] | None:
+    """Send the post-verification welcome email using the configured Resend template."""
+    return send_templated_email(
         to_email,
-        "Verify your TermSub email",
-        html,
-        idempotency_key=f"verify/{to_email}/{verification_token[:16]}",
+        "Welcome to TermSub!",
+        settings.RESEND_WELCOME_TEMPLATE_ALIAS,
+        {"app_url": app_url},
     )
 
 

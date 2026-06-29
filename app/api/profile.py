@@ -16,6 +16,7 @@ from app.core.auth import (
     hash_password,
     verify_password,
 )
+from app.core.config import settings
 from app.core.email import send_verification_email
 from app.core.quota import QuotaManager
 from app.core.redis_pubsub import get_sync_redis_client
@@ -206,9 +207,10 @@ def update_email(
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
+    verify_url = f"{settings.FRONTEND_BASE_URL}/?token={verification_token}"
     threading.Thread(
         target=send_verification_email,
-        args=(user.email, verification_token),
+        args=(user.email, verify_url),
         daemon=True,
     ).start()
 
