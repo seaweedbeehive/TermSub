@@ -1332,16 +1332,23 @@
 
         async function renderTerms() {
             if (!currentVideoId) return;
-            
+
             try {
                 const response = await fetch(`/terms/video/${currentVideoId}`);
                 const terms = await response.json();
-                
+
                 const tbody = document.getElementById('termsTable');
-                
+                const countBadge = document.getElementById('termsCount');
+
                 if (!terms || terms.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">No terms extracted yet.</td></tr>';
+                    if (countBadge) countBadge.classList.add('hidden');
                     return;
+                }
+
+                if (countBadge) {
+                    countBadge.textContent = terms.length.toString();
+                    countBadge.classList.remove('hidden');
                 }
 
                 tbody.innerHTML = terms.map(term => {

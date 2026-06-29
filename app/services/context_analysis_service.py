@@ -27,7 +27,7 @@ CONTEXT_ANALYSIS_PROMPTS = {
 
 1. MAIN TOPIC: The central political theme (e.g., "Democratic transitions in the Middle East")
 2. SUB-TOPICS: 3-5 specific political concepts covered
-3. KEY TERMS: 10-20 political terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
+3. KEY TERMS: approximately {term_budget} political terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
    - Political systems (democracy, authoritarianism, regime types)
    - Ideologies (liberalism, conservatism, socialism, nationalism)
    - Governance concepts (civil society, public policy, sovereignty)
@@ -39,7 +39,7 @@ IMPORTANT: The original term MUST be written exactly as it appears in the transc
 
 1. MAIN TOPIC: The medical specialty or health topic (e.g., "Type 2 Diabetes Management")
 2. SUB-TOPICS: 3-5 specific medical concepts covered
-3. KEY TERMS: 10-20 medical terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
+3. KEY TERMS: approximately {term_budget} medical terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
    - Diseases and conditions
    - Medical procedures and treatments
    - Anatomy and physiology terms
@@ -51,7 +51,7 @@ IMPORTANT: The original term MUST be written exactly as it appears in the transc
 
 1. MAIN TOPIC: The psychological domain (e.g., "Cognitive Behavioral Therapy for Anxiety")
 2. SUB-TOPICS: 3-5 specific psychological concepts covered
-3. KEY TERMS: 10-20 psychology terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
+3. KEY TERMS: approximately {term_budget} psychology terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
    - Mental health disorders
    - Therapeutic approaches (CBT, psychoanalysis, etc.)
    - Cognitive concepts (perception, memory, learning)
@@ -63,7 +63,7 @@ IMPORTANT: The original term MUST be written exactly as it appears in the transc
 
 1. MAIN TOPIC: The sociological theme (e.g., "Social Stratification and Inequality")
 2. SUB-TOPICS: 3-5 specific sociological concepts covered
-3. KEY TERMS: 10-20 sociology terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
+3. KEY TERMS: approximately {term_budget} sociology terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
    - Social structures and institutions
    - Concepts of inequality and stratification
    - Social processes (socialization, urbanization)
@@ -75,7 +75,7 @@ IMPORTANT: The original term MUST be written exactly as it appears in the transc
 
 1. MAIN TOPIC: The primary subject matter
 2. SUB-TOPICS: 3-5 key themes or concepts covered
-3. KEY TERMS: 10-20 important terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
+3. KEY TERMS: approximately {term_budget} important terminology items as they appear in the SOURCE LANGUAGE of the transcript, with their STANDARD {target_language} translations:
    - Technical jargon specific to the field
    - Multi-word concepts and compound terms
    - Academic or specialized vocabulary
@@ -87,6 +87,14 @@ IMPORTANT: The original term MUST be written exactly as it appears in the transc
 - Have established {target_language} translations in the field
 - Are central to understanding the content""",  # noqa: E501
 }
+
+
+def _calculate_term_budget(segment_count: int) -> int:
+    """Calculate a dynamic term budget based on transcript length.
+
+    Short videos get ~10 terms, long films get up to 100.
+    """
+    return min(max(10, segment_count // 5), 100)
 
 
 def _get_openai_client(api_key: str | None = None) -> OpenAI:
@@ -105,14 +113,20 @@ def _get_openai_client(api_key: str | None = None) -> OpenAI:
 
 
 def build_context_analysis_prompt(
-    full_transcript: str, domain: str, target_language: str, source_language: str = ""
+    full_transcript: str,
+    domain: str,
+    target_language: str,
+    source_language: str = "",
+    term_budget: int = 15,
 ) -> str:
     """Build the context analysis prompt for Pass 1."""
 
     domain_prompt = CONTEXT_ANALYSIS_PROMPTS.get(
         domain, CONTEXT_ANALYSIS_PROMPTS[VideoDomain.GENERAL.value]
     )
-    domain_prompt = domain_prompt.format(target_language=target_language)
+    domain_prompt = domain_prompt.format(
+        target_language=target_language, term_budget=term_budget
+    )
 
     source_lang_clause = (
         f"The transcript is written in {source_language}." if source_language else ""
@@ -160,7 +174,7 @@ EXAMPLE — WRONG (English source, Farsi target):
   {{"original": "یادگیری ماشین", "target_standard": "یادگیری ماشین"}}
 
 Guidelines:
-- Extract 10-20 key terms maximum - focus on the most important
+- Extract approximately {term_budget} key terms - focus on the most important
 - For each term, provide the SINGLE best standard {target_language} translation
 - Prioritize terms that appear multiple times in the transcript
 - Include multi-word concepts (e.g., "cognitive behavioral therapy", not just "therapy")
@@ -241,8 +255,11 @@ def analyze_video_context(
     )
 
     # Build prompt
+    segment_count = len(segments)
+    term_budget = _calculate_term_budget(segment_count)
+
     prompt = build_context_analysis_prompt(
-        full_transcript, domain, target_language, source_language
+        full_transcript, domain, target_language, source_language, term_budget
     )
 
     # ========================================================================
@@ -268,7 +285,7 @@ def analyze_video_context(
             model=model_name,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_completion_tokens=4096,
+            max_completion_tokens=16384,
         )
 
         elapsed = (datetime.utcnow() - start_time).total_seconds()
@@ -524,6 +541,9 @@ def extract_glossary(
             else ""
         )
 
+        segment_count = len(segments)
+        term_budget = _calculate_term_budget(segment_count)
+
         prompt = f"""You are a Glossary Extraction Agent. Your task is to extract and standardize terminology.
 
 CONTEXT FROM PREVIOUS ANALYSIS:
@@ -537,7 +557,7 @@ FULL TRANSCRIPT:
 
 Extract a comprehensive glossary of terms:
 
-1. KEY TERMS (10-20 items): Technical terminology, jargon, and key concepts
+1. KEY TERMS (approximately {term_budget} items): Technical terminology, jargon, and key concepts
    - original: The term or concept exactly as it appears in the native source language text (do NOT translate it)
    - target_standard: The standard {target_language} translation
    - category: Technical | Proper Noun | Key Concept | Academic Term
@@ -596,7 +616,7 @@ Guidelines:
             model=model_name,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_completion_tokens=4096,
+            max_completion_tokens=16384,
         )
 
         elapsed = (datetime.utcnow() - start_time).total_seconds()

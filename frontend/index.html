@@ -488,7 +488,10 @@
             <div class="lg:col-span-2 space-y-6">
                 <!-- Terms Table -->
                 <div id="termsPanel" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
-                    <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-4">Extracted Terms</h2>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Extracted Terms</h2>
+                        <span id="termsCount" class="hidden inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">0</span>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead class="sticky top-0 bg-white dark:bg-[#1A1A1E] z-10 shadow-sm text-slate-600 dark:text-[#8A8F98]">
