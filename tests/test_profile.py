@@ -135,14 +135,13 @@ class TestUpdatePreferences:
         response = client.put(
             "/api/profile/preferences",
             headers=_headers_for(profile_user),
-            json={"wants_updates": False, "display_name": "Test User"},
+            json={"wants_updates": False},
         )
         assert response.status_code == 200
 
         response = client.get("/api/profile/me", headers=_headers_for(profile_user))
         data = response.json()
         assert data["wants_updates"] is False
-        assert data["display_name"] == "Test User"
 
 
 class TestApiKeyMode:

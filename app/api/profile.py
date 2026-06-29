@@ -102,7 +102,6 @@ def get_profile(
         return {
             "id": identity.user_id,
             "email": "BYOK",
-            "display_name": None,
             "is_email_verified": True,
             "wants_updates": False,
             "api_key_mode": "byok",
@@ -120,7 +119,6 @@ def get_profile(
     return ProfileMeResponse(
         id=user.id,
         email=user.email,
-        display_name=user.display_name,
         is_email_verified=user.is_email_verified,
         wants_updates=user.wants_updates,
         api_key_mode=user.api_key_mode,
@@ -246,13 +244,11 @@ def update_preferences(
     identity: RequestIdentity = Depends(get_current_user_or_byok),
     db: Session = Depends(get_db),
 ) -> MessageResponse:
-    """Update user preferences such as newsletter opt-in and display name."""
+    """Update user preferences such as newsletter opt-in."""
     user = _require_standard_user(identity)
 
     if payload.wants_updates is not None:
         user.wants_updates = payload.wants_updates
-    if payload.display_name is not None:
-        user.display_name = payload.display_name.strip() or None
     db.commit()
 
     return MessageResponse(message="Preferences updated successfully.")

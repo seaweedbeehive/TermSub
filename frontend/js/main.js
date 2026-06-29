@@ -685,24 +685,20 @@
                 const data = await response.json();
 
                 const emailEl = document.getElementById('profileEmail');
-                const displayNameEl = document.getElementById('profileDisplayName');
                 const createdAtEl = document.getElementById('profileCreatedAt');
                 const totalJobsEl = document.getElementById('profileTotalJobs');
                 const verificationEl = document.getElementById('profileVerificationStatus');
-                const displayNameInput = document.getElementById('profileDisplayNameInput');
                 const wantsUpdatesInput = document.getElementById('profileWantsUpdates');
                 const modeStandardInput = document.getElementById('profileModeStandard');
                 const modeByokInput = document.getElementById('profileModeByok');
 
                 if (emailEl) emailEl.textContent = data.email || '-';
-                if (displayNameEl) displayNameEl.textContent = data.display_name || '-';
                 if (createdAtEl) createdAtEl.textContent = formatDate(data.created_at);
                 if (totalJobsEl) totalJobsEl.textContent = data.total_jobs_processed ?? 0;
                 if (verificationEl) {
                     verificationEl.textContent = data.is_email_verified ? 'Verified' : 'Unverified';
                     verificationEl.className = `text-xs font-medium ${data.is_email_verified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`;
                 }
-                if (displayNameInput) displayNameInput.value = data.display_name || '';
                 if (wantsUpdatesInput) wantsUpdatesInput.checked = !!data.wants_updates;
                 if (modeStandardInput) modeStandardInput.checked = data.api_key_mode === 'standard';
                 if (modeByokInput) modeByokInput.checked = data.api_key_mode === 'byok';
@@ -796,10 +792,8 @@
 
         async function savePreferences(event) {
             event.preventDefault();
-            const displayNameInput = document.getElementById('profileDisplayNameInput');
             const wantsUpdatesInput = document.getElementById('profileWantsUpdates');
             const body = {
-                display_name: displayNameInput ? displayNameInput.value.trim() : null,
                 wants_updates: wantsUpdatesInput ? wantsUpdatesInput.checked : null
             };
 
@@ -816,7 +810,6 @@
                 showToast('Preferences saved.', 'success');
                 loadProfile();
                 if (currentUser) {
-                    currentUser.display_name = body.display_name;
                     currentUser.wants_updates = body.wants_updates;
                 }
             } catch (err) {

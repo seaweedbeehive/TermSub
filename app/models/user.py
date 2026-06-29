@@ -46,9 +46,6 @@ class User(Base):
     api_key_mode: Mapped[str] = mapped_column(
         String(50), nullable=False, default="standard"
     )
-    display_name: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, default=None
-    )
     total_minutes_used: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )

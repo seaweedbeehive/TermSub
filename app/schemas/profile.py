@@ -10,7 +10,6 @@ class ProfileMeResponse(BaseModel):
 
     id: str
     email: str
-    display_name: str | None
     is_email_verified: bool
     wants_updates: bool
     api_key_mode: str
@@ -71,7 +70,6 @@ class UpdatePreferencesRequest(BaseModel):
     """Request to update user preferences."""
 
     wants_updates: bool | None = None
-    display_name: str | None = Field(None, max_length=255)
 
 
 class UpdateApiKeyModeRequest(BaseModel):
