@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Run database migrations first
-alembic upgrade head
+alembic upgrade heads
 
 # Start Celery worker in background
 celery -A app.core.celery_app worker --loglevel=info --concurrency=2 &
