@@ -293,7 +293,7 @@
 
     <div id="mainApp" class="max-w-6xl mx-auto p-6">
         <!-- App Header -->
-        <div class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 mb-6">
+        <div class="app-header bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 mb-6">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -334,9 +334,6 @@
                         Log in / Sign up
                     </button>
                     <div class="flex items-center gap-2">
-                        <button id="howToUseBtn" type="button" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="How to use TermSub">
-                            <i class="fa-solid fa-circle-info text-slate-600 dark:text-[#8A8F98]"></i>
-                        </button>
                         <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="Toggle theme">
                             <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
                             <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
@@ -346,9 +343,9 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="app-workspace grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Left Panel - Upload & Controls -->
-            <div class="lg:col-span-1 flex flex-col gap-4 max-h-[calc(100vh-3rem)]">
+            <div class="lg:col-span-1 flex flex-col gap-4 overflow-y-auto pr-1">
                 <!-- Upload Card -->
                 <div id="uploadCard" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 shrink-0">
                     <div id="uploadForm" class="space-y-4">
@@ -386,13 +383,16 @@
                             <div class="flex items-start gap-2 px-1 -mt-1">
                                 <input type="checkbox" id="reviewTerminologyCheckbox" checked class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-[#2A2A30] text-indigo-600 focus:ring-indigo-500 dark:focus:ring-[#00F0FF]">
                                 <label for="reviewTerminologyCheckbox" class="text-xs text-slate-600 dark:text-[#8A8F98] cursor-pointer select-none">
-                                    Review terminology before getting subtitles
+                                    Review terminology
                                 </label>
                             </div>
                             <button id="originalSubtitlesBtn" data-mode="transcribe" class="w-full py-2 px-4 bg-slate-600 hover:bg-slate-700 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
                                 <i class="fa-solid fa-closed-captioning mr-2"></i>Get Subtitles in Original Language
                             </button>
                         </div>
+                        <p class="mt-3 text-[10px] text-slate-500 dark:text-[#6B7280] text-center">
+                            <i class="fa-solid fa-lock mr-1"></i>Audio and transcripts are processed by OpenAI. We do not store your API key.
+                        </p>
                     </div>
 
                     <!-- Post-upload compact state -->
@@ -448,7 +448,7 @@
                         
                         <!-- Director's Context Brief -->
                         <div id="contextBriefContainer" class="hidden mt-3 pt-3 border-t border-slate-100 dark:border-white/10">
-                            <p class="text-[10px] font-semibold text-slate-400 dark:text-[#6B7280] uppercase tracking-wider mb-1">Director's Context Brief</p>
+                            <p class="text-[10px] font-semibold text-slate-400 dark:text-[#6B7280] uppercase tracking-wider mb-1">Context Brief</p>
                             <p id="contextBriefText" class="text-xs text-slate-600 dark:text-[#8A8F98] italic bg-slate-50 dark:bg-[#121214] p-2 rounded border border-slate-100 dark:border-white/10 leading-relaxed"></p>
                         </div>
                     </div>
@@ -484,15 +484,15 @@
                 </div>
             </div>
 
-            <!-- Right Panel - Terms & Activity -->
-            <div class="lg:col-span-2 space-y-6">
+            <!-- Right Panel - Terms & Subtitles -->
+            <div class="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
                 <!-- Terms Table -->
-                <div id="termsPanel" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
-                    <div class="flex items-center justify-between mb-4">
+                <div id="termsPanel" class="hidden bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 flex-1 min-h-0 flex flex-col">
+                    <div class="flex items-center justify-between mb-4 shrink-0">
                         <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Extracted Terms</h2>
                         <span id="termsCount" class="hidden inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">0</span>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto overflow-y-auto flex-1 min-h-0">
                         <table class="w-full text-sm">
                             <thead class="sticky top-0 bg-white dark:bg-[#1A1A1E] z-10 shadow-sm text-slate-600 dark:text-[#8A8F98]">
                                 <tr>
@@ -514,7 +514,7 @@
                 </div>
 
                 <!-- Subtitle Review Timeline -->
-                <div id="subtitleReviewPanel" class="hidden h-full flex flex-col bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
+                <div id="subtitleReviewPanel" class="hidden flex-1 min-h-0 flex flex-col bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Translated Subtitle Timeline</h2>
                         <button id="undoTimelineBtn" class="px-2 py-1 text-xs bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors opacity-50 cursor-not-allowed" disabled title="Undo last change (Ctrl+Z)">
@@ -567,39 +567,20 @@
                         </div>
                     </template>
                 </div>
-
-                <!-- Activity Log -->
-                <div class="bg-slate-900 dark:bg-[#0A0A0C] rounded-xl shadow-sm p-4">
-                    <h2 class="text-sm font-semibold text-slate-200 dark:text-[#E2E2E8] mb-3">Activity Log</h2>
-                    <div id="activityLog" class="h-48 overflow-y-auto font-mono text-xs space-y-1">
-                        <div class="text-slate-500 dark:text-[#8A8F98]">Waiting for file upload...</div>
-                    </div>
-                </div>
             </div>
         </div>
 
-        <!-- Version footer -->
-        <div class="mt-8 text-center">
-            <span id="versionIndicator" class="text-xs text-slate-400 dark:text-[#6B7280]">TermSub</span>
-        </div>
-    </div>
-
-    <!-- How to Use Modal -->
-    <div id="howToUseModal" class="hidden fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm" aria-hidden="true">
-        <div class="bg-white dark:bg-[#1A1A1E] border border-slate-200 dark:border-[#2A2A30] rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 relative">
-            <button id="howToUseModalClose" type="button" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-[#E2E2E8] transition-colors" aria-label="Close modal">
-                <i class="fa-solid fa-xmark text-lg"></i>
+        <!-- Activity Log -->
+        <div id="activityLogContainer" class="activity-log-collapsed bg-slate-900 dark:bg-[#0A0A0C] rounded-xl shadow-sm p-4 flex flex-col">
+            <button id="activityLogToggle" type="button" class="flex items-center justify-between w-full text-left group shrink-0" aria-expanded="false" aria-controls="activityLog">
+                <h2 class="text-sm font-semibold text-slate-200 dark:text-[#E2E2E8]">Activity Log (advanced)</h2>
+                <i class="fa-solid fa-chevron-down text-xs text-slate-400 dark:text-[#8A8F98] transition-transform duration-200 group-hover:text-slate-200"></i>
             </button>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-[#E2E2E8] mb-4">How to Use TermSub</h3>
-            <ul class="list-disc list-inside text-sm text-slate-600 dark:text-[#8A8F98] space-y-2">
-                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Upload</strong> – drag &amp; drop a video, audio, or <code>.txt</code>/<code>.srt</code> file (or click the upload area). Max file size is 500 MB.</li>
-                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Choose languages</strong> – pick a source language (or Auto-detect) and a target language. Type in the dropdown to search 59 languages by English or native name.</li>
-                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Enter your OpenAI API key</strong> – paste your key in the field; it is saved only in your browser.</li>
-                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Click Start</strong> – TermSub uploads the file and runs transcription, terminology analysis, and translation in the background. Monitor progress in the Activity Log.</li>
-                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Review &amp; refine</strong> – edit extracted terms for consistency, then tweak subtitles in the timeline (edit text, split/add/remove segments, or use Find &amp; Replace).</li>
-                <li><strong class="text-slate-800 dark:text-[#E2E2E8]">Export</strong> – download SRT, VTT, TXT, or JSON files when you are done.</li>
-            </ul>
+            <div id="activityLog" class="overflow-y-auto font-mono text-xs space-y-1 mt-3 transition-opacity duration-200">
+                <div class="text-slate-500 dark:text-[#8A8F98]">Waiting for file upload...</div>
+            </div>
         </div>
+
     </div>
 
     <!-- Profile Modal -->

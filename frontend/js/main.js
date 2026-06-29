@@ -713,6 +713,7 @@
 
                 // BYOK users cannot use standard-only profile features.
                 const standardOnlySections = [
+                    'profileQuotaSection',
                     'profilePreferencesSection',
                     'profileApiKeyModeSection',
                     'profileEmailSection',
@@ -722,7 +723,7 @@
                 ];
                 standardOnlySections.forEach(id => {
                     const el = document.getElementById(id);
-                    if (el) el.classList.toggle('hidden', data.email === 'BYOK');
+                    if (el) el.classList.toggle('hidden', isByok);
                 });
             } catch (err) {
                 showToast(err.message, 'error');
@@ -2177,7 +2178,7 @@
 
                 default:
                     primaryBtn?.classList.add('hidden');
-                    if (termsPanel) termsPanel.classList.remove('hidden');
+                    if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
             }
         }
@@ -2297,7 +2298,7 @@
             const primaryActionReset = document.getElementById('primaryActionContainer');
             if (primaryActionReset) primaryActionReset.classList.add('hidden');
             const termsPanelReset = document.getElementById('termsPanel');
-            if (termsPanelReset) termsPanelReset.classList.remove('hidden');
+            if (termsPanelReset) termsPanelReset.classList.add('hidden');
             const subtitleReviewReset = document.getElementById('subtitleReviewPanel');
             if (subtitleReviewReset) subtitleReviewReset.classList.add('hidden');
             const timelineGridReset = document.getElementById('timelineCardGrid');
@@ -2966,21 +2967,6 @@
                 });
             }
 
-            // Version indicator
-            const versionIndicator = document.getElementById('versionIndicator');
-            if (versionIndicator) {
-                fetch('/api/version')
-                    .then((response) => response.json())
-                    .then((data) => {
-                        if (data.version) {
-                            versionIndicator.textContent = `TermSub v${data.version}`;
-                        }
-                    })
-                    .catch(() => {
-                        // Leave the static fallback text if the version endpoint is unreachable.
-                    });
-            }
-
             // Language dropdown population with Tom Select
             const sourceLanguageSelect = document.getElementById('sourceLanguage');
             const targetLanguageSelect = document.getElementById('targetLanguage');
@@ -3097,37 +3083,13 @@
             window.termsubSourceLanguage = sourceLanguageSelect;
             window.termsubTargetLanguage = targetLanguageSelect;
 
-            // --- How to Use Modal ---
-            const howToUseModal = document.getElementById('howToUseModal');
-            const howToUseBtn = document.getElementById('howToUseBtn');
-            const howToUseModalClose = document.getElementById('howToUseModalClose');
-
-            function openHowToUseModal() {
-                if (howToUseModal) {
-                    howToUseModal.classList.remove('hidden');
-                    howToUseModal.setAttribute('aria-hidden', 'false');
-                    document.body.style.overflow = 'hidden';
-                }
-            }
-
-            function closeHowToUseModal() {
-                if (howToUseModal) {
-                    howToUseModal.classList.add('hidden');
-                    howToUseModal.setAttribute('aria-hidden', 'true');
-                    document.body.style.overflow = '';
-                }
-            }
-
-            if (howToUseBtn) howToUseBtn.addEventListener('click', openHowToUseModal);
-            if (howToUseModalClose) howToUseModalClose.addEventListener('click', closeHowToUseModal);
-            if (howToUseModal) {
-                howToUseModal.addEventListener('click', (e) => {
-                    if (e.target === howToUseModal) closeHowToUseModal();
-                });
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape' && howToUseModal && !howToUseModal.classList.contains('hidden')) {
-                        closeHowToUseModal();
-                    }
+            // --- Activity Log Collapse ---
+            const activityLogToggle = document.getElementById('activityLogToggle');
+            const activityLogContainer = document.getElementById('activityLogContainer');
+            if (activityLogToggle && activityLogContainer) {
+                activityLogToggle.addEventListener('click', () => {
+                    const collapsed = activityLogContainer.classList.toggle('activity-log-collapsed');
+                    activityLogToggle.setAttribute('aria-expanded', (!collapsed).toString());
                 });
             }
 

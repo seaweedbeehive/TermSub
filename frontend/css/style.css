@@ -1,4 +1,48 @@
         body { font-family: 'Inter', system-ui, sans-serif; }
+
+        /* Fixed-height desktop app shell — no page scrolling on lg screens */
+        @media (min-width: 1024px) {
+            html, body { height: 100vh; overflow: hidden; }
+
+            #mainApp {
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+
+            .app-header { flex-shrink: 0; }
+            .app-workspace {
+                flex: 1 1 0%;
+                min-height: 0;
+                overflow: hidden;
+            }
+        }
+
+        /* Collapsible bottom activity log — expands upward */
+        #activityLogContainer {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            max-height: 4rem;
+            overflow: hidden;
+            transition: max-height 0.2s ease;
+        }
+        #activityLogContainer:not(.activity-log-collapsed) {
+            max-height: 18rem;
+        }
+        #activityLog {
+            flex: 1 1 0%;
+            min-height: 0;
+            overflow-y: auto;
+        }
+        .activity-log-collapsed #activityLog {
+            opacity: 0;
+        }
+        .activity-log-collapsed .fa-chevron-down {
+            transform: rotate(-90deg);
+        }
+
         .rtl-text {
             direction: rtl;
             text-align: right;
