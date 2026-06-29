@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 # Run database migrations first
 alembic upgrade heads
