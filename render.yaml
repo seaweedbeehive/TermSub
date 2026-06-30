@@ -21,7 +21,7 @@ services:
       - key: RESEND_FROM_EMAIL
         value: hello@termsub.eedbee.app
       - key: FRONTEND_BASE_URL
-        value: https://termsub.eedbee.app
+        value: https://www.termsub.eedbee.app
 
 databases:
   - name: termsub-db
