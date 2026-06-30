@@ -12,6 +12,7 @@ from app.core.quota import QuotaManager
 from app.db.session import get_db
 from app.models.analytics import PageView, UsageEvent
 from app.models.user import User
+from app.schemas.admin import BulkDeleteRequest
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -170,3 +171,54 @@ def admin_toggle_user_mode(
         "api_key_mode": user.api_key_mode,
         "message": f"User mode switched to {user.api_key_mode}",
     }
+
+
+@router.delete("/users/{user_id}")
+def admin_delete_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin_user),
+) -> dict[str, str]:
+    """Delete a user and their associated usage events."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    email = user.email
+    db.query(UsageEvent).filter(UsageEvent.user_id == user_id).delete(
+        synchronize_session=False
+    )
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted", "email": email}
+
+
+@router.post("/users/bulk-delete")
+def admin_bulk_delete_users(
+    payload: BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin_user),
+) -> dict[str, int]:
+    """Delete multiple users by email address and their usage events."""
+    emails = payload.emails
+    deleted = 0
+    not_found = 0
+
+    for email in emails:
+        user = db.query(User).filter(User.email == email.lower().strip()).first()
+        if not user:
+            not_found += 1
+            continue
+
+        db.query(UsageEvent).filter(UsageEvent.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.delete(user)
+        deleted += 1
+
+    db.commit()
+    return {"deleted": deleted, "not_found": not_found}
