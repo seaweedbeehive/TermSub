@@ -344,6 +344,24 @@ class QuotaManager:
                 detail="Quota service unavailable",
             ) from exc
 
+    def set_quota(self, user_id: str, minutes: float) -> None:
+        """Set the user's remaining minute quota in Redis.
+
+        The quota model stores minutes *used* and computes remaining as
+        ``trial_minutes - used``. Setting remaining to ``minutes`` means storing
+        ``used = trial_minutes - minutes``. Negative used values are allowed and
+        effectively grant extra quota beyond the default trial allowance.
+        """
+        try:
+            used = self.trial_minutes - float(minutes)
+            self._redis.set(self._minutes_key(user_id), str(used))
+        except Exception as exc:
+            logger.error("Redis set_quota failed for %s: %s", user_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Quota service unavailable",
+            ) from exc
+
     def get_quota_status(self, user_id: str, is_byok: bool = False) -> dict[str, Any]:
         """Return remaining quota for the UI.
 

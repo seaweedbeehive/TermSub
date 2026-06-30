@@ -159,6 +159,31 @@
         }
         .btn-danger:hover { background: #b91c1c; }
         .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-secondary {
+            background: #3b82f6;
+            color: #fff;
+            margin-right: 6px;
+        }
+        .btn-secondary:hover { background: #2563eb; }
+        .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .quota-edit {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .quota-edit.show { display: inline-flex; }
+        .quota-input {
+            width: 70px;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            color: #e2e8f0;
+            padding: 4px 8px;
+            font-size: 12px;
+            outline: none;
+        }
+        .quota-input:focus { border-color: #60a5fa; }
         .empty-state {
             text-align: center;
             padding: 40px 20px;
@@ -244,7 +269,7 @@
                                 <th>Status</th>
                                 <th data-sort="minutes_used">Minutes Used<i class="fa-solid fa-sort sort-icon"></i></th>
                                 <th data-sort="minutes_remaining">Remaining<i class="fa-solid fa-sort sort-icon"></i></th>
-                                <th style="width: 100px;">Actions</th>
+                                <th style="width: 160px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="usersTableBody">
@@ -364,6 +389,11 @@
                 }
                 if (user.api_key_mode === 'byok') badges.push('<span class="badge badge-byok">BYOK</span>');
 
+                const canEditQuota = user.api_key_mode !== 'byok';
+                const quotaBtn = canEditQuota
+                    ? `<button class="btn btn-secondary" onclick="showQuotaEdit('${user.id}', ${user.minutes_remaining ?? 0})"><i class="fa-solid fa-pen"></i> Quota</button>`
+                    : '';
+
                 return `
                     <tr data-id="${user.id}">
                         <td>${escapeHtml(user.email)}</td>
@@ -372,6 +402,12 @@
                         <td>${user.minutes_used ?? 0}</td>
                         <td>${user.minutes_remaining ?? 0}</td>
                         <td>
+                            ${quotaBtn}
+                            <div class="quota-edit" id="quota-edit-${user.id}">
+                                <input type="number" class="quota-input" id="quota-input-${user.id}" value="${user.minutes_remaining ?? 0}" min="0">
+                                <button class="btn btn-secondary" onclick="saveQuota('${user.id}', '${escapeHtml(user.email)}')">Save</button>
+                                <button class="btn" style="background: #475569; color: #fff;" onclick="hideQuotaEdit('${user.id}')">Cancel</button>
+                            </div>
                             <button class="btn btn-danger" onclick="deleteUser('${user.id}', '${escapeHtml(user.email)}')">
                                 <i class="fa-solid fa-trash"></i> Delete
                             </button>
@@ -411,6 +447,51 @@
             } catch (err) {
                 showToast(err.message, 'error');
                 if (btn) btn.disabled = false;
+            }
+        }
+
+        function showQuotaEdit(userId, currentMinutes) {
+            document.querySelectorAll('.quota-edit').forEach(el => el.classList.remove('show'));
+            const editEl = document.getElementById(`quota-edit-${userId}`);
+            const input = document.getElementById(`quota-input-${userId}`);
+            if (editEl) editEl.classList.add('show');
+            if (input) {
+                input.value = currentMinutes;
+                input.focus();
+            }
+        }
+
+        function hideQuotaEdit(userId) {
+            const editEl = document.getElementById(`quota-edit-${userId}`);
+            if (editEl) editEl.classList.remove('show');
+        }
+
+        async function saveQuota(userId, email) {
+            const input = document.getElementById(`quota-input-${userId}`);
+            const minutes = parseFloat(input?.value);
+            if (Number.isNaN(minutes) || minutes < 0) {
+                showToast('Please enter a valid number of minutes', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/quota`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ minutes })
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to update quota');
+                }
+                showToast(`Quota updated for ${email}`, 'success');
+                hideQuotaEdit(userId);
+                await loadUsers();
+            } catch (err) {
+                showToast(err.message, 'error');
             }
         }
 

@@ -12,7 +12,7 @@ from app.core.quota import QuotaManager
 from app.db.session import get_db
 from app.models.analytics import PageView, UsageEvent
 from app.models.user import User
-from app.schemas.admin import BulkDeleteRequest
+from app.schemas.admin import BulkDeleteRequest, QuotaUpdateRequest
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -222,3 +222,34 @@ def admin_bulk_delete_users(
 
     db.commit()
     return {"deleted": deleted, "not_found": not_found}
+
+
+@router.post("/users/{user_id}/quota")
+def admin_update_user_quota(
+    user_id: str,
+    payload: QuotaUpdateRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin_user),
+) -> dict[str, Any]:
+    """Set a user's remaining minute quota."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.api_key_mode == "byok":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot set quota for BYOK users",
+        )
+
+    quota = QuotaManager()
+    quota.set_quota(user.id, payload.minutes)
+
+    return {
+        "user_id": user.id,
+        "minutes": payload.minutes,
+        "message": "Quota updated",
+    }
