@@ -118,23 +118,27 @@ def send_welcome_email(to_email: str, app_url: str) -> dict[str, Any] | None:
     html = f"""
     <html>
       <body style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1f2937; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px;">
-        <h1 style="color: #111827; font-size: 24px; margin-bottom: 16px;">Welcome to TermSub!</h1>
+        <h1 style="color: #111827; font-size: 24px; margin-bottom: 16px;">Welcome to TermSub beta</h1>
         <p>Hi there,</p>
-        <p>Thanks for signing up. You now have <strong>30 free minutes</strong> of video translation to get started.</p>
-        <p>Upload a video or text transcript, review the extracted terminology, and export AI-powered subtitles in your target language.</p>
-        <p><strong>What makes TermSub different?</strong> Our AI understands the full context of your video — not just sentence by sentence — so translations stay consistent and accurate, even for specialized topics like science, politics, sociology, computer science, or AI content.</p>
+        <p>Welcome to TermSub beta. You've got <strong>30 free minutes</strong> of video translation to start with.</p>
+        <p><strong>What TermSub does:</strong> Upload any video, audio, or text/SRT file and let the AI* transcribe, analyze, and translate it into subtitle files — with full control over terminology, editable subtitle cards, and it's exportable in minutes** from and to 59 languages.</p>
+        <p><strong>Why TermSub is different:</strong> Unlike standard translators, TermSub reads the full context of your video, not sentence by sentence, so translations stay consistent and accurate, even for specialized topics or longer videos.</p>
+        <p><strong>You're a beta tester, invited to test the app. If something breaks, feels slow, or could be better — just reply to this email.</strong></p>
         <p style="margin: 32px 0;">
           <a href="{app_url}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Open TermSub</a>
         </p>
         <p style="font-size: 14px; color: #6b7280;">If the button doesn't work, paste this link into your browser:<br><a href="{app_url}" style="color: #2563eb;">{app_url}</a></p>
-        <p>You are a beta-user, invited to test the app. We'd love your feedback — just reply to this email!</p>
-        <p style="margin-top: 32px;">Happy translating!<br>The TermSub Team</p>
+        <p style="font-size: 13px; color: #6b7280; margin-top: 24px;">
+          *AI processing (transcription, analysis, and translation) is powered by OpenAI.<br>
+          **a feature film can be subtitled (with good quality and still under your control) in less than 10 minutes.
+        </p>
+        <p style="margin-top: 32px;">— seaweed</p>
       </body>
     </html>
     """
     return _send_email(
         to_email,
-        "Welcome to TermSub!",
+        "Welcome to TermSub beta",
         html,
         idempotency_key=f"welcome/{to_email}",
     )
