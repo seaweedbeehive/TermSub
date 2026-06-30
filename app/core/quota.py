@@ -16,7 +16,6 @@ DEFAULT_TRIAL_MINUTES = 30
 
 # BYOK abuse limits.
 BYOK_MAX_UPLOAD_MB = 500
-BYOK_MAX_MINUTES_PER_VIDEO = 60
 BYOK_MAX_CONCURRENT_JOBS = 10
 BYOK_JOB_TTL_SECONDS = 120
 
@@ -113,16 +112,6 @@ class QuotaManager:
                 return {
                     "allowed": False,
                     "reason": f"BYOK uploads are limited to {BYOK_MAX_UPLOAD_MB} MB per file.",
-                    "is_unlimited": True,
-                }
-
-            if estimated_minutes > BYOK_MAX_MINUTES_PER_VIDEO:
-                return {
-                    "allowed": False,
-                    "reason": (
-                        f"BYOK uploads are limited to {BYOK_MAX_MINUTES_PER_VIDEO} "
-                        "minutes of audio per video."
-                    ),
                     "is_unlimited": True,
                 }
 
@@ -380,7 +369,6 @@ class QuotaManager:
                 "minutes_used": None,
                 "minutes_remaining": None,
                 "byok_max_upload_mb": BYOK_MAX_UPLOAD_MB,
-                "byok_max_minutes_per_video": BYOK_MAX_MINUTES_PER_VIDEO,
                 "byok_max_concurrent_jobs": BYOK_MAX_CONCURRENT_JOBS,
             }
 
