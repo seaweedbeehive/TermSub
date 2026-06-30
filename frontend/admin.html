@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TermSub Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        a { color: inherit; text-decoration: none; }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #1e293b;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+        .logo span { color: #60a5fa; }
+        .nav a {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-left: 16px;
+            transition: color 0.2s;
+        }
+        .nav a:hover { color: #f8fafc; }
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #64748b;
+            font-size: 14px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .stat-card .label {
+            font-size: 12px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+        .section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+        .search-input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            padding: 8px 12px;
+            font-size: 13px;
+            outline: none;
+            width: 240px;
+        }
+        .search-input:focus { border-color: #60a5fa; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+        th {
+            color: #94a3b8;
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        th:hover { color: #e2e8f0; }
+        th .sort-icon {
+            margin-left: 4px;
+            color: #64748b;
+            font-size: 11px;
+        }
+        tbody tr:hover { background: #26334d; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-right: 4px;
+        }
+        .badge-admin { background: #7c3aed; color: #fff; }
+        .badge-verified { background: #059669; color: #fff; }
+        .badge-unverified { background: #475569; color: #cbd5e1; }
+        .badge-byok { background: #b45309; color: #fff; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-danger {
+            background: #dc2626;
+            color: #fff;
+        }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+        .error {
+            background: #450a0a;
+            border: 1px solid #7f1d1d;
+            color: #fecaca;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 50;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-color: #059669; }
+        .toast.error { border-color: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">TermSub <span>Admin</span></div>
+            <nav class="nav">
+                <a href="/">App</a>
+                <a href="#" id="logoutLink">Logout</a>
+            </nav>
+        </header>
+
+        <div id="errorContainer"></div>
+
+        <div id="loadingState" class="loading">
+            <i class="fa-solid fa-circle-notch fa-spin"></i> Checking admin access...
+        </div>
+
+        <div id="dashboard" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="label">Total Users</div>
+                    <div class="value" id="statTotalUsers">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">New Users Today</div>
+                    <div class="value" id="statNewUsers">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Uploads Today</div>
+                    <div class="value" id="statUploads">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Newsletter Subscribers</div>
+                    <div class="value" id="statSubscribers">—</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">Users</div>
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search by email...">
+                </div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-sort="email">Email<i class="fa-solid fa-sort sort-icon"></i></th>
+                                <th data-sort="created_at">Created<i class="fa-solid fa-sort sort-icon"></i></th>
+                                <th>Status</th>
+                                <th data-sort="minutes_used">Minutes Used<i class="fa-solid fa-sort sort-icon"></i></th>
+                                <th data-sort="minutes_remaining">Remaining<i class="fa-solid fa-sort sort-icon"></i></th>
+                                <th style="width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr><td colspan="6" class="empty-state">Loading users...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const token = localStorage.getItem('termsub_token');
+        if (!token) {
+            window.location.href = '/';
+        }
+
+        let allUsers = [];
+        let sortField = 'created_at';
+        let sortDirection = 'desc';
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.status === 403 || !response.ok) {
+                    window.location.href = '/';
+                    return;
+                }
+                const data = await response.json();
+                if (!data.is_admin) {
+                    window.location.href = '/';
+                    return;
+                }
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                loadStats();
+                loadUsers();
+            } catch (err) {
+                window.location.href = '/';
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/admin/stats', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to load stats');
+                const data = await response.json();
+                document.getElementById('statTotalUsers').textContent = data.total_users ?? 0;
+                document.getElementById('statNewUsers').textContent = data.new_users_today ?? 0;
+                document.getElementById('statUploads').textContent = data.uploads_today ?? 0;
+                document.getElementById('statSubscribers').textContent = data.newsletter_subscribers ?? 0;
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to load users');
+                allUsers = await response.json();
+                renderUsers();
+            } catch (err) {
+                showError(err.message);
+                document.getElementById('usersTableBody').innerHTML =
+                    '<tr><td colspan="6" class="empty-state">Failed to load users</td></tr>';
+            }
+        }
+
+        function formatDate(isoString) {
+            if (!isoString) return '—';
+            const date = new Date(isoString);
+            return date.toLocaleDateString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+        }
+
+        function renderUsers() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            let users = allUsers.filter(u =>
+                (u.email || '').toLowerCase().includes(search)
+            );
+
+            users.sort((a, b) => {
+                let aVal = a[sortField];
+                let bVal = b[sortField];
+                if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+                if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+                if (aVal === null || aVal === undefined) aVal = '';
+                if (bVal === null || bVal === undefined) bVal = '';
+                if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            const tbody = document.getElementById('usersTableBody');
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No users found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = users.map(user => {
+                const badges = [];
+                if (user.is_admin) badges.push('<span class="badge badge-admin">Admin</span>');
+                if (user.is_email_verified) {
+                    badges.push('<span class="badge badge-verified">Verified</span>');
+                } else {
+                    badges.push('<span class="badge badge-unverified">Unverified</span>');
+                }
+                if (user.api_key_mode === 'byok') badges.push('<span class="badge badge-byok">BYOK</span>');
+
+                return `
+                    <tr data-id="${user.id}">
+                        <td>${escapeHtml(user.email)}</td>
+                        <td>${formatDate(user.created_at)}</td>
+                        <td>${badges.join('')}</td>
+                        <td>${user.minutes_used ?? 0}</td>
+                        <td>${user.minutes_remaining ?? 0}</td>
+                        <td>
+                            <button class="btn btn-danger" onclick="deleteUser('${user.id}', '${escapeHtml(user.email)}')">
+                                <i class="fa-solid fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        async function deleteUser(userId, email) {
+            if (!confirm(`Delete user ${email}? This cannot be undone.`)) return;
+            const btn = document.querySelector(`tr[data-id="${userId}"] .btn-danger`);
+            if (btn) btn.disabled = true;
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Failed to delete user');
+                }
+                showToast(`Deleted ${email}`, 'success');
+                allUsers = allUsers.filter(u => u.id !== userId);
+                renderUsers();
+            } catch (err) {
+                showToast(err.message, 'error');
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('errorContainer').innerHTML =
+                `<div class="error"><i class="fa-solid fa-circle-exclamation"></i> ${escapeHtml(message)}</div>`;
+        }
+
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const field = th.dataset.sort;
+                if (sortField === field) {
+                    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortField = field;
+                    sortDirection = 'asc';
+                }
+                document.querySelectorAll('.sort-icon').forEach(icon => icon.className = 'fa-solid fa-sort sort-icon');
+                const icon = th.querySelector('.sort-icon');
+                icon.className = `fa-solid fa-sort-${sortDirection === 'asc' ? 'up' : 'down'} sort-icon`;
+                renderUsers();
+            });
+        });
+
+        document.getElementById('searchInput').addEventListener('input', renderUsers);
+
+        document.getElementById('logoutLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('termsub_token');
+            window.location.href = '/';
+        });
+
+        checkAuth();
+    </script>
+</body>
+</html>

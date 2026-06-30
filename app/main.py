@@ -317,9 +317,8 @@ async def root() -> FileResponse:
 @app.get("/admin")
 @app.get("/admin/{path:path}")
 async def admin_page(path: str | None = None) -> FileResponse:
-    """Admin dashboard frontend route - serve the SPA for /admin deep links."""
-    return FileResponse(str(_FRONTEND_DIR / "index.html"))
-
+    """Admin dashboard frontend route - serve admin.html for /admin deep links."""
+    return FileResponse(str(_FRONTEND_DIR / "admin.html"))
 
 
 @app.get("/favicon.ico")
