@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="de" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beta-Test Vereinbarung | TermSub</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script>
+        tailwind.config = { darkMode: 'class' };
+        (function () {
+            const key = 'theme';
+            const stored = localStorage.getItem(key);
+            if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; font-weight: 300; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+    <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
+        <div class="max-w-4xl mx-auto px-6 py-5 flex items-center justify-between gap-4">
+            <a href="/" class="text-2xl sm:text-3xl font-medium text-slate-900 dark:text-white tracking-wide">
+                TermSub <span class="text-blue-600 dark:text-blue-400 text-sm sm:text-base font-light align-top">(beta)</span>
+            </a>
+            <div class="flex items-center gap-3">
+                <a href="/app" class="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Back to TermSub</a>
+                <button id="themeToggle" type="button" aria-label="Toggle theme" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 py-12 sm:py-16">
+        <div class="max-w-3xl mx-auto px-6">
+            <h1 class="text-3xl sm:text-4xl font-light text-slate-900 dark:text-white mb-2 tracking-wide">Beta-Test Vereinbarung</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-10">Stand: Juni 2026 | Gültig für die geschlossene Beta-Phase von TermSub</p>
+
+            <div class="space-y-10 text-slate-700 dark:text-slate-300 font-light leading-relaxed">
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">1. Geltungsbereich</h2>
+                    <p>Diese Vereinbarung gilt für die Teilnahme am geschlossenen Beta-Test von TermSub, einem KI-gestützten Video-Übersetzungs- und Untertitel-Tool. Mit der Registrierung und Nutzung des Beta-Programms stimmen Sie diesen Bedingungen zu. Die Teilnahme ist kostenlos und freiwillig.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">2. Beta-Charakter der Software</h2>
+                    <p class="mb-3">Sie bestätigen ausdrücklich, dass es sich bei TermSub um eine Vorabversion handelt, die sich noch in der Entwicklung befindet. Folgendes ist möglich und zu erwarten:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>Softwarefehler, Abstürze und unerwartetes Verhalten</li>
+                        <li>Datenverlust oder -beschädigung von Projekten</li>
+                        <li>Nicht-Verfügbarkeit des Dienstes (Wartungsfenster, Serverprobleme)</li>
+                        <li>Änderungen von Funktionen, Benutzeroberfläche und API ohne vorherige Ankündigung</li>
+                        <li>Limitierte Verarbeitungskontingente (übersichtlich in der Benutzeroberfläche dargestellt)</li>
+                    </ul>
+                    <p class="mt-3">Bitte erstellen Sie Sicherungskopien wichtiger Dateien vor dem Upload. Wir übernehmen keine Haftung für verlorene Daten oder entgangene Gewinne.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">3. Nutzungsrechte und -beschränkungen</h2>
+                    <p class="mb-3">Während der Beta-Phase räumen wir Ihnen ein eingeschränktes, nicht-exklusives, nicht-übertragbares Recht zur Nutzung von TermSub ein. Sie verpflichten sich:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>Die Software nicht zur Verarbeitung illegaler, vertraulicher oder urheberrechtlich geschützter Inhalte ohne Berechtigung zu nutzen</li>
+                        <li>Die Software nicht zu dekompilieren, zu reverse-engineeren oder zu umgehen</li>
+                        <li>Ihre Zugangsdaten nicht mit Dritten zu teilen</li>
+                        <li>Nicht mehrere Accounts zu erstellen, um Kontingentbeschränkungen zu umgehen</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">4. Nutzungskontingente</h2>
+                    <p>Während der Beta-Phase gelten folgende Limits: Maximale Audiolänge pro Datei, tägliche/wöchentliche Verarbeitungslimits und maximale Anzahl gleichzeitiger Jobs. Diese Limits sind in Ihrer Benutzeroberfläche jederzeit einsehbar. Wir behalten uns vor, diese Kontingente jederzeit anzupassen.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">5. Feedback und Verbesserungsvorschläge</h2>
+                    <p>Wir freuen uns über Ihr Feedback! Mit der Teilnahme am Beta-Programm räumen Sie uns ein unentgeltliches, unwiderrufliches, weltweites Recht ein, Ihre Fehlermeldungen, Verbesserungsvorschläge und sonstiges Feedback zu nutzen, um TermSub zu verbessern – ohne dass Ihnen dafür Vergütungen zustehen. Persönliche Daten in Feedback werden gemäß unserer Datenschutzerklärung behandelt.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">6. Datenschutz</h2>
+                    <p>Die Verarbeitung Ihrer personenbezogenen Daten erfolgt gemäß unserer <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Datenschutzerklärung</a>, die Bestandteil dieser Vereinbarung ist. Bitte lesen Sie sie sorgfältig.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">7. Haftungsausschluss</h2>
+                    <p class="font-normal text-slate-900 dark:text-white">TERMSUB WIRD "WIE BESEHEN" UND "WIE VERFÜGBAR" OHNE JEGLICHE GEWÄHRLEISTUNG BEREITGESTELLT. WIR ÜBERNEHMEN KEINE HAFTUNG FÜR DIREKTE, INDIREKTE, ZUFÄLLIGE ODER FOLGESCHÄDEN, DIE SICH AUS DER NUTZUNG ODER UNMÖGLICHKEIT DER NUTZUNG ERGEBEN, EINSCHLIESSLICH DATENVERLUST, ENTGANGENER GEWINNE ODER BETRIEBSUNTERBRECHUNG.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">8. Kündigung</h2>
+                    <p class="mb-3"><span class="font-normal text-slate-900 dark:text-white">Durch Sie:</span> Jederzeit durch Löschen Ihres Accounts in den Profileinstellungen oder per E-Mail an <a href="mailto:saeid.behb@gmail.com" class="text-blue-600 dark:text-blue-400 hover:underline">saeid.behb@gmail.com</a>. Alle Ihre Daten werden innerhalb von 30 Tagen gelöscht.</p>
+                    <p><span class="font-normal text-slate-900 dark:text-white">Durch uns:</span> Wir können Ihre Teilnahme jederzeit ohne Angabe von Gründen beenden, z. B. bei Programmende, Verstößen gegen diese Bedingungen oder technischen Notwendigkeiten. Vorherige Ankündigung wird soweit möglich gegeben.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">9. Hinweis zu KI-generierten Inhalten</h2>
+                    <p>TermSub nutzt KI-Modelle von OpenAI zur Transkription und Übersetzung. Diese können Ungenauigkeiten, Halluzinationen oder unangemessene Übersetzungen enthalten. Insbesondere bei sensiblen, rechtlichen, medizinischen oder sicherheitskritischen Inhalten wird eine menschliche Überprüfung dringend empfohlen.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">10. Schlussbestimmungen</h2>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><span class="font-normal text-slate-900 dark:text-white">Salvatorische Klausel:</span> Sollten einzelne Bestimmungen unwirksam sein, bleibt der Rest der Vereinbarung wirksam.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Änderungen:</span> Wir behalten uns vor, diese Bedingungen anzupassen. Bei wesentlichen Änderungen informieren wir Sie per E-Mail.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Anwendbares Recht:</span> Deutsches Recht unter Ausschluss des UN-Kaufrechts.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Gerichtsstand:</span> Berlin, Deutschland.</li>
+                    </ul>
+                </section>
+
+                <section class="pt-8 border-t border-slate-200 dark:border-slate-800">
+                    <h2 class="text-2xl font-light text-slate-900 dark:text-white mb-6 tracking-wide">English Summary</h2>
+                    <p class="mb-6">For convenience only. The German text above is legally binding.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Beta Software Disclaimer</h3>
+                    <p class="mb-4">TermSub is pre-release software. Bugs, crashes, data loss, and downtime are expected. Backup your files before uploading. No warranty of any kind. Maximum 100 beta testers.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Usage Restrictions</h3>
+                    <p class="mb-4">Don't process illegal or unauthorized copyrighted content. Don't reverse-engineer, share credentials, or create multiple accounts to bypass limits.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Feedback License</h3>
+                    <p class="mb-4">You grant us a free, irrevocable, worldwide license to use your feedback and bug reports to improve TermSub.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Termination</h3>
+                    <p class="mb-4">Either party can terminate at any time. You: delete your account. Us: with notice where possible.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">AI Disclaimer</h3>
+                    <p class="mb-4">AI-generated translations may contain errors. Human review is recommended, especially for sensitive content.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Governing Law</h3>
+                    <p>German law. Place of jurisdiction: Berlin, Germany.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500 dark:text-slate-500">
+            <p>&copy; 2026 TermSub. Beta.</p>
+            <div class="flex flex-wrap items-center justify-center gap-4">
+                <a href="/static/legal/imprint.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Imprint</a>
+                <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Privacy</a>
+                <a href="/static/legal/beta-terms.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Beta Terms</a>
+                <a href="/static/legal/ai-disclosure.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">AI Info</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            const key = 'theme';
+            const btn = document.getElementById('themeToggle');
+            const icon = btn.querySelector('i');
+            const root = document.documentElement;
+
+            function apply(dark) {
+                if (dark) {
+                    root.classList.add('dark');
+                    icon.className = 'fa-solid fa-sun';
+                } else {
+                    root.classList.remove('dark');
+                    icon.className = 'fa-solid fa-moon';
+                }
+            }
+
+            apply(root.classList.contains('dark'));
+
+            btn.addEventListener('click', function () {
+                const isDark = root.classList.contains('dark');
+                apply(!isDark);
+                localStorage.setItem(key, !isDark ? 'dark' : 'light');
+            });
+        })();
+    </script>
+</body>
+</html>

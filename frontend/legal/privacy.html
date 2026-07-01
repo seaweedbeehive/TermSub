@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="de" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Datenschutzerklärung | TermSub</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script>
+        tailwind.config = { darkMode: 'class' };
+        (function () {
+            const key = 'theme';
+            const stored = localStorage.getItem(key);
+            if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; font-weight: 300; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+    <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
+        <div class="max-w-4xl mx-auto px-6 py-5 flex items-center justify-between gap-4">
+            <a href="/" class="text-2xl sm:text-3xl font-medium text-slate-900 dark:text-white tracking-wide">
+                TermSub <span class="text-blue-600 dark:text-blue-400 text-sm sm:text-base font-light align-top">(beta)</span>
+            </a>
+            <div class="flex items-center gap-3">
+                <a href="/app" class="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Back to TermSub</a>
+                <button id="themeToggle" type="button" aria-label="Toggle theme" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 py-12 sm:py-16">
+        <div class="max-w-3xl mx-auto px-6">
+            <h1 class="text-3xl sm:text-4xl font-light text-slate-900 dark:text-white mb-2 tracking-wide">Datenschutzerklärung</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-10">Stand: Juni 2026</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-10">Englische Zusammenfassung unten / English summary below.</p>
+
+            <div class="space-y-10 text-slate-700 dark:text-slate-300 font-light leading-relaxed">
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">1. Verantwortlicher</h2>
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 mb-3">
+                        <p>Saeid Behbahaninia</p>
+                        <p>Vegesacker Str. 145</p>
+                        <p>28219 Bremen</p>
+                        <p>Germany</p>
+                        <p class="mt-2">E-Mail: <a href="mailto:saeid.behb@gmail.com" class="text-blue-600 dark:text-blue-400 hover:underline">saeid.behb@gmail.com</a></p>
+                    </div>
+                    <p>Verantwortlich für die Verarbeitung Ihrer personenbezogenen Daten im Sinne der Datenschutz-Grundverordnung (DSGVO).</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">2. Welche Daten wir erheben</h2>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><span class="font-normal text-slate-900 dark:text-white">Kontodaten (Registrierung):</span> E-Mail-Adresse, Passwort (als Hash gespeichert). Für BYOK-Nutzer: OpenAI-API-Schlüssel (verschlüsselt gespeichert, nur serverseitig nutzbar).</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Hochgeladene Dateien:</span> Video-, Audio- oder Textdateien, die Sie zur Verarbeitung hochladen. Diese enthalten möglicherweise personenbezogene Daten (z. B. Stimmen, Gesichter, Namen, gesprochene Informationen).</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Verarbeitungsergebnisse:</span> Transkripte, Übersetzungen, Glossare und generierte Untertitel.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Nutzungsdaten:</span> IP-Adresse, Zeitstempel, verarbeitete Minuten (für Kontingentverwaltung), Browser-Typ und -Version.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Fehlerprotokolle:</span> Server-Logs zur Fehlerbehebung (30 Tage aufbewahrt).</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">3. Zweck und Rechtsgrundlage der Verarbeitung</h2>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><span class="font-normal text-slate-900 dark:text-white">Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO):</span> Bereitstellung des Übersetzungs- und Untertitel-Services, Authentifizierung, Kontingentverwaltung.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Berechtigtes Interesse (Art. 6 Abs. 1 lit. f DSGVO):</span> Fehlerbehebung, Sicherheit, Missbrauchsprävention, Server-Logs.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Einwilligung (Art. 6 Abs. 1 lit. a DSGVO):</span> Beta-Test-Feedback, optionale Newsletter, nicht-essentielle Cookies (sofern verwendet).</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Rechtliche Verpflichtung (Art. 6 Abs. 1 lit. c DSGVO):</span> Steuerliche und buchhalterische Aufbewahrungspflichten.</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">4. Empfänger und Drittlandübermittlung</h2>
+                    <p class="mb-3"><span class="font-normal text-slate-900 dark:text-white">OpenAI, LLC (USA):</span> Transkription und Übersetzung Ihrer Audio-/Videodaten. Die Übermittlung erfolgt auf Grundlage der EU-Standardvertragsklauseln (SCCs) gemäß Art. 46 Abs. 2 lit. c DSGVO. OpenAI verarbeitet Daten gemäß seinem <a href="https://openai.com/policies/data-processing-addendum/" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Data Processing Addendum</a>. OpenAI speichert hochgeladene Audiodateien nicht dauerhaft und nutzt sie nicht zum Training von Modellen, sofern Sie dies nicht ausdrücklich erlauben.</p>
+                    <p class="mb-3"><span class="font-normal text-slate-900 dark:text-white">Hosting-Anbieter:</span> Render – Server-Hosting und Datenbankspeicherung.</p>
+                    <p><span class="font-normal text-slate-900 dark:text-white">Keine weiteren Dritten:</span> Wir verkaufen oder vermieten Ihre Daten nicht. Keine Werbenetzwerke, keine Social-Media-Tracking-Pixel.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">5. Speicherdauer</h2>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><span class="font-normal text-slate-900 dark:text-white">Hochgeladene Medien:</span> Automatische Löschung nach Abschluss der Verarbeitung oder bei Fehler.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Kontodaten:</span> Bis zur Löschung Ihres Accounts. Sofortige Löschung möglich über Profileinstellungen.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Ergebnisse (Transkripte/Untertitel):</span> Gespeichert, bis Sie das Projekt löschen oder Ihren Account entfernen.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Server-Logs:</span> 30 Tage.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Gelöschte Accounts:</span> Alle personenbezogenen Daten werden innerhalb von 30 Tagen vollständig entfernt. Gesetzliche Aufbewahrungspflichten vorbehalten.</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">6. Ihre Rechte</h2>
+                    <p class="mb-3">Sie haben folgende Rechte unter der DSGVO:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><span class="font-normal text-slate-900 dark:text-white">Auskunft (Art. 15 DSGVO):</span> Welche Daten wir über Sie speichern.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Berichtigung (Art. 16 DSGVO):</span> Falsche Daten korrigieren lassen.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Löschung (Art. 17 DSGVO):</span> "Recht auf Vergessenwerden" – Account-Löschung in den Profileinstellungen.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Einschränkung (Art. 18 DSGVO):</span> Verarbeitung einschränken lassen.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Datenübertragbarkeit (Art. 20 DSGVO):</span> Daten in maschinenlesbarem Format exportieren.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Widerspruch (Art. 21 DSGVO):</span> Widerspruch gegen Verarbeitung aufgrund berechtigten Interesses.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Widerruf der Einwilligung (Art. 7 Abs. 3 DSGVO):</span> Jederzeit mit Wirkung für die Zukunft.</li>
+                    </ul>
+                    <p class="mt-3">Zur Ausübung Ihrer Rechte kontaktieren Sie uns unter <a href="mailto:saeid.behb@gmail.com" class="text-blue-600 dark:text-blue-400 hover:underline">saeid.behb@gmail.com</a>. Antwort innerhalb von 30 Tagen gemäß Art. 12 DSGVO.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">7. Beschwerderecht bei der Aufsichtsbehörde</h2>
+                    <p class="mb-3">Unabhängig von anderen Rechtsbehelfen steht Ihnen das Recht zu, sich bei der zuständigen Datenschutzaufsichtsbehörde zu beschweren:</p>
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6">
+                        <p class="font-normal text-slate-900 dark:text-white">Berliner Beauftragte für Datenschutz und Informationsfreiheit (BlnBDI)</p>
+                        <p>Friedrichstr. 219, 10969 Berlin</p>
+                        <p>Tel.: 030 13889-0</p>
+                        <p>E-Mail: <a href="mailto:mailbox@datenschutz-berlin.de" class="text-blue-600 dark:text-blue-400 hover:underline">mailbox@datenschutz-berlin.de</a></p>
+                        <p>Web: <a href="https://www.datenschutz-berlin.de" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">www.datenschutz-berlin.de</a></p>
+                    </div>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">8. Cookies und lokale Speicherung</h2>
+                    <p class="mb-3">TermSub verwendet ausschließlich technisch notwendige Cookies und lokale Speicherung:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><span class="font-normal text-slate-900 dark:text-white">Session-Cookie (auth_token):</span> Notwendig für die Anmeldung und Authentifizierung. Löscht sich beim Abmelden.</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Theme-Präferenz (localStorage):</span> Speichert Ihre bevorzugte Darstellung (hell/dunkel).</li>
+                        <li><span class="font-normal text-slate-900 dark:text-white">Cookie-Einwilligung (localStorage):</span> Speichert Ihre Entscheidung zur Cookie-Nutzung.</li>
+                    </ul>
+                    <p class="mt-3">Keine Tracking-Cookies, keine Analyse-Tools, keine Werbe-Cookies.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">9. Datensicherheit</h2>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>HTTPS/TLS-Verschlüsselung für alle Datenübertragungen</li>
+                        <li>Passwörter werden als bcrypt-Hashes gespeichert</li>
+                        <li>BYOK-API-Schlüssel werden verschlüsselt in der Datenbank gespeichert</li>
+                        <li>Regelmäßige Sicherheitsupdates</li>
+                        <li>Zugriff auf Server-Logs ist auf den Betreiber beschränkt</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">10. Künstliche Intelligenz (KI) &amp; EU AI Act</h2>
+                    <p class="mb-3">TermSub nutzt KI-Modelle von OpenAI (Whisper, GPT-4o) zur automatischen Transkription und Übersetzung. Dies ist ein KI-gestützter Dienst im Sinne der EU-Verordnung über künstliche Intelligenz (EU AI Act).</p>
+                    <p><span class="font-normal text-slate-900 dark:text-white">Wichtiger Hinweis:</span> KI-generierte Übersetzungen und Transkriptionen können Fehler enthalten. Eine menschliche Überprüfung der Ergebnisse wird empfohlen, insbesondere für fachspezifische, rechtliche oder sensible Inhalte. Die Qualität variiert je nach Sprachpaar und Inhaltskomplexität.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">11. Änderungen dieser Erklärung</h2>
+                    <p>Wir behalten uns vor, diese Datenschutzerklärung bei Bedarf anzupassen, z. B. bei neuen Funktionen oder geänderten Rechtslagen. Die aktuelle Version ist immer auf dieser Seite einsehbar. Bei wesentlichen Änderungen informieren wir Sie per E-Mail.</p>
+                </section>
+
+                <section class="pt-8 border-t border-slate-200 dark:border-slate-800">
+                    <h2 class="text-2xl font-light text-slate-900 dark:text-white mb-6 tracking-wide">English Summary</h2>
+                    <p class="mb-6">This is a summary for convenience. The legally binding version is the German text above.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Controller</h3>
+                    <p class="mb-4">Saeid Behbahaninia<br>Vegesacker Str. 145<br>28219 Bremen<br>Germany<br>E-Mail: <a href="mailto:saeid.behb@gmail.com" class="text-blue-600 dark:text-blue-400 hover:underline">saeid.behb@gmail.com</a></p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Data We Collect</h3>
+                    <p class="mb-4">Account data (email, password hash), uploaded video/audio/text files (may contain personal data), processing results (transcripts, subtitles, translations), usage data (IP address, timestamps, processed minutes for quota), server logs (30 days).</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Legal Basis</h3>
+                    <p class="mb-4">Art. 6(1)(b) GDPR (contract performance), Art. 6(1)(f) (legitimate interest: security/debugging), Art. 6(1)(a) (consent for beta feedback), Art. 6(1)(c) (legal obligations).</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Third Country Transfer</h3>
+                    <p class="mb-4">OpenAI LLC (USA) for transcription/translation. Based on EU Standard Contractual Clauses (SCCs). OpenAI does not use uploaded audio for model training unless explicitly opted in.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Retention</h3>
+                    <p class="mb-4">Uploaded media: auto-deleted after processing. Account data: until account deletion. Logs: 30 days. Deleted accounts: all personal data removed within 30 days.</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">Your Rights</h3>
+                    <p class="mb-4">Access, rectification, erasure, restriction, data portability, objection. Contact <a href="mailto:saeid.behb@gmail.com" class="text-blue-600 dark:text-blue-400 hover:underline">saeid.behb@gmail.com</a> — response within 30 days. Right to complain to Berlin DPA (BlnBDI).</p>
+
+                    <h3 class="text-base font-normal text-slate-900 dark:text-white mb-2 tracking-wide">AI Disclosure</h3>
+                    <p>This service uses OpenAI AI models (Whisper, GPT-4o) for transcription and translation. Outputs may contain errors — human review is recommended. Quality varies by language pair and content.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500 dark:text-slate-500">
+            <p>&copy; 2026 TermSub. Beta.</p>
+            <div class="flex flex-wrap items-center justify-center gap-4">
+                <a href="/static/legal/imprint.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Imprint</a>
+                <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Privacy</a>
+                <a href="/static/legal/beta-terms.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Beta Terms</a>
+                <a href="/static/legal/ai-disclosure.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">AI Info</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            const key = 'theme';
+            const btn = document.getElementById('themeToggle');
+            const icon = btn.querySelector('i');
+            const root = document.documentElement;
+
+            function apply(dark) {
+                if (dark) {
+                    root.classList.add('dark');
+                    icon.className = 'fa-solid fa-sun';
+                } else {
+                    root.classList.remove('dark');
+                    icon.className = 'fa-solid fa-moon';
+                }
+            }
+
+            apply(root.classList.contains('dark'));
+
+            btn.addEventListener('click', function () {
+                const isDark = root.classList.contains('dark');
+                apply(!isDark);
+                localStorage.setItem(key, !isDark ? 'dark' : 'light');
+            });
+        })();
+    </script>
+</body>
+</html>

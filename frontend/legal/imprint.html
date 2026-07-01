@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="de" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impressum | TermSub</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script>
+        tailwind.config = { darkMode: 'class' };
+        (function () {
+            const key = 'theme';
+            const stored = localStorage.getItem(key);
+            if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; font-weight: 300; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+    <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
+        <div class="max-w-4xl mx-auto px-6 py-5 flex items-center justify-between gap-4">
+            <a href="/" class="text-2xl sm:text-3xl font-medium text-slate-900 dark:text-white tracking-wide">
+                TermSub <span class="text-blue-600 dark:text-blue-400 text-sm sm:text-base font-light align-top">(beta)</span>
+            </a>
+            <div class="flex items-center gap-3">
+                <a href="/app" class="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Back to TermSub</a>
+                <button id="themeToggle" type="button" aria-label="Toggle theme" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 py-12 sm:py-16">
+        <div class="max-w-3xl mx-auto px-6">
+            <h1 class="text-3xl sm:text-4xl font-light text-slate-900 dark:text-white mb-8 tracking-wide">Impressum</h1>
+
+            <div class="space-y-8 text-slate-700 dark:text-slate-300 font-light leading-relaxed">
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">Angaben gemäß § 5 TMG</h2>
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6">
+                        <p class="font-normal text-slate-900 dark:text-white mb-2">Betreiber der Website</p>
+                        <p>Saeid Behbahaninia</p>
+                        <p>Vegesacker Str. 145</p>
+                        <p>28219 Bremen</p>
+                        <p>Germany</p>
+                    </div>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">Kontakt</h2>
+                    <p>E-Mail: <a href="mailto:saeid.behb@gmail.com" class="text-blue-600 dark:text-blue-400 hover:underline">saeid.behb@gmail.com</a></p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">EU-Streitschlichtung</h2>
+                    <p class="mb-3">Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit: <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">https://ec.europa.eu/consumers/odr</a>.</p>
+                    <p>Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">Haftung für Inhalte</h2>
+                    <p>Als Diensteanbieter sind wir gemäß § 7 Abs.1 TMG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 TMG sind wir als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen.</p>
+                </section>
+
+                <section>
+                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">Hinweis zur Beta-Software</h2>
+                    <p>TermSub befindet sich derzeit in einer geschlossenen Beta-Phase. Die Software wird "wie besehen" ohne Gewährleistung jeglicher Art bereitgestellt. Fehler, Ausfälle und Datenverluste sind möglich.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500 dark:text-slate-500">
+            <p>&copy; 2026 TermSub. Beta.</p>
+            <div class="flex flex-wrap items-center justify-center gap-4">
+                <a href="/static/legal/imprint.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Imprint</a>
+                <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Privacy</a>
+                <a href="/static/legal/beta-terms.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Beta Terms</a>
+                <a href="/static/legal/ai-disclosure.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">AI Info</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            const key = 'theme';
+            const btn = document.getElementById('themeToggle');
+            const icon = btn.querySelector('i');
+            const root = document.documentElement;
+
+            function apply(dark) {
+                if (dark) {
+                    root.classList.add('dark');
+                    icon.className = 'fa-solid fa-sun';
+                } else {
+                    root.classList.remove('dark');
+                    icon.className = 'fa-solid fa-moon';
+                }
+            }
+
+            apply(root.classList.contains('dark'));
+
+            btn.addEventListener('click', function () {
+                const isDark = root.classList.contains('dark');
+                apply(!isDark);
+                localStorage.setItem(key, !isDark ? 'dark' : 'light');
+            });
+        })();
+    </script>
+</body>
+</html>

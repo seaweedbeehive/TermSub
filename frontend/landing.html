@@ -157,11 +157,44 @@
             <div class="max-w-6xl mx-auto px-6 text-center">
                 <p class="text-xs text-slate-500 mb-4">*AI processing (transcription, analysis, and translation) is powered by OpenAI.</p>
             </div>
-            <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
-                <p>Open source video translation.</p>
-                <p>&copy; 2026 TermSub</p>
-            </div>
+            <footer class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+                <p>&copy; 2026 TermSub. Beta.</p>
+                <div class="flex flex-wrap items-center justify-center gap-4">
+                    <a href="/static/legal/imprint.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">Imprint</a>
+                    <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">Privacy</a>
+                    <a href="/static/legal/beta-terms.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">Beta Terms</a>
+                    <a href="/static/legal/ai-disclosure.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">AI Info</a>
+                </div>
+            </footer>
         </section>
     </main>
+
+    <!-- Cookie Consent Banner -->
+    <div id="cookieBanner" class="hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 border-t border-slate-800 backdrop-blur">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p class="text-sm text-slate-300 font-light text-center sm:text-left">
+                We use only essential cookies for authentication and theme preferences.
+                <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline ml-1">Learn more</a>
+            </p>
+            <button id="cookieBannerAccept" type="button" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-lg transition-colors tracking-wide whitespace-nowrap">
+                Got it
+            </button>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const key = 'cookie_consent';
+            const banner = document.getElementById('cookieBanner');
+            const acceptBtn = document.getElementById('cookieBannerAccept');
+            if (!localStorage.getItem(key)) {
+                banner.classList.remove('hidden');
+            }
+            acceptBtn.addEventListener('click', function () {
+                localStorage.setItem(key, 'dismissed');
+                banner.classList.add('hidden');
+            });
+        })();
+    </script>
 </body>
 </html>
