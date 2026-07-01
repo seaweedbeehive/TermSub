@@ -43,6 +43,37 @@
             transform: rotate(-90deg);
         }
 
+        /* Mobile-friendly base improvements */
+        @media (max-width: 1023px) {
+            #mainApp {
+                padding: 12px;
+            }
+            .app-workspace {
+                gap: 12px;
+            }
+            button, .btn, [role="button"] {
+                min-height: 40px;
+                min-width: 40px;
+            }
+            input, select, textarea {
+                font-size: 16px; /* Prevent iOS zoom on focus */
+            }
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+                -webkit-overflow-scrolling: touch;
+            }
+            th, td {
+                white-space: nowrap;
+            }
+        }
+
+        /* Safe-area support for notched devices */
+        body {
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+
         .rtl-text {
             direction: rtl;
             text-align: right;

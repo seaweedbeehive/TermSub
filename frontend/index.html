@@ -293,20 +293,20 @@
 
     <div id="mainApp" class="max-w-6xl mx-auto p-6">
         <!-- App Header -->
-        <div class="app-header bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 mb-6">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                        <i class="fa-solid fa-closed-captioning text-white"></i>
+        <div class="app-header bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-closed-captioning text-white text-sm sm:text-base"></i>
                     </div>
-                    <div>
-                        <h1 class="text-xl font-bold text-slate-900 dark:text-[#E2E2E8]">TermSub</h1>
-                        <p class="text-sm text-slate-500 dark:text-[#8A8F98]">Video Translation & Terminology Management</p>
+                    <div class="min-w-0 overflow-hidden">
+                        <h1 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-[#E2E2E8]">TermSub</h1>
+                        <p class="text-xs sm:text-sm text-slate-500 dark:text-[#8A8F98] truncate">Video Translation & Terminology Management</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-3">
-                    <div id="userInfo" class="hidden flex items-center gap-3">
-                        <div id="quotaWidgetHeader" class="hidden rounded-lg bg-slate-50 dark:bg-[#121214] border border-slate-200 dark:border-[#2A2A30] px-3 py-1.5">
+                <div class="flex items-center justify-end gap-2 sm:gap-3">
+                    <div id="userInfo" class="hidden flex items-center gap-2 sm:gap-3">
+                        <div id="quotaWidgetHeader" class="hidden rounded-lg bg-slate-50 dark:bg-[#121214] border border-slate-200 dark:border-[#2A2A30] px-2 sm:px-3 py-1.5">
                             <p class="text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#6B7280]">Trial Remaining</p>
                             <div class="text-xs text-slate-700 dark:text-[#E2E2E8]">
                                 <span id="quotaMinutesHeader" title="Audio minutes remaining in trial">- min</span>
@@ -317,7 +317,7 @@
                                 <div class="w-7 h-7 rounded-full bg-blue-100 dark:bg-[#1A1A1E] flex items-center justify-center">
                                     <i class="fa-solid fa-user text-xs text-slate-600 dark:text-[#8A8F98]"></i>
                                 </div>
-                                <div id="userEmail" class="text-xs font-medium text-slate-700 dark:text-[#E2E2E8] max-w-[140px] truncate">-</div>
+                                <div id="userEmail" class="hidden sm:block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] max-w-[120px] truncate">-</div>
                                 <i class="fa-solid fa-chevron-down text-[10px] text-slate-500 dark:text-[#8A8F98]"></i>
                             </button>
                             <div id="userMenuDropdown" class="hidden absolute right-0 mt-2 w-44 bg-white dark:bg-[#1A1A1E] border border-slate-200 dark:border-[#2A2A30] rounded-lg shadow-xl py-1 z-[9995]">
@@ -330,11 +330,12 @@
                             </div>
                         </div>
                     </div>
-                    <button id="loginBtn" type="button" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">
-                        Log in / Sign up
+                    <button id="loginBtn" type="button" class="hidden px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors whitespace-nowrap">
+                        <span class="sm:hidden">Log in</span>
+                        <span class="hidden sm:inline">Log in / Sign up</span>
                     </button>
-                    <div class="flex items-center gap-2">
-                        <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors" title="Toggle theme">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors shrink-0" title="Toggle theme">
                             <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
                             <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
                         </button>
