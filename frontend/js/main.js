@@ -1370,6 +1370,9 @@
                         </td>
                     </tr>
                 `}).join('');
+
+                // Refresh remaining minutes after terms are shown (video processing has billed minutes).
+                loadQuota();
             } catch (err) {
                 console.error('Failed to load terms:', err);
             }
