@@ -310,7 +310,14 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 @app.get("/")
 async def root() -> FileResponse:
-    """Root endpoint - serve the frontend HTML interface."""
+    """Root endpoint - serve the landing page."""
+    return FileResponse(str(_FRONTEND_DIR / "landing.html"))
+
+
+@app.get("/app")
+@app.get("/app/{path:path}")
+async def app_page(path: str | None = None) -> FileResponse:
+    """App frontend route - serve index.html for /app deep links."""
     return FileResponse(str(_FRONTEND_DIR / "index.html"))
 
 
