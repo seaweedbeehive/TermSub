@@ -2951,15 +2951,6 @@
                 }
             })();
 
-            // Theme toggle handler
-            const themeToggleBtn = document.getElementById('themeToggleBtn');
-            if (themeToggleBtn) {
-                themeToggleBtn.addEventListener('click', () => {
-                    const isDark = document.documentElement.classList.toggle('dark');
-                    localStorage.setItem('termsub_theme', isDark ? 'dark' : 'light');
-                });
-            }
-
             // Language dropdown population with Tom Select
             const sourceLanguageSelect = document.getElementById('sourceLanguage');
             const targetLanguageSelect = document.getElementById('targetLanguage');
