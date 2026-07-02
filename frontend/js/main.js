@@ -387,12 +387,56 @@
             
             logEl.insertAdjacentHTML('beforeend', html);
             logEl.scrollTo({ top: logEl.scrollHeight, behavior: 'smooth' });
+
+            // Mirror critical errors in the normal user-facing status line
+            if (type === 'error') {
+                updateUserFacingStatus({ status: 'error', message });
+            }
         }
         
         function clearActivityLog() {
             const logEl = document.getElementById('activityLog');
             logEl.innerHTML = '';
             loggedCompletions.clear(); // Reset completion tracking
+        }
+
+        function expandActivityLog() {
+            const container = document.getElementById('activityLogContainer');
+            const toggle = document.getElementById('activityLogToggle');
+            if (container) container.classList.remove('activity-log-collapsed');
+            if (toggle) toggle.setAttribute('aria-expanded', 'true');
+        }
+
+        function updateUserFacingStatus(data) {
+            const currentStepEl = document.getElementById('currentStep');
+            if (!currentStepEl) return;
+
+            const isError = data.status === 'error' || !!data.error;
+            const friendly = {
+                uploaded: 'Upload complete — ready to process.',
+                queued: 'Queued — waiting for an available worker...',
+                extracting_audio: 'Extracting audio from the video...',
+                transcribing: 'Transcribing audio with OpenAI Whisper...',
+                transcribed: 'Transcription complete — review or continue.',
+                analyzing: 'Analyzing content and tone...',
+                context_ready: 'Context analysis complete.',
+                glossary_extracting: 'Extracting key terms...',
+                terms_ready: 'Terms extracted — review them before translating.',
+                translating: 'Translating subtitles with OpenAI GPT-4o...',
+                completed: 'Done — subtitles are ready.',
+            };
+
+            if (isError) {
+                const message = data.message || data.current_step || data.error || 'Something went wrong.';
+                currentStepEl.innerHTML = `${escapeHtml(message)} <button type="button" data-open-activity-log class="text-blue-400 hover:text-blue-300 underline ml-1">Open activity log for details.</button>`;
+                currentStepEl.classList.remove('text-slate-300');
+                currentStepEl.classList.add('text-rose-300');
+            } else {
+                const message = friendly[data.status] || data.current_step || data.message || 'Processing...';
+                currentStepEl.textContent = message;
+                currentStepEl.classList.remove('text-rose-300');
+                currentStepEl.classList.add('text-slate-300');
+            }
         }
 
         function escapeHtml(text) {
@@ -1303,22 +1347,18 @@
             statusBadge.className = `inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.color} text-xs font-semibold rounded-full transition-colors`;
             statusBadge.innerHTML = `<span id="statusDot" class="w-1.5 h-1.5 rounded-full ${cfg.dotColor} ${isProcessing ? 'pulse-indicator' : ''}"></span>${cfg.label}`;
             
-            // Update step & segment counters
-            const currentStepEl = document.getElementById('currentStep');
-            if (currentStepEl) currentStepEl.textContent = data.current_step || 'Ready';
+            // Update user-facing status (replaces the old currentStep / stepDetail text)
+            updateUserFacingStatus(data);
+
+            // Hide the old step-detail box to avoid redundancy
+            const stepDetail = document.getElementById('stepDetail');
+            if (stepDetail) stepDetail.classList.add('hidden');
+
+            // Update segment counters
             const segmentCountEl = document.getElementById('segmentCount');
             if (segmentCountEl) segmentCountEl.textContent = `${data.total_segments ?? 0} segments`;
             const processedCountEl = document.getElementById('processedCount');
             if (processedCountEl) processedCountEl.textContent = `${data.processed_segments || 0} processed`;
-            
-            // Update Step Detail
-            const stepDetail = document.getElementById('stepDetail');
-            if (data.step_detail || (isProcessing && data.current_step)) {
-                stepDetail.textContent = data.step_detail || data.current_step;
-                stepDetail.classList.remove('hidden');
-            } else {
-                stepDetail.classList.add('hidden');
-            }
 
             // Show/hide buttons based on status
             updateButtonVisibility(data.status);
@@ -2316,7 +2356,11 @@
             const procCountReset = document.getElementById('processedCount');
             if (procCountReset) procCountReset.textContent = '0 processed';
             const stepReset = document.getElementById('currentStep');
-            if (stepReset) stepReset.textContent = 'Ready to process';
+            if (stepReset) {
+                stepReset.textContent = 'Ready to process';
+                stepReset.classList.remove('text-rose-300');
+                stepReset.classList.add('text-slate-300');
+            }
             
             // Clear logs and terms
             clearActivityLog();
@@ -3087,6 +3131,17 @@
                 activityLogToggle.addEventListener('click', () => {
                     const collapsed = activityLogContainer.classList.toggle('activity-log-collapsed');
                     activityLogToggle.setAttribute('aria-expanded', (!collapsed).toString());
+                });
+            }
+
+            // Clicking the "Open activity log" link in the status line expands the log
+            const currentStepEl = document.getElementById('currentStep');
+            if (currentStepEl) {
+                currentStepEl.addEventListener('click', (e) => {
+                    if (e.target.matches('[data-open-activity-log]')) {
+                        e.preventDefault();
+                        expandActivityLog();
+                    }
                 });
             }
 
