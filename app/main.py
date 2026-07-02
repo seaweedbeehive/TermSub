@@ -347,6 +347,12 @@ async def admin_page(path: str | None = None) -> FileResponse:
     return FileResponse(str(_FRONTEND_DIR / "admin.html"))
 
 
+@app.get("/contact")
+async def contact_page() -> FileResponse:
+    """Contact page frontend route."""
+    return FileResponse(str(_FRONTEND_DIR / "contact.html"))
+
+
 @app.get("/favicon.ico")
 async def favicon() -> Response:
     """Return a 1x1 transparent pixel to stop 404 errors."""
@@ -364,6 +370,7 @@ async def sitemap() -> Response:
     pages = [
         ("", "weekly", "1.0"),
         ("/app", "weekly", "0.8"),
+        ("/contact", "monthly", "0.5"),
         ("/static/legal/imprint.html", "monthly", "0.3"),
         ("/static/legal/privacy.html", "monthly", "0.3"),
         ("/static/legal/beta-terms.html", "monthly", "0.3"),
