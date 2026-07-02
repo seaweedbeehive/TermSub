@@ -357,6 +357,49 @@ async def favicon() -> Response:
     )
 
 
+@app.get("/sitemap.xml")
+async def sitemap() -> Response:
+    """Serve a dynamic sitemap for public pages."""
+    base = settings.FRONTEND_BASE_URL.rstrip("/")
+    pages = [
+        ("", "weekly", "1.0"),
+        ("/app", "weekly", "0.8"),
+        ("/static/legal/imprint.html", "monthly", "0.3"),
+        ("/static/legal/privacy.html", "monthly", "0.3"),
+        ("/static/legal/beta-terms.html", "monthly", "0.3"),
+        ("/static/legal/ai-disclosure.html", "monthly", "0.3"),
+    ]
+
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for path, changefreq, priority in pages:
+        lines.extend([
+            "  <url>",
+            f"    <loc>{base}{path}</loc>",
+            f"    <changefreq>{changefreq}</changefreq>",
+            f"    <priority>{priority}</priority>",
+            "  </url>",
+        ])
+    lines.append("</urlset>")
+
+    return Response(content="\n".join(lines), media_type="application/xml")
+
+
+@app.get("/robots.txt")
+async def robots_txt() -> Response:
+    """Serve robots.txt with a link to the sitemap."""
+    base = settings.FRONTEND_BASE_URL.rstrip("/")
+    content = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+    )
+    return Response(content=content, media_type="text/plain")
+
+
 @app.get("/health")
 def health_check() -> dict[str, str]:
     """Health check endpoint."""
