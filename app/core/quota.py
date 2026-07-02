@@ -139,7 +139,8 @@ class QuotaManager:
                 "reason": (
                     f"Upload would exceed the trial audio limit "
                     f"({self.trial_minutes} minutes). "
-                    f"Remaining: {max(0, self.trial_minutes - current_minutes):.1f} minutes."
+                    f"Remaining: {max(0, self.trial_minutes - current_minutes):.1f} minutes. "
+                    f"Write us an email if you need more quota!"
                 ),
                 "is_unlimited": False,
             }
