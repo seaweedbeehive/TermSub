@@ -1,157 +1,110 @@
 <!DOCTYPE html>
-<html lang="de" class="scroll-smooth">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KI-Transparenzhinweis | TermSub</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <script>
-        tailwind.config = { darkMode: 'class' };
-        (function () {
-            const key = 'theme';
-            const stored = localStorage.getItem(key);
-            if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            }
-        })();
-    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: 'Inter', system-ui, sans-serif; font-weight: 300; }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
-    <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
-        <div class="max-w-4xl mx-auto px-6 py-5 flex items-center justify-between gap-4">
-            <a href="/" class="text-2xl sm:text-3xl font-medium text-slate-900 dark:text-white tracking-wide">
-                TermSub <span class="text-blue-600 dark:text-blue-400 text-sm sm:text-base font-light align-top">(beta)</span>
-            </a>
-            <div class="flex items-center gap-3">
-                <a href="/app" class="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Back to TermSub</a>
-                <button id="themeToggle" type="button" aria-label="Toggle theme" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-moon"></i>
-                </button>
+<body class="bg-slate-950 text-slate-100">
+    <header class="border-b border-slate-800">
+        <div class="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+            <div class="flex flex-col">
+                <span class="text-2xl sm:text-3xl font-medium text-white tracking-wide">TermSub <span class="text-blue-400 text-sm sm:text-base font-light align-top">(beta)</span></span>
+                <a href="/app" class="text-sm text-slate-400 hover:text-white transition-colors">&larr; Back to TermSub</a>
             </div>
         </div>
     </header>
 
-    <main class="flex-1 py-12 sm:py-16">
-        <div class="max-w-3xl mx-auto px-6">
-            <h1 class="text-3xl sm:text-4xl font-light text-slate-900 dark:text-white mb-2 tracking-wide">KI-Transparenzhinweis</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mb-10">Gemäß EU AI Act (Verordnung (EU) 2024/1689)</p>
+    <main class="max-w-4xl mx-auto px-6 py-16">
+        <h1 class="text-3xl sm:text-4xl font-light text-white mb-8 tracking-wide">KI-Transparenzhinweis</h1>
+        <p class="text-sm text-slate-500 mb-10">Gem&auml;&szlig; EU AI Act (Verordnung (EU) 2024/1689)</p>
 
-            <div class="space-y-10 text-slate-700 dark:text-slate-300 font-light leading-relaxed">
-                <section>
-                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">Dieser Dienst nutzt Künstliche Intelligenz</h2>
-                    <p>TermSub verwendet KI-Modelle von OpenAI (Whisper für Transkription, GPT-4o für Übersetzung), um Ihre Audio- und Videodateien in Untertitel zu verwandeln und in andere Sprachen zu übersetzen. Dies ist ein KI-gestützter Dienst im Sinne des EU AI Act.</p>
-                </section>
+        <div class="space-y-10 text-slate-400 font-light leading-relaxed">
+            <section>
+                <h2 class="text-lg font-normal text-white mb-3 tracking-wide">Dieser Dienst nutzt K&uuml;nstliche Intelligenz</h2>
+                <p>TermSub verwendet KI-Modelle von OpenAI (Whisper f&uuml;r Transkription, GPT-4o f&uuml;r &Uuml;bersetzung), um Ihre Audio- und Videodateien in Untertitel zu verwandeln und in andere Sprachen zu &uuml;bersetzen. Dies ist ein KI-gest&uuml;tzter Dienst im Sinne des EU AI Act.</p>
+            </section>
 
-                <section>
-                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-5 tracking-wide">Was die KI tut</h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
-                            <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 text-sm font-normal">1</div>
-                            <h3 class="text-base font-normal text-slate-900 dark:text-white mb-1 tracking-wide">Transkription</h3>
-                            <p class="text-sm">OpenAI Whisper wandelt gesprochene Sprache in Text mit Zeitstempeln um.</p>
-                        </div>
-                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
-                            <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 text-sm font-normal">2</div>
-                            <h3 class="text-base font-normal text-slate-900 dark:text-white mb-1 tracking-wide">Inhaltsanalyse</h3>
-                            <p class="text-sm">Ein KI-Agent analysiert Kontext, Tonfall und Domäne des Inhalts.</p>
-                        </div>
-                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
-                            <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 text-sm font-normal">3</div>
-                            <h3 class="text-base font-normal text-slate-900 dark:text-white mb-1 tracking-wide">Begriffsextraktion</h3>
-                            <p class="text-sm">Ein weiterer KI-Agent identifiziert Namen, Orte und Fachbegriffe für konsistente Übersetzung.</p>
-                        </div>
-                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
-                            <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 text-sm font-normal">4</div>
-                            <h3 class="text-base font-normal text-slate-900 dark:text-white mb-1 tracking-wide">Übersetzung</h3>
-                            <p class="text-sm">GPT-4o übersetzt den Text unter Berücksichtigung des Glossars und Kontexts.</p>
-                        </div>
+            <section>
+                <h2 class="text-lg font-normal text-white mb-3 tracking-wide">Was die KI tut</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                        <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center mb-3 text-sm font-normal">1</div>
+                        <h3 class="text-base font-normal text-white mb-1 tracking-wide">Transkription</h3>
+                        <p class="text-sm">OpenAI Whisper wandelt gesprochene Sprache in Text mit Zeitstempeln um.</p>
                     </div>
-                </section>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                        <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center mb-3 text-sm font-normal">2</div>
+                        <h3 class="text-base font-normal text-white mb-1 tracking-wide">Inhaltsanalyse</h3>
+                        <p class="text-sm">Ein KI-Agent analysiert Kontext, Tonfall und Dom&auml;ne des Inhalts.</p>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                        <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center mb-3 text-sm font-normal">3</div>
+                        <h3 class="text-base font-normal text-white mb-1 tracking-wide">Begriffsextraktion</h3>
+                        <p class="text-sm">Ein weiterer KI-Agent identifiziert Namen, Orte und Fachbegriffe f&uuml;r konsistente &Uuml;bersetzung.</p>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                        <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center mb-3 text-sm font-normal">4</div>
+                        <h3 class="text-base font-normal text-white mb-1 tracking-wide">&Uuml;bersetzung</h3>
+                        <p class="text-sm">GPT-4o &uuml;bersetzt den Text unter Ber&uuml;cksichtigung des Glossars und Kontexts.</p>
+                    </div>
+                </div>
+            </section>
 
-                <section>
-                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">Einschränkungen &amp; Risiken</h2>
-                    <ul class="list-disc pl-5 space-y-2">
-                        <li><span class="font-normal text-slate-900 dark:text-white">Fehler möglich:</span> KI-Transkriptionen und -Übersetzungen können ungenau, unvollständig oder fehlerhaft sein.</li>
-                        <li><span class="font-normal text-slate-900 dark:text-white">Halluzinationen:</span> Die KI kann Inhalte erfinden, Begriffe falsch wiedergeben oder Kontexte missverstehen.</li>
-                        <li><span class="font-normal text-slate-900 dark:text-white">Sensible Inhalte:</span> Bei juristischen, medizinischen, sicherheitskritischen oder persönlich sensiblen Inhalten ist eine menschliche Überprüfung dringend empfohlen.</li>
-                        <li><span class="font-normal text-slate-900 dark:text-white">Sprachabhängigkeit:</span> Die Qualität variiert stark je nach Sprachpaar. Weniger verbreitete Sprachen können ungenauere Ergebnisse liefern.</li>
-                        <li><span class="font-normal text-slate-900 dark:text-white">Keine Echtzeitübersetzung:</span> Die Verarbeitung erfolgt asynchron, nicht in Echtzeit.</li>
-                    </ul>
-                </section>
+            <section>
+                <h2 class="text-lg font-normal text-white mb-3 tracking-wide">Einschr&auml;nkungen &amp; Risiken</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li><span class="font-normal text-white">Fehler m&ouml;glich:</span> KI-Transkriptionen und -&Uuml;bersetzungen k&ouml;nnen ungenau, unvollst&auml;ndig oder fehlerhaft sein.</li>
+                    <li><span class="font-normal text-white">Halluzinationen:</span> Die KI kann Inhalte erfinden, Begriffe falsch wiedergeben oder Kontexte missverstehen.</li>
+                    <li><span class="font-normal text-white">Sensible Inhalte:</span> Bei juristischen, medizinischen, sicherheitskritischen oder pers&ouml;nlich sensiblen Inhalten ist eine menschliche &Uuml;berpr&uuml;fung dringend empfohlen.</li>
+                    <li><span class="font-normal text-white">Sprachabh&auml;ngigkeit:</span> Die Qualit&auml;t variiert stark je nach Sprachpaar. Weniger verbreitete Sprachen k&ouml;nnen ungenauere Ergebnisse liefern.</li>
+                    <li><span class="font-normal text-white">Keine Echtzeit&uuml;bersetzung:</span> Die Verarbeitung erfolgt asynchron, nicht in Echtzeit.</li>
+                </ul>
+            </section>
 
-                <section>
-                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">Datenverarbeitung durch OpenAI</h2>
-                    <p class="mb-3">Ihre Audiodaten werden zur Verarbeitung an OpenAI übermittelt. Details entnehmen Sie unserer <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Datenschutzerklärung</a>. Die wichtigsten Punkte:</p>
-                    <ul class="list-disc pl-5 space-y-2">
-                        <li>OpenAI speichert hochgeladene Audiodateien nicht dauerhaft</li>
-                        <li>OpenAI nutzt Ihre Daten nicht zum Training von KI-Modellen, sofern Sie dies nicht ausdrücklich erlauben</li>
-                        <li>Die Übermittlung erfolgt auf Basis der EU-Standardvertragsklauseln (SCCs)</li>
-                        <li>Bei BYOK-Nutzern: Ihr API-Schlüssel wird verschlüsselt gespeichert</li>
-                    </ul>
-                </section>
+            <section>
+                <h2 class="text-lg font-normal text-white mb-3 tracking-wide">Datenverarbeitung durch OpenAI</h2>
+                <p class="mb-3">Ihre Audiodaten werden zur Verarbeitung an OpenAI &uuml;bermittelt. Details entnehmen Sie unserer <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Datenschutzerkl&auml;rung</a>. Die wichtigsten Punkte:</p>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>OpenAI speichert hochgeladene Audiodateien nicht dauerhaft</li>
+                    <li>OpenAI nutzt Ihre Daten nicht zum Training von KI-Modellen, sofern Sie dies nicht ausdr&uuml;cklich erlauben</li>
+                    <li>Die &Uuml;bermittlung erfolgt auf Basis der EU-Standardvertragsklauseln (SCCs)</li>
+                    <li>Bei BYOK-Nutzern: Ihr API-Schl&uuml;ssel wird verschl&uuml;sselt gespeichert</li>
+                </ul>
+            </section>
 
-                <section>
-                    <h2 class="text-lg font-normal text-slate-900 dark:text-white mb-3 tracking-wide">Ihre Kontrolle</h2>
-                    <ul class="list-disc pl-5 space-y-2">
-                        <li><span class="font-normal text-slate-900 dark:text-white">Prüfung:</span> Alle Ergebnisse werden Ihnen zur Review angezeigt, bevor Sie sie exportieren.</li>
-                        <li><span class="font-normal text-slate-900 dark:text-white">Bearbeitung:</span> Sie können alle Untertitel inline bearbeiten, einschließlich Zeitstempel und Text.</li>
-                        <li><span class="font-normal text-slate-900 dark:text-white">Löschung:</span> Sie können Ihren Account und alle damit verbundenen Daten jederzeit löschen.</li>
-                        <li><span class="font-normal text-slate-900 dark:text-white">Keine Automatisierung:</span> Es gibt keine automatische Veröffentlichung oder Weiterleitung von Ergebnissen.</li>
-                    </ul>
-                </section>
+            <section>
+                <h2 class="text-lg font-normal text-white mb-3 tracking-wide">Ihre Kontrolle</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li><span class="font-normal text-white">Pr&uuml;fung:</span> Alle Ergebnisse werden Ihnen zur Review angezeigt, bevor Sie sie exportieren.</li>
+                    <li><span class="font-normal text-white">Bearbeitung:</span> Sie k&ouml;nnen alle Untertitel inline bearbeiten, einschlie&szlig;lich Zeitstempel und Text.</li>
+                    <li><span class="font-normal text-white">L&ouml;schung:</span> Sie k&ouml;nnen Ihren Account und alle damit verbundenen Daten jederzeit l&ouml;schen.</li>
+                    <li><span class="font-normal text-white">Keine Automatisierung:</span> Es gibt keine automatische Ver&ouml;ffentlichung oder Weiterleitung von Ergebnissen.</li>
+                </ul>
+            </section>
 
-                <section class="pt-8 border-t border-slate-200 dark:border-slate-800">
-                    <h2 class="text-2xl font-light text-slate-900 dark:text-white mb-6 tracking-wide">English</h2>
-                    <p>This service uses OpenAI AI models (Whisper, GPT-4o) for transcription and translation. AI-generated outputs may contain errors, hallucinations, or inaccuracies. Human review is strongly recommended, especially for legal, medical, security-critical, or sensitive personal content. Quality varies by language pair. OpenAI does not store uploaded audio permanently and does not use it for model training unless you explicitly opt in. All results are shown for your review and editing before export. See our <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Privacy Policy</a> for details on data processing.</p>
-                </section>
-            </div>
+            <section class="pt-8 border-t border-slate-800">
+                <h2 class="text-lg font-normal text-white mb-3 tracking-wide">English</h2>
+                <p>This service uses OpenAI AI models (Whisper, GPT-4o) for transcription and translation. AI-generated outputs may contain errors, hallucinations, or inaccuracies. Human review is strongly recommended, especially for legal, medical, security-critical, or sensitive personal content. Quality varies by language pair. OpenAI does not store uploaded audio permanently and does not use it for model training unless you explicitly opt in. All results are shown for your review and editing before export. See our <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Privacy Policy</a> for details on data processing.</p>
+            </section>
         </div>
     </main>
 
-    <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6">
-        <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500 dark:text-slate-500">
-            <p>&copy; 2026 TermSub. Beta.</p>
-            <div class="flex flex-wrap items-center justify-center gap-4">
-                <a href="/static/legal/imprint.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Imprint</a>
-                <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Privacy</a>
-                <a href="/static/legal/beta-terms.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">Beta Terms</a>
-                <a href="/static/legal/ai-disclosure.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-slate-300 transition-colors">AI Info</a>
-            </div>
+    <footer class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+        <p>&copy; 2026 TermSub. Beta.</p>
+        <div class="flex flex-wrap items-center justify-center gap-4">
+            <a href="/static/legal/imprint.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">Imprint</a>
+            <a href="/static/legal/privacy.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">Privacy</a>
+            <a href="/static/legal/beta-terms.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">Beta Terms</a>
+            <a href="/static/legal/ai-disclosure.html" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">AI Info</a>
         </div>
     </footer>
-
-    <script>
-        (function () {
-            const key = 'theme';
-            const btn = document.getElementById('themeToggle');
-            const icon = btn.querySelector('i');
-            const root = document.documentElement;
-
-            function apply(dark) {
-                if (dark) {
-                    root.classList.add('dark');
-                    icon.className = 'fa-solid fa-sun';
-                } else {
-                    root.classList.remove('dark');
-                    icon.className = 'fa-solid fa-moon';
-                }
-            }
-
-            apply(root.classList.contains('dark'));
-
-            btn.addEventListener('click', function () {
-                const isDark = root.classList.contains('dark');
-                apply(!isDark);
-                localStorage.setItem(key, !isDark ? 'dark' : 'light');
-            });
-        })();
-    </script>
 </body>
 </html>
