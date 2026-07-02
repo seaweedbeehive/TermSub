@@ -132,6 +132,21 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+class ProxySchemeMiddleware(BaseHTTPMiddleware):
+    """Respect the X-Forwarded-Proto header from reverse proxies.
+
+    Render (and similar proxies) forward HTTPS traffic to the app over HTTP.
+    Without this, FastAPI redirects and URL generation use `http://`, which
+    browsers block as mixed content when the page was loaded over HTTPS.
+    """
+
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        if forwarded_proto:
+            request.scope["scheme"] = forwarded_proto
+        return await call_next(request)
+
+
 class AnalyticsMiddleware(BaseHTTPMiddleware):
     """Log incoming requests to the PageView analytics table.
 
@@ -282,6 +297,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Trust X-Forwarded-Proto from the reverse proxy so HTTPS URLs are generated
+# correctly (avoids mixed-content redirects).
+app.add_middleware(ProxySchemeMiddleware)
 
 # Analytics middleware — logs page views in the background
 app.add_middleware(AnalyticsMiddleware)

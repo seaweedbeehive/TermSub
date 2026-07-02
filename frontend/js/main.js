@@ -586,7 +586,7 @@
 
         async function loadQuota() {
             try {
-                const response = await fetch('/api/quota');
+                const response = await fetch('/api/quota/');
                 if (!response.ok) throw new Error('Quota unavailable');
                 const quota = await response.json();
                 updateQuotaDisplay(quota);
@@ -728,7 +728,7 @@
 
         async function loadProfileQuota() {
             try {
-                const response = await fetch('/api/quota');
+                const response = await fetch('/api/quota/');
                 if (!response.ok) throw new Error('Quota unavailable');
                 const data = await response.json();
                 const remainingEl = document.getElementById('profileQuotaRemaining');
