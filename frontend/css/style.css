@@ -1,134 +1,180 @@
-        body { font-family: 'Inter', system-ui, sans-serif; }
+/* Shared design tokens: Scandinavian-inspired, dark-slate TermSub UI.
+   These variables keep the app and landing page visually consistent. */
+:root {
+    --ts-bg: #020617;         /* slate-950 */
+    --ts-card: #0f172a;       /* slate-900 */
+    --ts-card-hover: #1e293b; /* slate-800 */
+    --ts-border: #1e293b;     /* slate-800 */
+    --ts-text: #f1f5f9;       /* slate-100 */
+    --ts-text-muted: #94a3b8; /* slate-400 */
+    --ts-accent: #2563eb;     /* blue-600 */
+    --ts-accent-hover: #1d4ed8; /* blue-700 */
+    --ts-radius-sm: 8px;
+    --ts-radius-md: 12px;
+    --ts-radius-lg: 16px;
+}
 
-        /* Fixed-height desktop app shell — no page scrolling on lg screens */
-        @media (min-width: 1024px) {
-            html, body { height: 100vh; overflow: hidden; }
+body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 300;
+    background-color: var(--ts-bg);
+    color: var(--ts-text);
+}
 
-            #mainApp {
-                height: 100vh;
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-            }
+/* Desktop no-scroll shell */
+@media (min-width: 1024px) {
+    html, body { height: 100vh; overflow: hidden; }
 
-            .app-header { flex-shrink: 0; }
-            .app-workspace {
-                flex: 1 1 0%;
-                min-height: 0;
-                overflow: hidden;
-            }
-        }
+    #mainApp {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
 
-        /* Collapsible bottom activity log — expands upward */
-        #activityLogContainer {
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            max-height: 4rem;
-            overflow: hidden;
-            transition: max-height 0.2s ease;
-        }
-        #activityLogContainer:not(.activity-log-collapsed) {
-            max-height: 18rem;
-        }
-        #activityLog {
-            flex: 1 1 0%;
-            min-height: 0;
-            overflow-y: auto;
-        }
-        .activity-log-collapsed #activityLog {
-            opacity: 0;
-        }
-        .activity-log-collapsed .fa-chevron-down {
-            transform: rotate(-90deg);
-        }
+    .app-header { flex-shrink: 0; }
+    .app-workspace {
+        flex: 1 1 0%;
+        min-height: 0;
+        overflow: hidden;
+    }
+}
 
-        /* Mobile-friendly base improvements */
-        @media (max-width: 1023px) {
-            #mainApp {
-                padding: 12px;
-            }
-            .app-workspace {
-                gap: 12px;
-            }
-            button, .btn, [role="button"] {
-                min-height: 40px;
-                min-width: 40px;
-            }
-            input, select, textarea {
-                font-size: 16px; /* Prevent iOS zoom on focus */
-            }
-            table {
-                display: block;
-                overflow-x: auto;
-                white-space: nowrap;
-                -webkit-overflow-scrolling: touch;
-            }
-            th, td {
-                white-space: nowrap;
-            }
-        }
+/* Collapsible bottom activity log */
+#activityLogContainer {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    max-height: 4rem;
+    overflow: hidden;
+    transition: max-height 0.2s ease;
+}
+#activityLogContainer:not(.activity-log-collapsed) {
+    max-height: 18rem;
+}
+#activityLog {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+}
+.activity-log-collapsed #activityLog {
+    opacity: 0;
+}
+.activity-log-collapsed .fa-chevron-down {
+    transform: rotate(-90deg);
+}
 
-        /* Safe-area support for notched devices */
-        body {
-            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-        }
+/* Mobile-friendly base improvements */
+@media (max-width: 1023px) {
+    #mainApp {
+        padding: 12px;
+    }
+    .app-workspace {
+        gap: 12px;
+    }
+    button, .btn, [role="button"] {
+        min-height: 40px;
+        min-width: 40px;
+    }
+    input, select, textarea {
+        font-size: 16px; /* Prevent iOS zoom on focus */
+    }
+    table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+    th, td {
+        white-space: nowrap;
+    }
+}
 
-        .rtl-text {
-            direction: rtl;
-            text-align: right;
-            unicode-bidi: isolate;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
-        }
-        .pulse-indicator {
-            animation: pulse-dot 1.5s ease-in-out infinite;
-        }
+/* Safe-area support for notched devices */
+body {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
 
-        /* Activity Log — modern dark-editor scrollbar */
-        #activityLog::-webkit-scrollbar {
-            width: 6px;
-        }
-        #activityLog::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        #activityLog::-webkit-scrollbar-thumb {
-            background-color: #475569;
-            border-radius: 3px;
-        }
-        #activityLog::-webkit-scrollbar-thumb:hover {
-            background-color: #64748b;
-        }
-        #activityLog {
-            scrollbar-width: thin;
-            scrollbar-color: #475569 transparent;
-        }
+/* Consistency overrides: map legacy light/dark app classes to the dark-slate
+   design system used by the landing page. This unifies the whole app quickly
+   without rewriting every Tailwind class in index.html. */
+.bg-white,
+[class*="bg-[#1A1A1E]"],
+[class*="bg-[#121214]"],
+[class*="bg-[#0F0F12]"],
+[class*="bg-[#2A2A30]"] {
+    background-color: var(--ts-card) !important;
+}
 
-        /* Tom Select dark-mode overrides */
-        .dark .ts-control,
-        .dark .ts-control input,
-        .dark .ts-dropdown {
-            background-color: #0F0F12;
-            color: #E2E2E8;
-            border-color: #2A2A30;
-        }
-        .dark .ts-dropdown .option {
-            color: #E2E2E8;
-        }
-        .dark .ts-dropdown .option:hover,
-        .dark .ts-dropdown .active {
-            background-color: #2A2A30;
-            color: #E2E2E8;
-        }
-        .dark .ts-dropdown .selected {
-            background-color: #1A1A1E;
-        }
-        .dark .ts-control .item,
-        .dark .ts-control .ts-input {
-            color: #E2E2E8;
-        }
-        .dark .ts-control input::placeholder {
-            color: #8A8F98;
-        }
+.text-slate-900,
+[class*="text-[#E2E2E8]"] {
+    color: var(--ts-text) !important;
+}
+
+.text-slate-600,
+.text-slate-700,
+[class*="text-[#8A8F98]"] {
+    color: var(--ts-text-muted) !important;
+}
+
+.text-slate-500,
+[class*="text-[#6B7280]"] {
+    color: var(--ts-text-muted) !important;
+}
+
+.border-slate-200,
+.border-slate-300,
+[class*="border-[#2A2A30]"],
+[class*="border-white/10"] {
+    border-color: var(--ts-border) !important;
+}
+
+.bg-slate-100,
+.bg-slate-50,
+[class*="bg-slate-200"] {
+    background-color: var(--ts-card-hover) !important;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+    background-color: var(--ts-card-hover) !important;
+    border-color: var(--ts-border) !important;
+    color: var(--ts-text) !important;
+}
+
+.rtl-text {
+    direction: rtl;
+    text-align: right;
+    unicode-bidi: isolate;
+}
+
+/* Tom Select overrides */
+.ts-control,
+.ts-control input,
+.ts-dropdown {
+    background-color: #0f172a !important;
+    color: #f1f5f9 !important;
+    border-color: #1e293b !important;
+}
+.ts-dropdown .option {
+    color: #f1f5f9;
+}
+.ts-dropdown .option:hover,
+.ts-dropdown .active {
+    background-color: #1e293b;
+    color: #f1f5f9;
+}
+.ts-dropdown .selected {
+    background-color: #0f172a;
+}
+.ts-control .item,
+.ts-control .ts-input {
+    color: #f1f5f9;
+}
+.ts-control input::placeholder {
+    color: #94a3b8;
+}

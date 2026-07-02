@@ -340,13 +340,13 @@
 
         // Status config with colors
         const statusConfig = {
-            uploaded: { label: 'Uploaded', color: 'bg-slate-100 dark:bg-cyan-500/20 text-slate-700 dark:text-cyan-300', dotColor: 'bg-slate-400 dark:bg-cyan-400' },
+            uploaded: { label: 'Uploaded', color: 'bg-blue-500/20 text-blue-300', dotColor: 'bg-blue-400' },
             queued: { label: 'Queued', color: 'bg-gray-100 text-gray-700', dotColor: 'bg-gray-400' },
             extracting_audio: { label: 'Extracting Audio', color: 'bg-amber-100 text-amber-800', dotColor: 'bg-amber-500' },
             transcribing: { label: 'Transcribing', color: 'bg-orange-100 text-orange-800', dotColor: 'bg-orange-500' },
             transcribed: { label: 'Transcribed', color: 'bg-blue-100 text-blue-800', dotColor: 'bg-blue-500' },
-            analyzing: { label: 'Analyzing', color: 'bg-cyan-100 text-cyan-800', dotColor: 'bg-cyan-500' },
-            context_ready: { label: 'Context Ready', color: 'bg-sky-100 text-sky-800', dotColor: 'bg-sky-500' },
+            analyzing: { label: 'Analyzing', color: 'bg-blue-500/20 text-blue-300', dotColor: 'bg-blue-400' },
+            context_ready: { label: 'Context Ready', color: 'bg-blue-500/20 text-blue-300', dotColor: 'bg-blue-400' },
             glossary_extracting: { label: 'Extracting Terms', color: 'bg-yellow-100 text-yellow-800', dotColor: 'bg-yellow-500' },
             terms_ready: { label: 'Terms Ready', color: 'bg-indigo-100 text-indigo-800', dotColor: 'bg-indigo-500' },
             translating: { label: 'Translating via OpenAI', color: 'bg-purple-100 text-purple-800', dotColor: 'bg-purple-500' },
@@ -2102,6 +2102,7 @@
             const container = document.getElementById('primaryActionContainer');
             const termsPanel = document.getElementById('termsPanel');
             const subtitleReviewPanel = document.getElementById('subtitleReviewPanel');
+            const howToPanel = document.getElementById('howToPanel');
 
             if (!container) return;
 
@@ -2123,6 +2124,9 @@
             switch (status) {
                 case 'uploaded':
                     primaryBtn?.classList.add('hidden');
+                    if (howToPanel) howToPanel.classList.remove('hidden');
+                    if (termsPanel) termsPanel.classList.add('hidden');
+                    if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
                     break;
 
                 case 'transcribed':
@@ -2133,10 +2137,11 @@
                     } else {
                         // Transcribe-only (or no mode): transcribed is the final state
                         primaryBtn.textContent = 'Download the subtitles in original language';
-                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
                         primaryBtn.onclick = downloadTranscription;
                         exportGrid?.classList.add('hidden');
                         exportHeader?.classList.add('hidden');
+                        if (howToPanel) howToPanel.classList.add('hidden');
                         if (termsPanel) termsPanel.classList.add('hidden');
                         if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
                         // Load original transcription into the timeline so the user can review it
@@ -2153,8 +2158,9 @@
                     if (targetPipelineMode === 'terminology' || !targetPipelineMode) {
                         helperText?.classList.remove('hidden');
                         primaryBtn.textContent = 'Translate Subtitles';
-                        primaryBtn.className = 'w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm';
+                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
                         primaryBtn.onclick = translateVideo;
+                        if (howToPanel) howToPanel.classList.add('hidden');
                         if (termsPanel) termsPanel.classList.remove('hidden');
                         if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
                         renderTerms();
@@ -2168,12 +2174,14 @@
                     exportGrid?.classList.remove('hidden');
                     exportHeader?.classList.remove('hidden');
                     if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
+                    if (howToPanel) howToPanel.classList.add('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
                     break;
 
                 default:
                     primaryBtn?.classList.add('hidden');
+                    if (howToPanel) howToPanel.classList.remove('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
             }
@@ -2297,6 +2305,8 @@
             if (termsPanelReset) termsPanelReset.classList.add('hidden');
             const subtitleReviewReset = document.getElementById('subtitleReviewPanel');
             if (subtitleReviewReset) subtitleReviewReset.classList.add('hidden');
+            const howToPanelReset = document.getElementById('howToPanel');
+            if (howToPanelReset) howToPanelReset.classList.remove('hidden');
             const timelineGridReset = document.getElementById('timelineCardGrid');
             if (timelineGridReset) timelineGridReset.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
             
@@ -2953,15 +2963,6 @@
                     updateUserDisplay();
                 }
             })();
-
-            // Theme toggle handler
-            const themeToggleBtn = document.getElementById('themeToggleBtn');
-            if (themeToggleBtn) {
-                themeToggleBtn.addEventListener('click', () => {
-                    const isDark = document.documentElement.classList.toggle('dark');
-                    localStorage.setItem('termsub_theme', isDark ? 'dark' : 'light');
-                });
-            }
 
             // Language dropdown population with Tom Select
             const sourceLanguageSelect = document.getElementById('sourceLanguage');

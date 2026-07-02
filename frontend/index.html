@@ -12,17 +12,7 @@
             originalWarn.apply(console, args);
         };
     </script>
-    <script>
-      // Prevent FOUC: apply theme before Tailwind loads
-      (function() {
-        const theme = localStorage.getItem('termsub_theme') || 'light';
-        if (theme === 'dark') document.documentElement.classList.add('dark');
-      })();
-    </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = { darkMode: 'class' };
-    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.6.1/dist/css/tom-select.css">
     <link rel="stylesheet" href="/static/css/style.css">
@@ -56,30 +46,30 @@
                 <div>
                     <label for="authEmail" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Email</label>
                     <input type="email" id="authEmail" required autocomplete="email" placeholder="you@example.com"
-                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                 </div>
                 <div>
                     <div class="flex items-center justify-between mb-1">
                         <label for="authPassword" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8]">Password</label>
-                        <button id="authForgotPasswordBtn" type="button" class="text-[10px] text-blue-600 dark:text-[#00F0FF] hover:underline font-medium bg-transparent border-none p-0">Forgot password?</button>
+                        <button id="authForgotPasswordBtn" type="button" class="text-[10px] text-blue-600 hover:underline font-normal bg-transparent border-none p-0">Forgot password?</button>
                     </div>
                     <div class="relative">
                         <input type="password" id="authPassword" required minlength="8" autocomplete="current-password" placeholder="••••••••"
-                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                         <button type="button" data-toggle-password="authPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                     </div>
                 </div>
                 <div id="wantsUpdatesContainer" class="flex items-start gap-2">
-                    <input type="checkbox" id="authWantsUpdates" checked class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-[#2A2A30] text-blue-600 focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
+                    <input type="checkbox" id="authWantsUpdates" checked class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-[#2A2A30] text-blue-600 focus:ring-blue-600">
                     <label for="authWantsUpdates" class="text-sm text-slate-600 dark:text-[#8A8F98]">Keep me updated on new releases</label>
                 </div>
                 <div id="authError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
-                <button type="submit" id="authSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" id="authSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-lg transition-colors tracking-wide">
                     Create Free Account
                 </button>
                 <p class="text-center text-xs text-slate-500 dark:text-[#8A8F98]">
                     <span id="authModeToggleText">Already have an account?</span>
-                    <button id="authModeToggleBtn" type="button" class="ml-1 text-blue-600 dark:text-[#00F0FF] hover:underline font-medium bg-transparent border-none p-0">Sign in</button>
+                    <button id="authModeToggleBtn" type="button" class="ml-1 text-blue-600 hover:underline font-normal bg-transparent border-none p-0">Sign in</button>
                 </p>
             </form>
 
@@ -89,15 +79,15 @@
                 <div>
                     <label for="forgotPasswordEmail" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Email</label>
                     <input type="email" id="forgotPasswordEmail" required autocomplete="email" placeholder="you@example.com"
-                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                 </div>
                 <div id="forgotPasswordError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
                 <div id="forgotPasswordSuccess" class="hidden text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded border border-emerald-200 dark:border-emerald-800"></div>
-                <button type="submit" id="forgotPasswordSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" id="forgotPasswordSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-lg transition-colors tracking-wide">
                     Send reset link
                 </button>
                 <p class="text-center text-xs text-slate-500 dark:text-[#8A8F98]">
-                    <button id="forgotPasswordBackBtn" type="button" class="text-blue-600 dark:text-[#00F0FF] hover:underline font-medium bg-transparent border-none p-0">Back to sign in</button>
+                    <button id="forgotPasswordBackBtn" type="button" class="text-blue-600 hover:underline font-normal bg-transparent border-none p-0">Back to sign in</button>
                 </p>
             </form>
 
@@ -108,7 +98,7 @@
                     <label for="resetPasswordInput" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">New password</label>
                     <div class="relative">
                         <input type="password" id="resetPasswordInput" required minlength="8" autocomplete="new-password" placeholder="••••••••"
-                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                         <button type="button" data-toggle-password="resetPasswordInput" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                     </div>
                 </div>
@@ -116,13 +106,13 @@
                     <label for="resetPasswordConfirm" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Confirm new password</label>
                     <div class="relative">
                         <input type="password" id="resetPasswordConfirm" required minlength="8" autocomplete="new-password" placeholder="••••••••"
-                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                         <button type="button" data-toggle-password="resetPasswordConfirm" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                     </div>
                 </div>
                 <div id="resetPasswordError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
                 <div id="resetPasswordSuccess" class="hidden text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded border border-emerald-200 dark:border-emerald-800"></div>
-                <button type="submit" id="resetPasswordSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" id="resetPasswordSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-lg transition-colors tracking-wide">
                     Reset password
                 </button>
             </form>
@@ -139,17 +129,17 @@
                     <label for="byokApiKey" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">OpenAI API Key</label>
                     <div class="relative">
                         <input type="password" id="byokApiKey" required minlength="20" placeholder="sk-..."
-                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                         <button type="button" data-toggle-password="byokApiKey" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                     </div>
                 </div>
                 <div>
                     <label for="byokEmail" class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Want product updates? (optional)</label>
                     <input type="email" id="byokEmail" autocomplete="email" placeholder="you@example.com"
-                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                 </div>
                 <div id="byokError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"></div>
-                <button type="submit" id="byokSubmitBtn" class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-900 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] text-white dark:text-[#E2E2E8] text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" id="byokSubmitBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-lg transition-colors tracking-wide">
                     Start Using TermSub
                 </button>
             </form>
@@ -177,7 +167,7 @@
                 <button id="resendVerifyBtn" type="button" class="w-full py-2.5 px-4 bg-white dark:bg-[#2A2A30] border border-slate-300 dark:border-[#3A3A40] text-slate-700 dark:text-[#E2E2E8] text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-[#3A3A40] transition-colors">
                     <i class="fa-solid fa-paper-plane mr-2"></i>Resend Email
                 </button>
-                <button id="recheckVerifyBtn" type="button" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-medium rounded-lg transition-colors">
+                <button id="recheckVerifyBtn" type="button" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-lg transition-colors tracking-wide">
                     <i class="fa-solid fa-rotate-right mr-2"></i>I've verified — Continue
                 </button>
             </div>
@@ -291,55 +281,46 @@
         </div>
     </div>
 
-    <div id="mainApp" class="max-w-6xl mx-auto p-6">
+    <div id="mainApp" class="max-w-6xl mx-auto p-3 sm:p-6">
         <!-- App Header -->
-        <div class="app-header bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+        <div class="app-header bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-closed-captioning text-white text-sm sm:text-base"></i>
-                    </div>
                     <div class="min-w-0 overflow-hidden">
-                        <h1 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-[#E2E2E8]">TermSub</h1>
-                        <p class="text-xs sm:text-sm text-slate-500 dark:text-[#8A8F98] truncate">Video Translation & Terminology Management</p>
+                        <h1 class="text-2xl sm:text-3xl font-medium text-white tracking-wide">TermSub <span class="text-blue-400 text-sm sm:text-base font-light align-top">(beta)</span></h1>
+                        <p class="text-xs sm:text-sm text-slate-400 truncate">Video Translation & Terminology Management</p>
                     </div>
                 </div>
                 <div class="flex items-center justify-end gap-2 sm:gap-3">
                     <div id="userInfo" class="hidden flex items-center gap-2 sm:gap-3">
-                        <div id="quotaWidgetHeader" class="hidden rounded-lg bg-slate-50 dark:bg-[#121214] border border-slate-200 dark:border-[#2A2A30] px-2 sm:px-3 py-1.5">
-                            <p class="text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#6B7280]">Trial Remaining</p>
-                            <div class="text-xs text-slate-700 dark:text-[#E2E2E8]">
+                        <div id="quotaWidgetHeader" class="hidden rounded-xl bg-slate-800 border border-slate-700 px-2 sm:px-3 py-1.5">
+                            <p class="text-[9px] font-normal uppercase tracking-wider text-slate-400">Trial Remaining</p>
+                            <div class="text-xs text-slate-100">
                                 <span id="quotaMinutesHeader" title="Audio minutes remaining in trial">- min</span>
                             </div>
                         </div>
                         <div class="relative">
-                            <button id="userMenuBtn" type="button" class="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] px-2 py-1.5 transition-colors">
-                                <div class="w-7 h-7 rounded-full bg-blue-100 dark:bg-[#1A1A1E] flex items-center justify-center">
-                                    <i class="fa-solid fa-user text-xs text-slate-600 dark:text-[#8A8F98]"></i>
+                            <button id="userMenuBtn" type="button" class="flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 px-2 py-1.5 transition-colors">
+                                <div class="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center">
+                                    <i class="fa-solid fa-user text-xs text-slate-300"></i>
                                 </div>
-                                <div id="userEmail" class="hidden sm:block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] max-w-[120px] truncate">-</div>
-                                <i class="fa-solid fa-chevron-down text-[10px] text-slate-500 dark:text-[#8A8F98]"></i>
+                                <div id="userEmail" class="hidden sm:block text-xs font-normal text-slate-200 max-w-[180px] truncate">-</div>
+                                <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
                             </button>
-                            <div id="userMenuDropdown" class="hidden absolute right-0 mt-2 w-44 bg-white dark:bg-[#1A1A1E] border border-slate-200 dark:border-[#2A2A30] rounded-lg shadow-xl py-1 z-[9995]">
-                                <button id="profileBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-[#E2E2E8] hover:bg-slate-50 dark:hover:bg-[#121214] transition-colors">
-                                    <i class="fa-solid fa-id-card w-5 text-slate-400 dark:text-[#6B7280]"></i> Profile
+                            <div id="userMenuDropdown" class="hidden absolute right-0 mt-2 w-44 bg-slate-900 border border-slate-800 rounded-xl shadow-xl py-1 z-[9995]">
+                                <button id="profileBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 transition-colors">
+                                    <i class="fa-solid fa-id-card w-5 text-slate-400"></i> Profile
                                 </button>
-                                <button id="logoutBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-[#E2E2E8] hover:bg-slate-50 dark:hover:bg-[#121214] transition-colors">
-                                    <i class="fa-solid fa-arrow-right-from-bracket w-5 text-slate-400 dark:text-[#6B7280]"></i> Log out
+                                <button id="logoutBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 transition-colors">
+                                    <i class="fa-solid fa-arrow-right-from-bracket w-5 text-slate-400"></i> Log out
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <button id="loginBtn" type="button" class="hidden px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors whitespace-nowrap">
+                    <button id="loginBtn" type="button" class="hidden px-2 sm:px-3 py-1.5 text-xs font-normal rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors whitespace-nowrap tracking-wide">
                         <span class="sm:hidden">Log in</span>
                         <span class="hidden sm:inline">Log in / Sign up</span>
                     </button>
-                    <div class="flex items-center gap-2 shrink-0">
-                        <button id="themeToggleBtn" class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#2A2A30] hover:bg-slate-200 dark:hover:bg-[#3A3A40] flex items-center justify-center transition-colors shrink-0" title="Toggle theme">
-                            <i class="fa-solid fa-moon text-slate-600 dark:text-[#8A8F98] dark:hidden"></i>
-                            <i class="fa-solid fa-sun text-[#00F0FF] hidden dark:block"></i>
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -348,72 +329,72 @@
             <!-- Left Panel - Upload & Controls -->
             <div class="lg:col-span-1 flex flex-col gap-4 overflow-y-auto pr-1">
                 <!-- Upload Card -->
-                <div id="uploadCard" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 shrink-0">
+                <div id="uploadCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shrink-0">
                     <div id="uploadForm" class="space-y-4">
                         <div>
                             <input type="file" id="fileInput" accept="video/*,audio/*,.txt" class="hidden">
                             <label for="fileInput" id="dropZone"
-                                class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 dark:border-[#2A2A30] rounded-lg bg-slate-50 dark:bg-[#0F0F12] hover:bg-slate-100 dark:hover:bg-[#0F0F12] cursor-pointer transition-colors dark:hover:border-[#00F0FF]">
-                                <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-400 dark:text-[#6B7280] mb-2"></i>
-                                <p class="text-sm text-slate-600 dark:text-[#8A8F98] font-medium" id="fileLabel">Click or drag &amp; drop a file</p>
-                                <p class="text-xs text-slate-400 dark:text-[#6B7280] mt-1">MP4, MOV, AVI, MP3, TXT</p>
+                                class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/50 hover:bg-slate-800 hover:border-blue-600 cursor-pointer transition-colors">
+                                <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-400 mb-2"></i>
+                                <p class="text-sm text-slate-300 font-normal" id="fileLabel">Click or drag &amp; drop a file</p>
+                                <p class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, MP3, TXT</p>
                             </label>
                         </div>
 
                         <div id="setupConfigPanel" class="space-y-4">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Source Language</label>
-                                <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <label class="block text-xs font-normal text-slate-400 mb-1 tracking-wide">Source Language</label>
+                                <select id="sourceLanguage" class="w-full px-3 py-2 border border-slate-700 rounded-xl text-sm bg-slate-800 text-slate-100 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none">
                                     <option value="auto">Auto-detect</option>
                                 </select>
                             </div>
 
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Target Language</label>
-                                <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <label class="block text-xs font-normal text-slate-400 mb-1 tracking-wide">Target Language</label>
+                                <select id="targetLanguage" class="w-full px-3 py-2 border border-slate-700 rounded-xl text-sm bg-slate-800 text-slate-100 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none">
                                     <option value="" disabled selected>Select target language...</option>
                                 </select>
-                                <div id="languageWarning" class="hidden text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
+                                <div id="languageWarning" class="hidden text-xs font-normal text-red-400 bg-red-900/20 border border-red-800 rounded-xl p-2 mt-2">⚠️ Please select a Target Language before proceeding!</div>
                             </div>
                         </div>
 
                         <div id="pipelineButtons" class="grid grid-cols-1 gap-3">
-                            <button id="translateSubtitlesBtn" data-mode="translate" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                            <button id="translateSubtitlesBtn" data-mode="translate" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide">
                                 <i class="fa-solid fa-language mr-2"></i>Translate and Get Subtitles
                             </button>
                             <div class="flex items-start gap-2 px-1 -mt-1">
-                                <input type="checkbox" id="reviewTerminologyCheckbox" checked class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-[#2A2A30] text-indigo-600 focus:ring-indigo-500 dark:focus:ring-[#00F0FF]">
+                                <input type="checkbox" id="reviewTerminologyCheckbox" checked class="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-600">
                                 <label for="reviewTerminologyCheckbox" class="text-xs text-slate-600 dark:text-[#8A8F98] cursor-pointer select-none">
                                     Review terminology
                                 </label>
                             </div>
-                            <button id="originalSubtitlesBtn" data-mode="transcribe" class="w-full py-2 px-4 bg-slate-600 hover:bg-slate-700 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded-lg transition-colors">
+                            <button id="originalSubtitlesBtn" data-mode="transcribe" class="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-normal rounded-xl transition-colors tracking-wide">
                                 <i class="fa-solid fa-closed-captioning mr-2"></i>Get Subtitles in Original Language
                             </button>
                         </div>
-                        <p class="mt-3 text-[10px] text-slate-500 dark:text-[#6B7280] text-center">
+                        <p class="mt-3 text-[10px] text-slate-500 text-center">
                             <i class="fa-solid fa-lock mr-1"></i>Audio and transcripts are processed by OpenAI. We do not store your API key.
                         </p>
                     </div>
 
                     <!-- Post-upload compact state -->
                     <div id="uploadCompleteCard" class="hidden space-y-3">
-                        <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/10">
-                            <i class="fa-solid fa-file-check text-emerald-500"></i>
-                            <span id="uploadedFilename" class="text-sm font-medium text-slate-700 dark:text-[#E2E2E8] truncate">filename.mp4</span>
+                        <div class="flex items-center gap-3 p-3 bg-slate-800 rounded-xl border border-slate-700">
+                            <i class="fa-solid fa-file-check text-emerald-400"></i>
+                            <span id="uploadedFilename" class="text-sm font-normal text-slate-200 truncate">filename.mp4</span>
                         </div>
-                        <button id="startNewProjectBtn" class="w-full py-2 px-3 text-xs font-medium text-slate-600 dark:text-[#8A8F98] bg-white dark:bg-[#2A2A30] border border-slate-300 dark:border-[#2A2A30] rounded-lg hover:bg-slate-50 dark:hover:bg-[#1A1A1E] transition-colors">
+                        <button id="startNewProjectBtn" class="w-full py-2 px-3 text-xs font-normal text-slate-300 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 transition-colors tracking-wide">
                             <i class="fa-solid fa-rotate-right mr-1"></i>Start New Project
                         </button>
                     </div>
                 </div>
 
                 <!-- Project Metadata & Status Card (Unified) -->
-                <div id="statusCard" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm overflow-hidden hidden shrink-0">
+                <div id="statusCard" class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hidden shrink-0">
                     <!-- Project Header -->
-                    <div class="bg-slate-50 dark:bg-[#121214] px-6 py-4 border-b border-slate-200 dark:border-white/10">
-                        <h2 id="projectTitle" class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] truncate">Untitled Project</h2>
-                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-[#8A8F98]">
+                    <div class="bg-slate-800 px-6 py-4 border-b border-slate-700">
+                        <h2 id="projectTitle" class="text-sm font-normal text-slate-100 truncate">Untitled Project</h2>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-400">
                             <span id="projectType"><i class="fa-solid fa-video mr-1"></i>Video</span>
                             <span>•</span>
                             <span id="projectLangs">EN → FA</span>
@@ -426,9 +407,9 @@
                     <div class="p-6">
                         <!-- Status Badge with Color -->
                         <div class="flex items-center justify-between mb-4">
-                            <span class="text-xs font-medium text-slate-500 dark:text-[#8A8F98] uppercase tracking-wider">Status</span>
-                            <span id="statusBadge" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-cyan-500/20 text-slate-700 dark:text-cyan-300 text-xs font-semibold rounded-full">
-                                <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-cyan-400"></span>
+                            <span class="text-xs font-normal text-slate-400 uppercase tracking-wider">Status</span>
+                            <span id="statusBadge" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 text-blue-300 text-xs font-normal rounded-full">
+                                <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
                                 Uploaded
                             </span>
                         </div>
@@ -436,30 +417,30 @@
                         <!-- Current Step & Segment Counters (no progress bar) -->
                         <div class="mb-4">
                             <div class="flex items-end justify-between mb-2">
-                                <span id="currentStep" class="text-sm text-slate-600 dark:text-[#8A8F98]">Ready to process</span>
+                                <span id="currentStep" class="text-sm text-slate-300">Ready to process</span>
                             </div>
-                            <div class="flex justify-between text-xs text-slate-500 dark:text-[#8A8F98]">
+                            <div class="flex justify-between text-xs text-slate-400">
                                 <span id="segmentCount">0 segments</span>
                                 <span id="processedCount">0 processed</span>
                             </div>
                         </div>
                         
                         <!-- Step Detail -->
-                        <div id="stepDetail" class="text-xs text-slate-500 dark:text-[#8A8F98] bg-slate-50 dark:bg-[#121214] rounded-lg px-3 py-2 hidden"></div>
+                        <div id="stepDetail" class="text-xs text-slate-400 bg-slate-800 rounded-xl px-3 py-2 hidden"></div>
                         
-                        <!-- Director's Context Brief -->
-                        <div id="contextBriefContainer" class="hidden mt-3 pt-3 border-t border-slate-100 dark:border-white/10">
-                            <p class="text-[10px] font-semibold text-slate-400 dark:text-[#6B7280] uppercase tracking-wider mb-1">Context Brief</p>
-                            <p id="contextBriefText" class="text-xs text-slate-600 dark:text-[#8A8F98] italic bg-slate-50 dark:bg-[#121214] p-2 rounded border border-slate-100 dark:border-white/10 leading-relaxed"></p>
+                        <!-- Context Brief -->
+                        <div id="contextBriefContainer" class="hidden mt-3 pt-3 border-t border-slate-700">
+                            <p class="text-[10px] font-normal text-slate-400 uppercase tracking-wider mb-1">Context Brief</p>
+                            <p id="contextBriefText" class="text-xs text-slate-300 italic bg-slate-800 p-2 rounded-xl border border-slate-700 leading-relaxed"></p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Primary Action Container -->
-                <div id="primaryActionContainer" class="bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-4 hidden shrink-0">
-                    <p id="primaryHelperText" class="text-xs text-amber-700 mb-2 hidden">💡 Review and edit your Extracted Terms before translating.</p>
+                <div id="primaryActionContainer" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 hidden shrink-0">
+                    <p id="primaryHelperText" class="text-xs text-amber-400 mb-2 hidden">💡 Review and edit your Extracted Terms before translating.</p>
                     
-                    <button id="primaryActionBtn" class="w-full py-3 px-4 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+                    <button id="primaryActionBtn" class="w-full py-3 px-4 text-white text-sm font-normal rounded-xl transition-colors tracking-wide">
                         Action
                     </button>
                     
@@ -487,25 +468,63 @@
 
             <!-- Right Panel - Terms & Subtitles -->
             <div class="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
+                <!-- How to Use -->
+                <div id="howToPanel" class="flex flex-col bg-slate-900 border border-slate-800 rounded-2xl p-6 overflow-y-auto shrink-0">
+                    <h2 class="text-sm font-normal text-slate-100 tracking-wide mb-4">How to use TermSub</h2>
+                    <div class="space-y-4">
+                        <div class="flex gap-3">
+                            <div class="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center shrink-0 text-xs font-normal">1</div>
+                            <div>
+                                <h3 class="text-sm font-normal text-slate-200">Upload a video, audio or text file</h3>
+                                <p class="text-xs text-slate-400 font-light mt-0.5">Upload a video, audio or text file. Choose your source and target languages.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center shrink-0 text-xs font-normal">2</div>
+                            <div>
+                                <h3 class="text-sm font-normal text-slate-200">Review extracted terms</h3>
+                                <p class="text-xs text-slate-400 font-light mt-0.5">TermSub identifies key terminology — names, brands, technical terms. Edit them to lock in consistency.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center shrink-0 text-xs font-normal">3</div>
+                            <div>
+                                <h3 class="text-sm font-normal text-slate-200">Translate &amp; edit subtitles</h3>
+                                <p class="text-xs text-slate-400 font-light mt-0.5">Get context-aware translations in 59 languages. Edit timing and text of subtitles.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center shrink-0 text-xs font-normal">4</div>
+                            <div>
+                                <h3 class="text-sm font-normal text-slate-200">Export</h3>
+                                <p class="text-xs text-slate-400 font-light mt-0.5">Download your subtitles as SRT, VTT, TXT, or JSON.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-6 pt-6 border-t border-slate-800">
+                        <p class="text-xs text-slate-500 font-light">Start with 30 free minutes. No credit card required.</p>
+                    </div>
+                </div>
+
                 <!-- Terms Table -->
-                <div id="termsPanel" class="hidden bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6 flex-1 min-h-0 flex flex-col">
+                <div id="termsPanel" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 flex-1 min-h-0 flex flex-col">
                     <div class="flex items-center justify-between mb-4 shrink-0">
-                        <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Extracted Terms</h2>
-                        <span id="termsCount" class="hidden inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">0</span>
+                        <h2 class="text-sm font-normal text-slate-100 tracking-wide">Extracted Terms</h2>
+                        <span id="termsCount" class="hidden inline-flex items-center px-2 py-0.5 rounded-full text-xs font-normal bg-blue-500/20 text-blue-300">0</span>
                     </div>
                     <div class="overflow-x-auto overflow-y-auto flex-1 min-h-0">
                         <table class="w-full text-sm">
-                            <thead class="sticky top-0 bg-white dark:bg-[#1A1A1E] z-10 shadow-sm text-slate-600 dark:text-[#8A8F98]">
+                            <thead class="sticky top-0 bg-slate-900 z-10 shadow-sm text-slate-400">
                                 <tr>
-                                    <th class="px-3 py-2 text-left text-xs font-medium">Type</th>
-                                    <th class="px-3 py-2 text-left text-xs font-medium">Original</th>
-                                    <th class="px-3 py-2 text-left text-xs font-medium">Translation</th>
-                                    <th class="px-3 py-2 text-left text-xs font-medium">Standard</th>
+                                    <th class="px-3 py-2 text-left text-xs font-normal">Type</th>
+                                    <th class="px-3 py-2 text-left text-xs font-normal">Original</th>
+                                    <th class="px-3 py-2 text-left text-xs font-normal">Translation</th>
+                                    <th class="px-3 py-2 text-left text-xs font-normal">Standard</th>
                                 </tr>
                             </thead>
-                            <tbody id="termsTable" class="divide-y divide-slate-100 dark:divide-white/10">
+                            <tbody id="termsTable" class="divide-y divide-slate-800">
                                 <tr>
-                                    <td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                                    <td colspan="4" class="px-3 py-8 text-center text-slate-500 text-sm">
                                         No terms extracted yet. Upload and process a video.
                                     </td>
                                 </tr>
@@ -515,55 +534,55 @@
                 </div>
 
                 <!-- Subtitle Review Timeline -->
-                <div id="subtitleReviewPanel" class="hidden flex-1 min-h-0 flex flex-col bg-white dark:bg-[#1A1A1E] rounded-xl shadow-sm p-6">
+                <div id="subtitleReviewPanel" class="hidden flex-1 min-h-0 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8]">Translated Subtitle Timeline</h2>
-                        <button id="undoTimelineBtn" class="px-2 py-1 text-xs bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors opacity-50 cursor-not-allowed" disabled title="Undo last change (Ctrl+Z)">
+                        <h2 class="text-sm font-normal text-slate-100 tracking-wide">Translated Subtitle Timeline</h2>
+                        <button id="undoTimelineBtn" class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors opacity-50 cursor-not-allowed" disabled title="Undo last change (Ctrl+Z)">
                             <i class="fa-solid fa-rotate-left mr-1"></i>Undo
                         </button>
                     </div>
                     
                     <!-- Global Find & Replace Bar -->
                     <div class="flex items-center gap-2 mb-3">
-                        <input type="text" id="findInput" placeholder="Find text..." class="flex-1 text-xs border border-slate-200 dark:border-[#2A2A30] bg-slate-50 dark:bg-[#0F0F12] rounded px-2 py-1 focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF] outline-none transition-all">
-                        <input type="text" id="replaceInput" placeholder="Replace with..." class="flex-1 text-xs border border-slate-200 dark:border-[#2A2A30] bg-slate-50 dark:bg-[#0F0F12] rounded px-2 py-1 focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF] outline-none transition-all">
-                        <button id="replaceAllBtn" class="px-3 py-1 bg-slate-700 hover:bg-slate-800 dark:bg-[#2A2A30] dark:hover:bg-[#3A3A40] dark:text-[#E2E2E8] text-white text-xs font-medium rounded transition-colors">Replace All</button>
+                        <input type="text" id="findInput" placeholder="Find text..." class="flex-1 text-xs border border-slate-700 bg-slate-800 rounded-xl px-2 py-1 text-slate-100 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all">
+                        <input type="text" id="replaceInput" placeholder="Replace with..." class="flex-1 text-xs border border-slate-700 bg-slate-800 rounded-xl px-2 py-1 text-slate-100 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all">
+                        <button id="replaceAllBtn" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-normal rounded-xl transition-colors tracking-wide">Replace All</button>
                     </div>
                     
                     <div id="timelineCardGrid" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
-                        <div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>
+                        <div class="text-slate-500 text-center py-8">No subtitles available yet.</div>
                     </div>
 
                     <!-- Segment card template used by renderSubtitleTimeline() -->
                     <template id="segmentCardTemplate">
-                        <div class="bg-slate-50 dark:bg-[#1A1A1E] rounded-lg p-3 border border-slate-100 dark:border-white/10 hover:border-slate-200 dark:hover:border-white/20 transition-colors group">
-                            <div class="flex items-center justify-between mb-1.5 text-slate-400 dark:text-[#6B7280]">
+                        <div class="bg-slate-800 rounded-xl p-3 border border-slate-700 hover:border-slate-600 transition-colors group">
+                            <div class="flex items-center justify-between mb-1.5 text-slate-400">
                                 <div class="flex items-center gap-2">
-                                    <span class="seq-num text-[10px] font-bold bg-slate-200 dark:bg-[#2A2A30] text-slate-600 dark:text-[#8A8F98] px-1.5 py-0.5 rounded">#1</span>
+                                    <span class="seq-num text-[10px] font-normal bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">#1</span>
                                     <div class="flex items-center gap-1.5">
-                                        <label class="text-[10px] text-slate-500 dark:text-[#6B7280]">Start</label>
+                                        <label class="text-[10px] text-slate-500">Start</label>
                                         <input type="text" data-time-role="start" placeholder="00:00:00,000"
-                                            class="timecode-input w-20 px-1.5 py-0.5 text-[11px] font-mono bg-slate-100 dark:bg-[#0F0F12] border border-slate-200 dark:border-[#2A2A30] rounded focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF] outline-none transition-all">
+                                            class="timecode-input w-20 px-1.5 py-0.5 text-[11px] font-mono bg-slate-900 border border-slate-700 rounded focus:ring-1 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all">
                                         <span class="text-[10px]">→</span>
                                         <input type="text" data-time-role="end" placeholder="00:00:00,000"
-                                            class="timecode-input w-20 px-1.5 py-0.5 text-[11px] font-mono bg-slate-100 dark:bg-[#0F0F12] border border-slate-200 dark:border-[#2A2A30] rounded focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF] outline-none transition-all">
-                                        <label class="text-[10px] text-slate-500 dark:text-[#6B7280]">End</label>
+                                            class="timecode-input w-20 px-1.5 py-0.5 text-[11px] font-mono bg-slate-900 border border-slate-700 rounded focus:ring-1 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all">
+                                        <label class="text-[10px] text-slate-500">End</label>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button data-action="split" title="Split card" class="px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors">
+                                    <button data-action="split" title="Split card" class="px-1.5 py-0.5 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors">
                                         <i class="fa-solid fa-scissors mr-0.5"></i>Split
                                     </button>
-                                    <button data-action="add" title="Add card below" class="px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-[#2A2A30] hover:bg-slate-300 dark:hover:bg-[#3A3A40] text-slate-600 dark:text-[#8A8F98] rounded transition-colors">
+                                    <button data-action="add" title="Add card below" class="px-1.5 py-0.5 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors">
                                         <i class="fa-solid fa-plus mr-0.5"></i>Add
                                     </button>
-                                    <button data-action="remove" title="Remove card" class="px-1.5 py-0.5 text-[10px] bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded transition-colors">
+                                    <button data-action="remove" title="Remove card" class="px-1.5 py-0.5 text-[10px] bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded transition-colors">
                                         <i class="fa-solid fa-trash mr-0.5"></i>Remove
                                     </button>
                                 </div>
                             </div>
                             <div data-time-role="text" contenteditable="true"
-                                class="text-slate-800 dark:text-[#E2E2E8] leading-relaxed outline-none focus:bg-white dark:focus:bg-[#0F0F12] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 rounded p-1 transition-all">
+                                class="text-slate-200 leading-relaxed outline-none focus:bg-slate-900 focus:ring-2 focus:ring-blue-900/50 rounded p-1 transition-all">
                             </div>
                         </div>
                     </template>
@@ -572,13 +591,13 @@
         </div>
 
         <!-- Activity Log -->
-        <div id="activityLogContainer" class="activity-log-collapsed bg-slate-900 dark:bg-[#0A0A0C] rounded-xl shadow-sm p-4 flex flex-col">
+        <div id="activityLogContainer" class="activity-log-collapsed bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col">
             <button id="activityLogToggle" type="button" class="flex items-center justify-between w-full text-left group shrink-0" aria-expanded="false" aria-controls="activityLog">
-                <h2 class="text-sm font-semibold text-slate-200 dark:text-[#E2E2E8]">Activity Log (advanced)</h2>
-                <i class="fa-solid fa-chevron-down text-xs text-slate-400 dark:text-[#8A8F98] transition-transform duration-200 group-hover:text-slate-200"></i>
+                <h2 class="text-sm font-normal text-slate-200 tracking-wide">Activity Log (advanced)</h2>
+                <i class="fa-solid fa-chevron-down text-xs text-slate-400 transition-transform duration-200 group-hover:text-slate-200"></i>
             </button>
             <div id="activityLog" class="overflow-y-auto font-mono text-xs space-y-1 mt-3 transition-opacity duration-200">
-                <div class="text-slate-500 dark:text-[#8A8F98]">Waiting for file upload...</div>
+                <div class="text-slate-500">Waiting for file upload...</div>
             </div>
         </div>
 
@@ -661,10 +680,10 @@
                     <h4 class="text-sm font-semibold text-slate-900 dark:text-[#E2E2E8] mb-3">Preferences</h4>
                     <div class="space-y-4">
                         <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" id="profileWantsUpdates" class="w-4 h-4 rounded border-slate-300 dark:border-[#2A2A30] text-blue-600 dark:text-[#00F0FF] focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
+                            <input type="checkbox" id="profileWantsUpdates" class="w-4 h-4 rounded border-slate-300 dark:border-[#2A2A30] text-blue-600 focus:ring-blue-600">
                             <span class="text-sm text-slate-700 dark:text-[#E2E2E8]">Send me product updates and tips</span>
                         </label>
-                        <button id="profileSavePreferencesBtn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Save preferences</button>
+                        <button id="profileSavePreferencesBtn" type="button" class="px-4 py-2 text-sm font-normal rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors tracking-wide">Save preferences</button>
                     </div>
                 </div>
 
@@ -674,23 +693,23 @@
                     <div class="space-y-4">
                         <div class="flex items-center gap-3">
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="apiKeyMode" value="standard" id="profileModeStandard" class="w-4 h-4 border-slate-300 dark:border-[#2A2A30] text-blue-600 dark:text-[#00F0FF] focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
+                                <input type="radio" name="apiKeyMode" value="standard" id="profileModeStandard" class="w-4 h-4 border-slate-300 dark:border-[#2A2A30] text-blue-600 focus:ring-blue-600">
                                 <span class="text-sm text-slate-700 dark:text-[#E2E2E8]">Standard (trial minutes)</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="apiKeyMode" value="byok" id="profileModeByok" class="w-4 h-4 border-slate-300 dark:border-[#2A2A30] text-blue-600 dark:text-[#00F0FF] focus:ring-blue-500 dark:focus:ring-[#00F0FF]">
+                                <input type="radio" name="apiKeyMode" value="byok" id="profileModeByok" class="w-4 h-4 border-slate-300 dark:border-[#2A2A30] text-blue-600 focus:ring-blue-600">
                                 <span class="text-sm text-slate-700 dark:text-[#E2E2E8]">BYOK (my OpenAI key)</span>
                             </label>
                         </div>
                         <div id="profileByokKeyContainer" class="hidden">
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">OpenAI API key</label>
                             <div class="relative">
-                                <input type="password" id="profileByokKeyInput" placeholder="sk-..." class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <input type="password" id="profileByokKeyInput" placeholder="sk-..." class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                                 <button type="button" data-toggle-password="profileByokKeyInput" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                             </div>
                             <p class="text-xs text-slate-500 dark:text-[#8A8F98] mt-1">Your key is validated by OpenAI but never stored on our servers.</p>
                         </div>
-                        <button id="profileSaveApiModeBtn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Update mode</button>
+                        <button id="profileSaveApiModeBtn" type="button" class="px-4 py-2 text-sm font-normal rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors tracking-wide">Update mode</button>
                     </div>
                 </div>
 
@@ -700,16 +719,16 @@
                     <form id="profileEmailForm" class="space-y-3">
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">New email</label>
-                            <input type="email" id="profileNewEmail" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                            <input type="email" id="profileNewEmail" required class="w-full px-3 py-2 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Current password</label>
                             <div class="relative">
-                                <input type="password" id="profileEmailPassword" required class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <input type="password" id="profileEmailPassword" required class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                                 <button type="button" data-toggle-password="profileEmailPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                             </div>
                         </div>
-                        <button type="submit" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Update email</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-normal rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors tracking-wide">Update email</button>
                     </form>
                 </div>
 
@@ -720,25 +739,25 @@
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Current password</label>
                             <div class="relative">
-                                <input type="password" id="profileCurrentPassword" required class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <input type="password" id="profileCurrentPassword" required class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                                 <button type="button" data-toggle-password="profileCurrentPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                             </div>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">New password</label>
                             <div class="relative">
-                                <input type="password" id="profileNewPassword" required minlength="8" class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <input type="password" id="profileNewPassword" required minlength="8" class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                                 <button type="button" data-toggle-password="profileNewPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                             </div>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-[#E2E2E8] mb-1">Confirm new password</label>
                             <div class="relative">
-                                <input type="password" id="profileConfirmPassword" required minlength="8" class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00F0FF] focus:border-blue-500 dark:focus:border-[#00F0FF]">
+                                <input type="password" id="profileConfirmPassword" required minlength="8" class="w-full px-3 py-2 pr-12 border border-slate-300 dark:border-[#2A2A30] rounded-lg text-sm bg-white dark:bg-[#0F0F12] text-slate-900 dark:text-[#E2E2E8] focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
                                 <button type="button" data-toggle-password="profileConfirmPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] bg-transparent border-none p-0">Show</button>
                             </div>
                         </div>
-                        <button type="submit" class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-[#00F0FF] dark:text-[#121214] dark:hover:bg-[#00D0DD] text-white transition-colors">Change password</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-normal rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors tracking-wide">Change password</button>
                     </form>
                 </div>
 
