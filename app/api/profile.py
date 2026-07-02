@@ -205,7 +205,7 @@ def update_email(
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/?token={verification_token}"
+    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={verification_token}"
     threading.Thread(
         target=send_verification_email,
         args=(user.email, verify_url),

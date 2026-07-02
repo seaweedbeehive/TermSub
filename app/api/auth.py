@@ -107,7 +107,7 @@ def signup(
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/?token={verification_token}"
+    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={verification_token}"
 
     # Fire verification email and optional newsletter signup in the background.
     threading.Thread(
@@ -175,7 +175,7 @@ def verify_email(token: str, db: Session = Depends(get_db)) -> dict[str, str]:
 
     # Send the welcome email only the first time the user verifies.
     if not was_already_verified:
-        app_url = settings.FRONTEND_BASE_URL
+        app_url = f"{settings.FRONTEND_BASE_URL}/app"
         threading.Thread(
             target=send_welcome_email,
             args=(user.email, app_url),
@@ -221,7 +221,7 @@ def resend_verification(
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/?token={verification_token}"
+    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={verification_token}"
     threading.Thread(
         target=send_verification_email,
         args=(user.email, verify_url),

@@ -21,8 +21,11 @@ resend.api_key = settings.RESEND_API_KEY or ""
 
 
 def _from_email() -> str:
-    """Return the configured sender address."""
-    return settings.RESEND_FROM_EMAIL
+    """Return the configured sender address with a display name."""
+    address = settings.RESEND_FROM_EMAIL
+    if "<" in address and ">" in address:
+        return address
+    return f"TermSub <{address}>"
 
 
 def _send_email(
@@ -149,7 +152,7 @@ def send_password_reset_email(
     reset_token: str,
 ) -> dict[str, Any] | None:
     """Send a password reset link."""
-    reset_url = f"{settings.FRONTEND_BASE_URL}/?reset_token={reset_token}"
+    reset_url = f"{settings.FRONTEND_BASE_URL}/app?reset_token={reset_token}"
     html = f"""
     <html>
       <body>
