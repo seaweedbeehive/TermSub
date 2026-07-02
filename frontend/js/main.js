@@ -540,7 +540,6 @@
             } else if (isByokMode() && userInfo && userEmailEl) {
                 userEmailEl.textContent = 'Using your OpenAI key';
                 userInfo.classList.remove('hidden');
-                if (quotaWidget) quotaWidget.classList.add('hidden');
                 if (loginBtn) loginBtn.classList.add('hidden');
             } else {
                 if (userInfo) userInfo.classList.add('hidden');
@@ -554,7 +553,8 @@
             const minutesEl = document.getElementById('quotaMinutesHeader');
             if (!widget || !minutesEl || !quota) return;
             if (quota.is_unlimited) {
-                widget.classList.add('hidden');
+                minutesEl.textContent = 'Unlimited';
+                widget.classList.remove('hidden');
                 return;
             }
             minutesEl.textContent = `${quota.minutes_remaining ?? 0} min remaining`;
