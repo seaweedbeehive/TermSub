@@ -5,6 +5,7 @@ services:
     repo: https://github.com/seaweedbeehive/TermSub
     plan: free
     dockerfilePath: Dockerfile
+    dockerCommand: sh start.sh
     envVars:
       - key: DATABASE_URL
         fromDatabase:

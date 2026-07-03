@@ -3,7 +3,7 @@
 from collections.abc import Generator
 from typing import Any
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
@@ -16,44 +16,6 @@ engine = create_engine(
     else {},
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def ensure_schema() -> None:
-    """Safety-net schema fixes that run on import.
-
-    Adds columns that may have been missed by migrations. Errors are swallowed
-    so that a missing table during first deploy does not crash the process;
-    regular migrations will create the table and columns.
-    """
-    try:
-        inspector = inspect(engine)
-        if not inspector.has_table("users"):
-            return
-
-        columns = {col["name"] for col in inspector.get_columns("users")}
-
-        with engine.begin() as conn:
-            if "total_minutes_used" not in columns:
-                conn.execute(
-                    text(
-                        "ALTER TABLE users ADD COLUMN total_minutes_used "
-                        "INTEGER NOT NULL DEFAULT 0"
-                    )
-                )
-            if "sessions_invalidated_at" not in columns:
-                conn.execute(
-                    text(
-                        "ALTER TABLE users ADD COLUMN sessions_invalidated_at "
-                        "TIMESTAMP WITHOUT TIME ZONE"
-                    )
-                )
-    except Exception:
-        # Swallow intentionally: migrations are the authoritative schema path.
-        pass
-
-
-# Run schema safety net on module import.
-ensure_schema()
 
 
 def get_db() -> Generator[Session, None, None]:

@@ -11,10 +11,11 @@ services:
       - .env
     working_dir: /app
     command: >
+      sh -c "alembic upgrade head &&
       python -m uvicorn app.main:app
       --host 0.0.0.0
       --port 8000
-      --reload
+      --reload"
     depends_on:
       - db
       - redis
@@ -32,9 +33,10 @@ services:
       - .env
     working_dir: /app
     command: >
+      sh -c "alembic upgrade head &&
       celery -A app.core.celery_app worker
       --loglevel=info
-      --concurrency=2
+      --concurrency=2"
     depends_on:
       - redis
       - db

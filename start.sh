@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-alembic upgrade heads
+alembic upgrade head
 
 celery -A app.core.celery_app worker --loglevel=info --concurrency=2 &
 

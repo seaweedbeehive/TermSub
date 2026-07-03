@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -40,6 +40,14 @@ class JobQueue(Base):
     __table_args__ = (
         Index("idx_job_queue_status", "status"),
         Index("idx_job_queue_video_status", "video_id", "status"),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'complete', 'error')",
+            name="ck_job_queue_status",
+        ),
+        CheckConstraint(
+            "job_type IN ('transcribe', 'analyze', 'translate')",
+            name="ck_job_queue_job_type",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -24,8 +24,7 @@ from app.core.analytics import log_page_view
 from app.core.auth import ACCESS_TOKEN_COOKIE, RequestIdentity, decode_access_token
 from app.core.config import settings
 from app.core.quota import QuotaManager
-from app.db.base import Base
-from app.db.session import SessionLocal, engine
+from app.db.session import SessionLocal
 from app.models.user import User
 
 
@@ -223,72 +222,12 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def check_database_schema() -> None:
-    """Verify database schema matches expected model.
-
-    Checks for required columns in the job_queue table and raises
-    an error if the schema is outdated.
-
-    Raises:
-        RuntimeError: If required columns are missing from job_queue table
-    """
-    from sqlalchemy import inspect
-
-    inspector = inspect(engine)
-
-    # Check if job_queue table exists
-    if "job_queue" not in inspector.get_table_names():
-        print("[INIT] job_queue table does not exist yet, will be created")
-        return
-
-    # Check for required columns in job_queue
-    columns = [col["name"] for col in inspector.get_columns("job_queue")]
-
-    required_columns = ["last_heartbeat", "timeout_at", "locked_by"]
-    missing = [col for col in required_columns if col not in columns]
-
-    if missing:
-        error_msg = (
-            f"\n{'=' * 70}\n"
-            f"DATABASE SCHEMA OUTDATED\n"
-            f"{'=' * 70}\n"
-            f"Missing columns in job_queue table: {', '.join(missing)}\n\n"
-            f"Please run the migration to update your database:\n\n"
-            f"  Option 1 (Recommended): python migrations/apply_migration.py\n"
-            f"  Option 2: Drop and recreate the database (data will be lost)\n"
-            f"{'=' * 70}\n"
-        )
-        raise RuntimeError(error_msg)
-
-    # Check for Celery migration column
-    if "celery_task_id" not in columns:
-        print("[INIT] WARNING: job_queue is missing 'celery_task_id' column.")
-        print("[INIT] Run: python migrations/add_celery_task_id_column.py")
-        raise RuntimeError(
-            "Database schema outdated: missing 'celery_task_id' in job_queue.\n"
-            "Run: python migrations/add_celery_task_id_column.py"
-        )
-
-    print("[INIT] Database schema verified (all required columns present)")
-
-
-def create_tables() -> None:
-    """Create all database tables."""
-    Base.metadata.create_all(bind=engine)
-    print("[INIT] Database tables created/verified")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan handler."""
     # Startup
     print("=" * 60)
     print("[INIT] Starting TermSub API...")
-
-    # Check schema before creating tables (for existing databases)
-    check_database_schema()
-
-    create_tables()
 
     # Start Redis Pub/Sub listener for WebSocket broadcasts from Celery workers
     from app.core.redis_pubsub import start_redis_listener

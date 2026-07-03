@@ -5,6 +5,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -28,6 +29,10 @@ class User(Base):
     __table_args__ = (
         Index("idx_users_email", "email", unique=True),
         Index("idx_users_is_active", "is_active"),
+        CheckConstraint(
+            "api_key_mode IN ('standard', 'byok')",
+            name="ck_users_api_key_mode",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)

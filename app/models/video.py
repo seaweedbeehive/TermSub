@@ -4,6 +4,7 @@ from enum import StrEnum
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -53,6 +54,23 @@ class ContentType(StrEnum):
 
 class Video(Base):
     __tablename__ = "videos"
+
+    __table_args__ = (
+        CheckConstraint(
+            "content_type IN ('video', 'text')",
+            name="ck_videos_content_type",
+        ),
+        CheckConstraint(
+            "status IN ('uploaded', 'queued', 'extracting_audio', 'transcribing', "
+            "'transcribed', 'analyzing', 'context_ready', 'glossary_extracting', "
+            "'terms_ready', 'translating', 'completed', 'error')",
+            name="ck_videos_status",
+        ),
+        CheckConstraint(
+            "domain IN ('general', 'politics', 'medicine', 'psychology', 'sociology')",
+            name="ck_videos_domain",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -177,7 +195,7 @@ class Segment(Base):
     __tablename__ = "segments"
 
     # Composite index for faster bulk operations by video_id + sequence_number
-    __table_args__ = (Index("idx_segments_video_seq", "video_id", "sequence_number"),)
+    __table_args__ = (Index("idx_segments_video_seq", "video_id", "sequence_number", unique=True),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     video_id: Mapped[str] = mapped_column(
@@ -203,6 +221,13 @@ class TermSource(StrEnum):
 
 class Term(Base):
     __tablename__ = "terms"
+
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('auto', 'manual')",
+            name="ck_terms_source",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     video_id: Mapped[str] = mapped_column(
