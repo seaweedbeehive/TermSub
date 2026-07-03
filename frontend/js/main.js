@@ -358,17 +358,17 @@
         function log(message, type = 'info') {
             const logEl = document.getElementById('activityLog');
             const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-            
+
             if (logEl.children.length === 1 && logEl.children[0].textContent.includes('Waiting')) {
-                logEl.innerHTML = '';
+                logEl.replaceChildren();
             }
-            
+
             // Prevent duplicate completion messages
             const lastEntry = logEl.lastElementChild;
             if (lastEntry && lastEntry.textContent.includes(message)) {
                 return; // Skip duplicate message
             }
-            
+
             // Badge map
             const badgeMap = {
                 info:    { label: 'INFO',    bg: 'bg-slate-700',    text: 'text-slate-200' },
@@ -379,13 +379,21 @@
                 context: { label: 'CONTEXT', bg: 'bg-indigo-600',   text: 'text-white' }
             };
             const cfg = badgeMap[type] || badgeMap.info;
-            
-            const html = `<div class="flex items-start gap-2 text-slate-300">
-                <span class="shrink-0 mt-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${cfg.bg} ${cfg.text}">${cfg.label}</span>
-                <span class="text-[11px] leading-tight">[${time}] ${message}</span>
-            </div>`;
-            
-            logEl.insertAdjacentHTML('beforeend', html);
+
+            const entry = document.createElement('div');
+            entry.className = 'flex items-start gap-2 text-slate-300';
+
+            const badge = document.createElement('span');
+            badge.className = `shrink-0 mt-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${cfg.bg} ${cfg.text}`;
+            badge.textContent = cfg.label;
+
+            const text = document.createElement('span');
+            text.className = 'text-[11px] leading-tight';
+            text.textContent = `[${time}] ${message}`;
+
+            entry.appendChild(badge);
+            entry.appendChild(text);
+            logEl.appendChild(entry);
             logEl.scrollTo({ top: logEl.scrollHeight, behavior: 'smooth' });
 
             // Mirror critical errors in the normal user-facing status line
@@ -393,10 +401,10 @@
                 updateUserFacingStatus({ status: 'error', message });
             }
         }
-        
+
         function clearActivityLog() {
             const logEl = document.getElementById('activityLog');
-            logEl.innerHTML = '';
+            logEl.replaceChildren();
             loggedCompletions.clear(); // Reset completion tracking
         }
 
@@ -428,7 +436,14 @@
 
             if (isError) {
                 const message = data.message || data.current_step || data.error || 'Something went wrong.';
-                currentStepEl.innerHTML = `${escapeHtml(message)} <button type="button" data-open-activity-log class="text-blue-400 hover:text-blue-300 underline ml-1">Open activity log for details.</button>`;
+                currentStepEl.replaceChildren();
+                currentStepEl.appendChild(document.createTextNode(message));
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.dataset.openActivityLog = '';
+                btn.className = 'text-blue-400 hover:text-blue-300 underline ml-1';
+                btn.textContent = 'Open activity log for details.';
+                currentStepEl.appendChild(btn);
                 currentStepEl.classList.remove('text-slate-300');
                 currentStepEl.classList.add('text-rose-300');
             } else {
@@ -1322,10 +1337,25 @@
 
             const el = document.createElement('div');
             el.className = `pointer-events-auto ${cfg.bg} text-white shadow-xl px-4 py-2 rounded-lg font-sans text-sm flex items-center gap-2 transition-all duration-300 transform translate-x-full`;
-            el.innerHTML = `
-                <svg class="w-4 h-4 shrink-0 ${cfg.icon}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span class="font-medium">${message}</span>
-            `;
+
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', `w-4 h-4 shrink-0 ${cfg.icon}`);
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('d', 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z');
+            svg.appendChild(path);
+
+            const span = document.createElement('span');
+            span.className = 'font-medium';
+            span.textContent = message;
+
+            el.appendChild(svg);
+            el.appendChild(span);
             container.appendChild(el);
 
             // Slide in

@@ -147,6 +147,32 @@ class ProxySchemeMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to every HTTP response."""
+
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Only send HSTS over HTTPS (or when the request claims HTTPS via a trusted proxy)
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=63072000; includeSubDomains; preload"
+            )
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+            "img-src 'self' data: https://img.shields.io; "
+            "connect-src 'self' wss: https://www.google-analytics.com https://*.google-analytics.com; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'"
+        )
+        return response
+
+
 class AnalyticsMiddleware(BaseHTTPMiddleware):
     """Log incoming requests to the PageView analytics table.
 
@@ -301,6 +327,9 @@ app.add_middleware(
 # Trust X-Forwarded-Proto from the reverse proxy so HTTPS URLs are generated
 # correctly (avoids mixed-content redirects).
 app.add_middleware(ProxySchemeMiddleware)
+
+# Security headers middleware — CSP, frame-options, HSTS, etc.
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Analytics middleware — logs page views in the background
 app.add_middleware(AnalyticsMiddleware)

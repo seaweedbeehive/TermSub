@@ -356,8 +356,9 @@
                 renderUsers();
             } catch (err) {
                 showError(err.message);
-                document.getElementById('usersTableBody').innerHTML =
-                    '<tr><td colspan="6" class="empty-state">Failed to load users</td></tr>';
+                document.getElementById('usersTableBody').replaceChildren(
+                    createEmptyRow('Failed to load users')
+                );
             }
         }
 
@@ -367,6 +368,29 @@
             return date.toLocaleDateString(undefined, {
                 year: 'numeric', month: 'short', day: 'numeric'
             });
+        }
+
+        function createIcon(className) {
+            const icon = document.createElement('i');
+            icon.className = `fa-solid ${className}`;
+            return icon;
+        }
+
+        function createBadge(text, className) {
+            const badge = document.createElement('span');
+            badge.className = `badge ${className}`;
+            badge.textContent = text;
+            return badge;
+        }
+
+        function createEmptyRow(text) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 6;
+            td.className = 'empty-state';
+            td.textContent = text;
+            tr.appendChild(td);
+            return tr;
         }
 
         function renderUsers() {
@@ -389,46 +413,89 @@
 
             const tbody = document.getElementById('usersTableBody');
             if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No users found</td></tr>';
+                tbody.replaceChildren(createEmptyRow('No users found'));
                 return;
             }
 
-            tbody.innerHTML = users.map(user => {
-                const badges = [];
-                if (user.is_admin) badges.push('<span class="badge badge-admin">Admin</span>');
-                if (user.is_email_verified) {
-                    badges.push('<span class="badge badge-verified">Verified</span>');
-                } else {
-                    badges.push('<span class="badge badge-unverified">Unverified</span>');
+            tbody.replaceChildren();
+            users.forEach(user => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = user.id;
+
+                const tdEmail = document.createElement('td');
+                tdEmail.textContent = user.email || '';
+                tr.appendChild(tdEmail);
+
+                const tdCreated = document.createElement('td');
+                tdCreated.textContent = formatDate(user.created_at);
+                tr.appendChild(tdCreated);
+
+                const tdBadges = document.createElement('td');
+                if (user.is_admin) tdBadges.appendChild(createBadge('Admin', 'badge-admin'));
+                tdBadges.appendChild(createBadge(
+                    user.is_email_verified ? 'Verified' : 'Unverified',
+                    user.is_email_verified ? 'badge-verified' : 'badge-unverified'
+                ));
+                if (user.api_key_mode === 'byok') tdBadges.appendChild(createBadge('BYOK', 'badge-byok'));
+                tr.appendChild(tdBadges);
+
+                const tdUsed = document.createElement('td');
+                tdUsed.textContent = user.minutes_used ?? 0;
+                tr.appendChild(tdUsed);
+
+                const tdRemaining = document.createElement('td');
+                tdRemaining.textContent = user.minutes_remaining ?? 0;
+                tr.appendChild(tdRemaining);
+
+                const tdActions = document.createElement('td');
+
+                if (user.api_key_mode !== 'byok') {
+                    const quotaBtn = document.createElement('button');
+                    quotaBtn.className = 'btn btn-secondary';
+                    quotaBtn.appendChild(createIcon('fa-pen'));
+                    quotaBtn.appendChild(document.createTextNode(' Quota'));
+                    quotaBtn.addEventListener('click', () => showQuotaEdit(user.id, user.minutes_remaining ?? 0));
+                    tdActions.appendChild(quotaBtn);
                 }
-                if (user.api_key_mode === 'byok') badges.push('<span class="badge badge-byok">BYOK</span>');
 
-                const canEditQuota = user.api_key_mode !== 'byok';
-                const quotaBtn = canEditQuota
-                    ? `<button class="btn btn-secondary" onclick="showQuotaEdit('${user.id}', ${user.minutes_remaining ?? 0})"><i class="fa-solid fa-pen"></i> Quota</button>`
-                    : '';
+                const editDiv = document.createElement('div');
+                editDiv.className = 'quota-edit';
+                editDiv.id = `quota-edit-${user.id}`;
 
-                return `
-                    <tr data-id="${user.id}">
-                        <td>${escapeHtml(user.email)}</td>
-                        <td>${formatDate(user.created_at)}</td>
-                        <td>${badges.join('')}</td>
-                        <td>${user.minutes_used ?? 0}</td>
-                        <td>${user.minutes_remaining ?? 0}</td>
-                        <td>
-                            ${quotaBtn}
-                            <div class="quota-edit" id="quota-edit-${user.id}">
-                                <input type="number" class="quota-input" id="quota-input-${user.id}" value="${user.minutes_remaining ?? 0}" min="0">
-                                <button class="btn btn-secondary" onclick="saveQuota('${user.id}', '${escapeHtml(user.email)}')">Save</button>
-                                <button class="btn" style="background: #475569; color: #fff;" onclick="hideQuotaEdit('${user.id}')">Cancel</button>
-                            </div>
-                            <button class="btn btn-danger" onclick="deleteUser('${user.id}', '${escapeHtml(user.email)}')">
-                                <i class="fa-solid fa-trash"></i> Delete
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.className = 'quota-input';
+                input.id = `quota-input-${user.id}`;
+                input.value = user.minutes_remaining ?? 0;
+                input.min = 0;
+                editDiv.appendChild(input);
+
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'btn btn-secondary';
+                saveBtn.textContent = 'Save';
+                saveBtn.addEventListener('click', () => saveQuota(user.id, user.email));
+                editDiv.appendChild(saveBtn);
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'btn';
+                cancelBtn.style.background = '#475569';
+                cancelBtn.style.color = '#fff';
+                cancelBtn.textContent = 'Cancel';
+                cancelBtn.addEventListener('click', () => hideQuotaEdit(user.id));
+                editDiv.appendChild(cancelBtn);
+
+                tdActions.appendChild(editDiv);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-danger';
+                deleteBtn.appendChild(createIcon('fa-trash'));
+                deleteBtn.appendChild(document.createTextNode(' Delete'));
+                deleteBtn.addEventListener('click', () => deleteUser(user.id, user.email));
+                tdActions.appendChild(deleteBtn);
+
+                tr.appendChild(tdActions);
+                tbody.appendChild(tr);
+            });
         }
 
         function escapeHtml(text) {
@@ -510,8 +577,13 @@
         }
 
         function showError(message) {
-            document.getElementById('errorContainer').innerHTML =
-                `<div class="error"><i class="fa-solid fa-circle-exclamation"></i> ${escapeHtml(message)}</div>`;
+            const container = document.getElementById('errorContainer');
+            container.replaceChildren();
+            const div = document.createElement('div');
+            div.className = 'error';
+            div.appendChild(createIcon('fa-circle-exclamation'));
+            div.appendChild(document.createTextNode(' ' + message));
+            container.appendChild(div);
         }
 
         function showToast(message, type) {
