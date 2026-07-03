@@ -39,7 +39,7 @@ class ResetPasswordRequest(BaseModel):
 
 class BYOKStartRequest(BaseModel):
     api_key: str = Field(..., min_length=10)
-    email: EmailStr | None = None
+    email: EmailStr
 
 
 class BYOKStartResponse(BaseModel):

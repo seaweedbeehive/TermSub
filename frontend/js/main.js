@@ -1066,7 +1066,7 @@
             const submitBtn = document.getElementById('byokSubmitBtn');
 
             const apiKey = apiKeyInput.value.trim();
-            const email = emailInput.value.trim() || undefined;
+            const email = emailInput.value.trim();
 
             if (errorEl) errorEl.classList.add('hidden');
             if (submitBtn) {
