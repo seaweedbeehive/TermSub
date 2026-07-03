@@ -234,6 +234,7 @@ def update_password(
         )
 
     user.password_hash = hash_password(payload.new_password)
+    user.sessions_invalidated_at = datetime.utcnow()
     db.commit()
 
     return MessageResponse(message="Password changed successfully.")

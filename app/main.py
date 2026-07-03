@@ -9,6 +9,7 @@ import json
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -473,6 +474,13 @@ def _extract_ws_identity(
             try:
                 user = db.query(User).filter(User.id == user_id).first()
                 if not user or not user.is_active or not user.is_email_verified:
+                    return None, None
+                if (
+                    user.sessions_invalidated_at is not None
+                    and payload.get("iat") is not None
+                    and datetime.fromtimestamp(payload["iat"], tz=UTC).replace(tzinfo=None)
+                    < user.sessions_invalidated_at
+                ):
                     return None, None
                 return None, RequestIdentity(
                     user_id=user_id, is_byok=False, user=user

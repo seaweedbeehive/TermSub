@@ -327,6 +327,7 @@ def reset_password(
     user.password_hash = hash_password(payload.new_password)
     user.password_reset_token = None
     user.password_reset_token_expires_at = None
+    user.sessions_invalidated_at = datetime.utcnow()
     db.commit()
 
     return AuthSuccessResponse(message="Password reset successfully. You can now log in.")
