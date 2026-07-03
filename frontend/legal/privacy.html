@@ -52,7 +52,7 @@
             <section>
                 <h2 class="text-lg font-normal text-white mb-3 tracking-wide">2. Welche Daten wir erheben</h2>
                 <ul class="list-disc pl-5 space-y-2">
-                    <li><span class="font-normal text-white">Kontodaten (Registrierung):</span> E-Mail-Adresse, Passwort (als Hash gespeichert). Für BYOK-Nutzer: OpenAI-API-Schlüssel (verschlüsselt gespeichert, nur serverseitig nutzbar).</li>
+                    <li><span class="font-normal text-white">Kontodaten (Registrierung):</span> E-Mail-Adresse, Passwort (als Hash gespeichert). Für BYOK-Nutzer: OpenAI-API-Schlüssel (verschlüsselt gespeichert, nur serverseitig nutzbar). Optional: Ihre Einwilligung zu Produkt-Updates (wants_updates Feld bei der Registrierung).</li>
                     <li><span class="font-normal text-white">Hochgeladene Dateien:</span> Video-, Audio- oder Textdateien, die Sie zur Verarbeitung hochladen. Diese enthalten möglicherweise personenbezogene Daten (z. B. Stimmen, Gesichter, Namen, gesprochene Informationen).</li>
                     <li><span class="font-normal text-white">Verarbeitungsergebnisse:</span> Transkripte, Übersetzungen, Glossare und generierte Untertitel.</li>
                     <li><span class="font-normal text-white">Nutzungsdaten:</span> IP-Adresse, Zeitstempel, verarbeitete Minuten (für Kontingentverwaltung), Browser-Typ und -Version.</li>
@@ -74,7 +74,8 @@
             <section>
                 <h2 class="text-lg font-normal text-white mb-3 tracking-wide">4. Empfänger und Drittlandübermittlung</h2>
                 <p class="mb-3"><span class="font-normal text-white">OpenAI, LLC (USA):</span> Transkription und Übersetzung Ihrer Audio-/Videodaten. Die Übermittlung erfolgt auf Grundlage der EU-Standardvertragsklauseln (SCCs) gemäß Art. 46 Abs. 2 lit. c DSGVO. OpenAI verarbeitet Daten gemäß seinem <a href="https://openai.com/policies/data-processing-addendum/" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">Data Processing Addendum</a>. OpenAI speichert hochgeladene Audiodateien nicht dauerhaft und nutzt sie nicht zum Training von Modellen, sofern Sie dies nicht ausdrücklich erlauben.</p>
-                <p class="mb-3"><span class="font-normal text-white">Hosting-Anbieter:</span> Render – Server-Hosting und Datenbankspeicherung.</p>
+                <p class="mb-3"><span class="font-normal text-white">Hosting-Anbieter:</span> Render, Inc. (USA) — Server-Hosting und Datenbankspeicherung.</p>
+                <p class="mb-3"><span class="font-normal text-white">E-Mail-Dienstleister:</span> Resend, Inc. (USA) — E-Mail-Versand für Kontoverifizierung, Passwort-Reset und Support-Anfragen.</p>
                 <p><span class="font-normal text-white">Keine weiteren Dritten:</span> Wir verkaufen oder vermieten Ihre Daten nicht. Keine Werbenetzwerke, keine Social-Media-Tracking-Pixel.</p>
             </section>
 
@@ -118,12 +119,12 @@
 
             <section>
                 <h2 class="text-lg font-normal text-white mb-3 tracking-wide">8. Cookies und lokale Speicherung</h2>
-                <p class="mb-3">TermSub verwendet ausschließlich technisch notwendige Cookies und lokale Speicherung für die Authentifizierung und die Speicherung Ihrer Cookie-Einwilligung:</p>
+                <p class="mb-3">TermSub verwendet einen serverseitig gesetzten, HttpOnly-, Secure- und SameSite=Strict-Cookie namens <span class="font-normal text-white">access_token</span> für die Sitzungsauthentifizierung. Dieser Cookie ist für JavaScript nicht zugänglich und wird bei der Abmeldung gelöscht.</p>
                 <ul class="list-disc pl-5 space-y-2">
-                    <li><span class="font-normal text-white">Session-Cookie (auth_token):</span> Notwendig für die Anmeldung und Authentifizierung. Löscht sich beim Abmelden.</li>
-                    <li><span class="font-normal text-white">Cookie-Einwilligung (localStorage):</span> Speichert Ihre Entscheidung zur Cookie-Nutzung.</li>
+                    <li><span class="font-normal text-white">Session-Cookie (access_token):</span> Notwendig für die Anmeldung und Authentifizierung. Wird serverseitig gesetzt, ist nicht über JavaScript lesbar und wird beim Abmelden gelöscht.</li>
+                    <li><span class="font-normal text-white">Google Analytics (G-GQGE4VC1PC):</span> Verwendet auf allen Seiten zur Nutzungsanalyse. Sie können dies über ein Browser-Add-on blockieren.</li>
                 </ul>
-                <p class="mt-3">Keine Tracking-Cookies, keine Analyse-Tools, keine Werbe-Cookies.</p>
+                <p class="mt-3">Keine Marketing-Cookies, keine Werbe-Cookies.</p>
             </section>
 
             <section>
