@@ -298,20 +298,13 @@
     <div id="toast" class="toast"></div>
 
     <script>
-        const token = localStorage.getItem('termsub_token');
-        if (!token) {
-            window.location.href = '/';
-        }
-
         let allUsers = [];
         let sortField = 'created_at';
         let sortDirection = 'desc';
 
         async function checkAuth() {
             try {
-                const response = await fetch('/api/auth/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const response = await fetch('/api/auth/me');
                 if (response.status === 403 || !response.ok) {
                     window.location.href = '/';
                     return;
@@ -332,9 +325,7 @@
 
         async function loadStats() {
             try {
-                const response = await fetch('/api/admin/stats', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const response = await fetch('/api/admin/stats');
                 if (!response.ok) throw new Error('Failed to load stats');
                 const data = await response.json();
                 document.getElementById('statTotalUsers').textContent = data.total_users ?? 0;
@@ -348,9 +339,7 @@
 
         async function loadUsers() {
             try {
-                const response = await fetch('/api/admin/users', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const response = await fetch('/api/admin/users');
                 if (!response.ok) throw new Error('Failed to load users');
                 allUsers = await response.json();
                 renderUsers();
@@ -515,8 +504,7 @@
 
             try {
                 const response = await fetch(`/api/admin/users/${userId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    method: 'DELETE'
                 });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
@@ -559,7 +547,6 @@
                 const response = await fetch(`/api/admin/users/${userId}/quota`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ minutes })
@@ -611,9 +598,13 @@
 
         document.getElementById('searchInput').addEventListener('input', renderUsers);
 
-        document.getElementById('logoutLink').addEventListener('click', (e) => {
+        document.getElementById('logoutLink').addEventListener('click', async (e) => {
             e.preventDefault();
-            localStorage.removeItem('termsub_token');
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (err) {
+                console.error('Logout failed:', err);
+            }
             window.location.href = '/';
         });
 

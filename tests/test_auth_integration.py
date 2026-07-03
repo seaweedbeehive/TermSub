@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.core.auth import hash_token
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.user import User
@@ -17,17 +18,20 @@ def _unique_email() -> str:
     return f"e2e_{uuid.uuid4().hex[:8]}@example.com"
 
 
-def _verification_token_for_email(email: str) -> str | None:
+def _set_known_verification_token(email: str, raw_token: str) -> None:
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
-        return user.email_verification_token if user else None
+        assert user is not None
+        user.email_verification_token = hash_token(raw_token)
+        user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
+        db.commit()
     finally:
         db.close()
 
 
 def test_signup_and_login_return_valid_token() -> None:
-    """A user can sign up, verify their email, and then use the returned token."""
+    """A user can sign up, verify their email, and then use the auth cookie."""
     email = _unique_email()
     password = "secure-pass-123"
 
@@ -36,26 +40,20 @@ def test_signup_and_login_return_valid_token() -> None:
         json={"email": email, "password": password, "wants_updates": True},
     )
     assert signup_response.status_code == 201
-    token = signup_response.json()["access_token"]
-    assert token
+    # The JWT is returned as an HttpOnly cookie, not in the response body.
+    assert "access_token" not in signup_response.json()
+    assert client.cookies.get("access_token")
 
     # Unverified users are blocked from authenticated endpoints.
-    me_response = client.get(
-        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
-    )
+    me_response = client.get("/api/auth/me")
     assert me_response.status_code == 403
 
-    verification_token = _verification_token_for_email(email)
-    assert verification_token
+    _set_known_verification_token(email, "verify-me")
 
-    verify_response = client.get(
-        f"/api/auth/verify?token={verification_token}"
-    )
+    verify_response = client.get("/api/auth/verify?token=verify-me")
     assert verify_response.status_code == 200
 
-    me_response = client.get(
-        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
-    )
+    me_response = client.get("/api/auth/me")
     assert me_response.status_code == 200
     assert me_response.json()["email"] == email
 
@@ -71,12 +69,10 @@ def test_email_is_normalized_during_signup_and_login() -> None:
         json={"email": upper_email, "password": password, "wants_updates": False},
     )
     assert signup_response.status_code == 201
-    token = signup_response.json()["access_token"]
+    assert client.cookies.get("access_token")
 
     # Verify the stored email is normalized.
-    me_response = client.get(
-        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
-    )
+    me_response = client.get("/api/auth/me")
     assert me_response.status_code == 403  # unverified
 
     db = SessionLocal()
@@ -87,13 +83,13 @@ def test_email_is_normalized_during_signup_and_login() -> None:
     finally:
         db.close()
 
-    # Login with a different case should succeed and target the same account.
+    # Login with a different case should succeed and set a fresh cookie.
     login_response = client.post(
         "/api/auth/login",
         json={"email": base_email.upper(), "password": password},
     )
     assert login_response.status_code == 200
-    assert login_response.json()["access_token"]
+    assert client.cookies.get("access_token")
 
 
 def test_expired_verification_token_is_rejected() -> None:
@@ -111,16 +107,14 @@ def test_expired_verification_token_is_rejected() -> None:
     try:
         user = db.query(User).filter(User.email == email).first()
         assert user is not None
-        assert user.email_verification_token_expires_at is not None
-
-        # Move the expiry into the past.
+        user.email_verification_token = hash_token("expired-token")
         user.email_verification_token_expires_at = datetime.utcnow() - timedelta(
             seconds=1
         )
         db.commit()
 
         verify_response = client.get(
-            f"/api/auth/verify?token={user.email_verification_token}"
+            "/api/auth/verify?token=expired-token"
         )
         assert verify_response.status_code == 400
         assert verify_response.json()["detail"] == "Verification link expired"

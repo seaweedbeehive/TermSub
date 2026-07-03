@@ -20,7 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import admin, auth, export, profile, progress, quota, terms, videos
 from app.core.analytics import log_page_view
-from app.core.auth import RequestIdentity, decode_access_token
+from app.core.auth import ACCESS_TOKEN_COOKIE, RequestIdentity, decode_access_token
 from app.core.config import settings
 from app.core.quota import QuotaManager
 from app.db.base import Base
@@ -451,40 +451,42 @@ def get_version() -> dict[str, str]:
 def _extract_ws_identity(
     websocket: WebSocket,
 ) -> tuple[str | None, RequestIdentity | None]:
-    """Resolve a WebSocket identity from the Sec-WebSocket-Protocol header.
+    """Resolve a WebSocket identity from the HttpOnly cookie or subprotocol.
 
-    Standard users send ``["termsub-auth", <jwt>]``.
-    BYOK users send ``["termsub-byok", <openai-api-key>]``.
-    This avoids putting credentials in the URL query string where they can leak
-    into proxy logs.
+    Standard users send the JWT in the ``access_token`` cookie; no subprotocol
+    is required. BYOK users send ``["termsub-byok", <openai-api-key>]`` via the
+    Sec-WebSocket-Protocol header.
 
     Returns:
         Tuple of (negotiated_subprotocol, RequestIdentity | None).
     """
+    # Standard users: JWT is sent automatically in the HttpOnly cookie.
+    token = websocket.cookies.get(ACCESS_TOKEN_COOKIE)
+    if token:
+        try:
+            payload = decode_access_token(token)
+            user_id = payload.get("sub")
+            if not user_id:
+                return None, None
+
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user or not user.is_active or not user.is_email_verified:
+                    return None, None
+                return None, RequestIdentity(
+                    user_id=user_id, is_byok=False, user=user
+                )
+            finally:
+                db.close()
+        except Exception:
+            return None, None
+
+    # BYOK users: API key via subprotocol.
     subprotocols = websocket.scope.get("subprotocols", [])
     if len(subprotocols) >= 2:
         protocol = subprotocols[0]
         credential = subprotocols[1]
-
-        if protocol == "termsub-auth":
-            try:
-                payload = decode_access_token(credential)
-                user_id = payload.get("sub")
-                if not user_id:
-                    return None, None
-
-                db = SessionLocal()
-                try:
-                    user = db.query(User).filter(User.id == user_id).first()
-                    if not user or not user.is_active or not user.is_email_verified:
-                        return None, None
-                    return protocol, RequestIdentity(
-                        user_id=user_id, is_byok=False, user=user
-                    )
-                finally:
-                    db.close()
-            except Exception:
-                return None, None
 
         if protocol == "termsub-byok":
             api_key = credential.strip()
@@ -505,8 +507,9 @@ async def websocket_endpoint(
 ) -> None:
     """WebSocket endpoint for real-time video progress updates.
 
-    Supports both standard JWT users (``["termsub-auth", token]``) and BYOK
-    users (``["termsub-byok", api_key]``) via the WebSocket subprotocol.
+    Standard users authenticate via the HttpOnly ``access_token`` cookie.
+    BYOK users authenticate with ``["termsub-byok", api_key]`` via the
+    Sec-WebSocket-Protocol header.
 
     Connect to this endpoint to receive real-time updates during:
     - Transcription

@@ -14,6 +14,7 @@ from app.core.auth import (
     generate_verification_token,
     get_current_user_or_byok,
     hash_password,
+    hash_token,
     verify_password,
 )
 from app.core.config import settings
@@ -200,12 +201,12 @@ def update_email(
 
     user.email = new_email
     user.is_email_verified = False
-    verification_token = generate_verification_token()
-    user.email_verification_token = verification_token
+    raw_verification_token = generate_verification_token()
+    user.email_verification_token = hash_token(raw_verification_token)
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={verification_token}"
+    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
     threading.Thread(
         target=send_verification_email,
         args=(user.email, verify_url),

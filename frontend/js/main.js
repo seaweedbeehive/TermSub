@@ -15,25 +15,12 @@
         // ------------------------------------------------------------------
         // Authentication
         // ------------------------------------------------------------------
-        const TOKEN_KEY = 'termsub_token';
         const API_KEY_KEY = 'termsub_api_key';
         const EMAIL_KEY = 'termsub_email';
         let currentUser = null;
         let currentAuthTab = 'standard';
         let currentStandardMode = 'signup';
         let currentAuthSubview = 'form'; // 'form' | 'forgot' | 'reset'
-
-        function getToken() {
-            return localStorage.getItem(TOKEN_KEY) || '';
-        }
-
-        function setToken(token) {
-            localStorage.setItem(TOKEN_KEY, token);
-        }
-
-        function clearToken() {
-            localStorage.removeItem(TOKEN_KEY);
-        }
 
         function getApiKey() {
             return localStorage.getItem(API_KEY_KEY) || '';
@@ -84,30 +71,19 @@
         }
 
         function isStandardLoggedIn() {
-            return !!getToken();
+            return currentUser !== null && !isByokMode();
         }
 
         function isByokMode() {
-            return !!getApiKey() && !getToken();
+            return !!getApiKey();
         }
 
         function isAuthenticated() {
             return isStandardLoggedIn() || isByokMode();
         }
 
-        function getAuthHeaders() {
-            const token = getToken();
-            if (token) {
-                return { 'Authorization': `Bearer ${token}` };
-            }
-            const apiKey = getApiKey();
-            if (apiKey) {
-                return { 'X-API-Key': apiKey };
-            }
-            return {};
-        }
-
-        // Patch global fetch to attach the Bearer token or BYOK API key to same-origin API calls.
+        // Patch global fetch to attach the BYOK API key to same-origin API calls.
+        // Standard auth is handled automatically via the HttpOnly cookie.
         (function patchFetch() {
             const originalFetch = window.fetch;
             window.fetch = async function(input, init) {
@@ -116,16 +92,9 @@
                 if (isSameOrigin) {
                     init = init || {};
                     const headers = new Headers(init.headers || {});
-                    const token = getToken();
-                    if (token) {
-                        if (!headers.has('Authorization')) {
-                            headers.set('Authorization', `Bearer ${token}`);
-                        }
-                    } else {
-                        const apiKey = getApiKey();
-                        if (apiKey && !headers.has('X-API-Key')) {
-                            headers.set('X-API-Key', apiKey);
-                        }
+                    const apiKey = getApiKey();
+                    if (apiKey && !headers.has('X-API-Key')) {
+                        headers.set('X-API-Key', apiKey);
                     }
                     init.headers = headers;
                 }
@@ -636,7 +605,6 @@
                 return true;
             } catch (err) {
                 console.error('Failed to load user:', err);
-                clearToken();
                 clearStoredEmail();
                 currentUser = null;
                 return false;
@@ -657,18 +625,11 @@
         }
 
         async function logout() {
-            const token = getToken();
-            if (token) {
-                try {
-                    await fetch('/api/auth/logout', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}` },
-                    });
-                } catch (err) {
-                    console.error('Logout API call failed:', err);
-                }
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (err) {
+                console.error('Logout API call failed:', err);
             }
-            clearToken();
             clearApiKey();
             clearStoredEmail();
             currentUser = null;
@@ -1008,7 +969,6 @@
                 showToast('Your account has been deleted.', 'info');
                 closeDeleteAccountModal();
                 closeProfileModal();
-                clearToken();
                 clearApiKey();
                 clearStoredEmail();
                 currentUser = null;
@@ -1057,10 +1017,7 @@
                     throw new Error(detail);
                 }
 
-                const data = await response.json();
-                if (!data.access_token) throw new Error('No token received from server.');
                 clearApiKey();
-                setToken(data.access_token);
                 setStoredEmail(email);
 
                 if (currentStandardMode === 'signup') {
@@ -1129,7 +1086,6 @@
                     throw new Error(detail);
                 }
 
-                clearToken();
                 setApiKey(apiKey);
                 updateUserDisplay();
                 showMainApp();
@@ -1871,20 +1827,19 @@
                 ws = null;
             }
 
-            const token = getToken();
             const apiKey = getApiKey();
             let protocols = null;
             let authMode = 'none';
 
-            if (token) {
-                protocols = ['termsub-auth', token];
-                authMode = 'standard';
-            } else if (apiKey) {
+            if (apiKey) {
                 protocols = ['termsub-byok', apiKey];
                 authMode = 'byok';
+            } else if (currentUser) {
+                // Standard auth is sent automatically via the HttpOnly cookie.
+                authMode = 'standard';
             }
 
-            if (!protocols) {
+            if (authMode === 'none') {
                 log('WebSocket connection skipped: not authenticated', 'warning');
                 fallbackToPolling(videoId);
                 return;
@@ -2993,14 +2948,12 @@
                         const response = await fetch(`/api/auth/verify?token=${encodeURIComponent(verifyToken)}`);
                         if (response.ok) {
                             showToast('Email verified successfully', 'success');
-                            // If the user has a stored session, refresh it and show the app.
-                            if (isStandardLoggedIn()) {
-                                const loaded = await loadUser();
-                                if (loaded) {
-                                    showMainApp();
-                                    window.history.replaceState({}, '', '/');
-                                    return;
-                                }
+                            // The backend sets the HttpOnly auth cookie; refresh the session.
+                            const loaded = await loadUser();
+                            if (loaded) {
+                                showMainApp();
+                                window.history.replaceState({}, '', '/');
+                                return;
                             }
                             // Otherwise fall through to login prompt.
                             showAuthView('standard', 'login');
@@ -3024,16 +2977,10 @@
                 }
             })();
 
-            // Determine initial view based on stored token or API key
+            // Determine initial view based on the HttpOnly cookie or BYOK API key.
             (async () => {
-                if (isStandardLoggedIn()) {
-                    const loaded = await loadUser();
-                    if (!loaded) {
-                        updateUserDisplay();
-                    }
-                } else if (isByokMode()) {
-                    updateUserDisplay();
-                } else {
+                const loaded = await loadUser();
+                if (!loaded) {
                     updateUserDisplay();
                 }
             })();

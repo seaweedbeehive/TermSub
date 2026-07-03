@@ -1,5 +1,6 @@
 """Authentication helpers: password hashing, JWT tokens, and current-user dependency."""
 
+import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -7,8 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
-from fastapi import Depends, Header, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, Header, HTTPException, Request, status
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
@@ -19,8 +19,8 @@ from app.db.session import get_db
 from app.models.user import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
-security_optional = HTTPBearer(auto_error=False)
+
+ACCESS_TOKEN_COOKIE = "access_token"
 
 ALGORITHM = settings.JWT_ALGORITHM
 
@@ -38,6 +38,15 @@ def generate_verification_token() -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain-text password against a bcrypt hash."""
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def hash_token(token: str) -> str:
+    """Hash a single-use email verification or password-reset token.
+
+    SHA-256 is sufficient here because the tokens are already high-entropy
+    random strings and the hash is only used for storage-time comparison.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create_access_token(user_id: str) -> str:
@@ -58,6 +67,21 @@ def create_access_token(user_id: str) -> str:
         "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
+
+
+def _get_access_token_from_request(request: Request) -> str | None:
+    """Read the JWT from the HttpOnly cookie, falling back to Authorization header.
+
+    The cookie is the normal path for browser clients; the Authorization header
+    fallback keeps programmatic access (tests, API clients) working.
+    """
+    token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    if token:
+        return token
+    auth = request.headers.get("Authorization")
+    if auth and auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return None
 
 
 def _is_token_revoked(jti: str) -> bool:
@@ -109,16 +133,16 @@ def decode_access_token(token: str) -> dict[str, Any]:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> User:
     """FastAPI dependency that returns the authenticated user.
 
-    Reads the Authorization: Bearer <token> header, decodes the JWT,
-    and loads the matching user from the database.
+    Reads the JWT from the HttpOnly cookie first, then the Authorization
+    header, decodes it, and loads the matching user from the database.
 
     Args:
-        credentials: Bearer token credentials from the request header.
+        request: FastAPI request object.
         db: Database session.
 
     Returns:
@@ -128,7 +152,13 @@ def get_current_user(
         HTTPException: 401 if the token is missing, invalid, expired,
             or the user does not exist / is inactive.
     """
-    token = credentials.credentials
+    token = _get_access_token_from_request(request)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     payload = decode_access_token(token)
     user_id = payload.get("sub")
 
@@ -172,7 +202,7 @@ def get_current_user(
 
 
 def get_optional_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> User | None:
     """Return the authenticated user, or None if no/invalid token is provided.
@@ -180,10 +210,11 @@ def get_optional_current_user(
     This dependency is useful for endpoints that support both authenticated
     users and BYOK (bring-your-own-key) traffic.
     """
-    if not credentials:
+    token = _get_access_token_from_request(request)
+    if not token:
         return None
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(token)
     except HTTPException:
         return None
     user_id = payload.get("sub")
@@ -207,14 +238,15 @@ class RequestIdentity:
 
 
 def get_current_user_or_byok(
+    request: Request,
     x_api_key: str | None = Header(None, alias="X-API-Key"),
-    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
     db: Session = Depends(get_db),
 ) -> RequestIdentity:
-    """Resolve a request identity from either a JWT or a BYOK API key header.
+    """Resolve a request identity from either a JWT cookie or a BYOK API key header.
 
-    Standard users authenticate with Authorization: Bearer <jwt> and must have
-    a verified email address. BYOK users authenticate with X-API-Key: <openai-key>.
+    Standard users authenticate with the HttpOnly `access_token` cookie (or a
+    Bearer token for programmatic use) and must have a verified email address.
+    BYOK users authenticate with X-API-Key: <openai-key>.
     """
     if x_api_key and x_api_key.strip():
         api_key = x_api_key.strip()
@@ -224,60 +256,61 @@ def get_current_user_or_byok(
             api_key=api_key,
         )
 
-    if credentials:
-        payload = decode_access_token(credentials.credentials)
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        user = db.query(User).filter(User.id == user_id).first()
-        if user is None or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        if (
-            user.sessions_invalidated_at is not None
-            and payload.get("iat") is not None
-            and datetime.fromtimestamp(payload["iat"], tz=UTC).replace(tzinfo=None)
-            < user.sessions_invalidated_at
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session has been invalidated. Please log in again.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        if not user.is_email_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "Email not verified. Please check your inbox or request a new "
-                    "verification email."
-                ),
-            )
-
-        token_issued_at = None
-        if payload.get("iat") is not None:
-            token_issued_at = datetime.fromtimestamp(
-                payload["iat"], tz=UTC
-            ).replace(tzinfo=None)
-
-        return RequestIdentity(
-            user_id=user.id,
-            is_byok=False,
-            user=user,
-            token_issued_at=token_issued_at,
+    token = _get_access_token_from_request(request)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Provide a Bearer token or X-API-Key header.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required. Provide a Bearer token or X-API-Key header.",
-        headers={"WWW-Authenticate": "Bearer"},
+    payload = decode_access_token(token)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if (
+        user.sessions_invalidated_at is not None
+        and payload.get("iat") is not None
+        and datetime.fromtimestamp(payload["iat"], tz=UTC).replace(tzinfo=None)
+        < user.sessions_invalidated_at
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been invalidated. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Email not verified. Please check your inbox or request a new "
+                "verification email."
+            ),
+        )
+
+    token_issued_at = None
+    if payload.get("iat") is not None:
+        token_issued_at = datetime.fromtimestamp(
+            payload["iat"], tz=UTC
+        ).replace(tzinfo=None)
+
+    return RequestIdentity(
+        user_id=user.id,
+        is_byok=False,
+        user=user,
+        token_issued_at=token_issued_at,
     )

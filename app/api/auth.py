@@ -6,17 +6,19 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import literal
 from sqlalchemy.orm import Session
 
 from app.core.admin_auth import require_admin_user
 from app.core.auth import (
+    ACCESS_TOKEN_COOKIE,
+    _get_access_token_from_request,
     create_access_token,
     generate_verification_token,
     get_current_user,
     hash_password,
+    hash_token,
     verify_password,
 )
 from app.core.config import settings
@@ -33,13 +35,13 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 from app.schemas.auth import (
+    AuthSuccessResponse,
     BYOKStartRequest,
     BYOKStartResponse,
     ForgotPasswordRequest,
     NewsletterSubscriberOut,
     ResendVerificationRequest,
     ResetPasswordRequest,
-    TokenResponse,
     UserLoginRequest,
     UserResponse,
     UserSignupRequest,
@@ -76,14 +78,33 @@ def _send_signup_emails(email: str, verify_url: str, wants_updates: bool) -> Non
         _record_newsletter_signup(email, source="signup")
 
 
-@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def _set_auth_cookie(response: Response, token: str) -> None:
+    """Set the HttpOnly, Secure, SameSite=Strict JWT cookie."""
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=token,
+        httponly=True,
+        secure=settings.FRONTEND_BASE_URL.startswith("https"),
+        samesite="strict",
+        max_age=settings.JWT_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    """Delete the authentication cookie."""
+    response.delete_cookie(key=ACCESS_TOKEN_COOKIE, path="/")
+
+
+@router.post("/signup", response_model=AuthSuccessResponse, status_code=status.HTTP_201_CREATED)
 @rate_limit("signup", limit=3, window=3600, identifier="ip")
 def signup(
     payload: UserSignupRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
-) -> TokenResponse:
-    """Register a new user account and return a JWT access token."""
+) -> AuthSuccessResponse:
+    """Register a new user account and set the JWT access token cookie."""
     email = payload.email.strip().lower()
     existing = db.query(User).filter(User.email == email).first()
     if existing:
@@ -102,12 +123,12 @@ def signup(
     db.commit()
     db.refresh(user)
 
-    verification_token = generate_verification_token()
-    user.email_verification_token = verification_token
+    raw_verification_token = generate_verification_token()
+    user.email_verification_token = hash_token(raw_verification_token)
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={verification_token}"
+    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
 
     # Fire verification email and optional newsletter signup in the background.
     threading.Thread(
@@ -117,17 +138,19 @@ def signup(
     ).start()
 
     token = create_access_token(user.id)
-    return TokenResponse(access_token=token)
+    _set_auth_cookie(response, token)
+    return AuthSuccessResponse(message="Account created. Please verify your email.")
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=AuthSuccessResponse)
 @rate_limit("login", limit=5, window=900, identifier="email")
 def login(
     payload: UserLoginRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
-) -> TokenResponse:
-    """Authenticate a user and return a JWT access token."""
+) -> AuthSuccessResponse:
+    """Authenticate a user and set the JWT access token cookie."""
     email = payload.email.strip().lower()
     user = db.query(User).filter(User.email == email).first()
     if user is None or not user.is_active:
@@ -145,13 +168,19 @@ def login(
         )
 
     token = create_access_token(user.id)
-    return TokenResponse(access_token=token)
+    _set_auth_cookie(response, token)
+    return AuthSuccessResponse(message="Logged in successfully.")
 
 
-@router.get("/verify")
-def verify_email(token: str, db: Session = Depends(get_db)) -> dict[str, str]:
+@router.get("/verify", response_model=AuthSuccessResponse)
+def verify_email(
+    token: str,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> AuthSuccessResponse:
     """Verify a user's email address using the token sent by email."""
-    user = db.query(User).filter(User.email_verification_token == token).first()
+    token_hash = hash_token(token)
+    user = db.query(User).filter(User.email_verification_token == token_hash).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -182,7 +211,10 @@ def verify_email(token: str, db: Session = Depends(get_db)) -> dict[str, str]:
             daemon=True,
         ).start()
 
-    return {"message": "Email verified successfully. You can now use TermSub."}
+    # Log the user in automatically after verification.
+    access_token = create_access_token(user.id)
+    _set_auth_cookie(response, access_token)
+    return AuthSuccessResponse(message="Email verified successfully. You can now use TermSub.")
 
 
 @router.post("/resend-verification")
@@ -216,12 +248,12 @@ def resend_verification(
         # Do not reveal whether the email exists or is already verified.
         return {"message": "If an unverified account exists, a verification email has been sent."}
 
-    verification_token = generate_verification_token()
-    user.email_verification_token = verification_token
+    raw_verification_token = generate_verification_token()
+    user.email_verification_token = hash_token(raw_verification_token)
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={verification_token}"
+    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
     threading.Thread(
         target=send_verification_email,
         args=(user.email, verify_url),
@@ -253,28 +285,29 @@ def forgot_password(
     user = db.query(User).filter(User.email == email).first()
 
     if user:
-        reset_token = generate_verification_token()
-        user.password_reset_token = reset_token
+        raw_reset_token = generate_verification_token()
+        user.password_reset_token = hash_token(raw_reset_token)
         user.password_reset_token_expires_at = datetime.utcnow() + timedelta(hours=24)
         db.commit()
 
         threading.Thread(
             target=send_password_reset_email,
-            args=(user.email, reset_token),
+            args=(user.email, raw_reset_token),
             daemon=True,
         ).start()
 
     return {"message": "If an account exists, a password reset email has been sent."}
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=AuthSuccessResponse)
 def reset_password(
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db),
-) -> dict[str, str]:
+) -> AuthSuccessResponse:
     """Reset the user's password using a valid reset token."""
+    token_hash = hash_token(payload.reset_token)
     user = (
-        db.query(User).filter(User.password_reset_token == payload.reset_token).first()
+        db.query(User).filter(User.password_reset_token == token_hash).first()
     )
     if not user:
         raise HTTPException(
@@ -296,7 +329,7 @@ def reset_password(
     user.password_reset_token_expires_at = None
     db.commit()
 
-    return {"message": "Password reset successfully. You can now log in."}
+    return AuthSuccessResponse(message="Password reset successfully. You can now log in.")
 
 
 @router.get("/me", response_model=UserResponse)
@@ -305,43 +338,43 @@ def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-logout_security = HTTPBearer()
-
-
-@router.post("/logout")
+@router.post("/logout", response_model=AuthSuccessResponse)
 def logout(
-    credentials: HTTPAuthorizationCredentials = Depends(logout_security),
-) -> dict[str, str]:
+    request: Request,
+    response: Response,
+) -> AuthSuccessResponse:
     """Revoke the current JWT by adding its jti to the Redis blocklist.
 
     The blocklist entry TTL is the token's remaining lifetime, so the token
-    cannot be used until it naturally expires.
+    cannot be used until it naturally expires. The authentication cookie is
+    also cleared.
     """
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
-            options={"verify_exp": False},
-        )
-    except jwt.InvalidTokenError:
-        # If the token is malformed, there is nothing to revoke.
-        return {"message": "Logged out successfully."}
+    token = _get_access_token_from_request(request)
+    if token:
+        try:
+            payload = jwt.decode(
+                token,
+                settings.JWT_SECRET_KEY,
+                algorithms=[settings.JWT_ALGORITHM],
+                options={"verify_exp": False},
+            )
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            if jti and exp:
+                now = datetime.now(UTC).timestamp()
+                ttl = max(0, int(exp - now))
+                if ttl > 0:
+                    try:
+                        redis = get_sync_redis_client()
+                        redis.setex(f"revoked_token:{jti}", ttl, "1")
+                    except Exception as exc:
+                        logger.warning("Failed to store revoked token in Redis: %s", exc)
+        except jwt.InvalidTokenError:
+            # If the token is malformed, there is nothing to revoke.
+            pass
 
-    jti = payload.get("jti")
-    exp = payload.get("exp")
-    if jti and exp:
-        now = datetime.now(UTC).timestamp()
-        ttl = max(0, int(exp - now))
-        if ttl > 0:
-            try:
-                redis = get_sync_redis_client()
-                redis.setex(f"revoked_token:{jti}", ttl, "1")
-            except Exception as exc:
-                logger.warning("Failed to store revoked token in Redis: %s", exc)
-
-    return {"message": "Logged out successfully."}
+    _clear_auth_cookie(response)
+    return AuthSuccessResponse(message="Logged out successfully.")
 
 
 def _validate_openai_api_key(api_key: str) -> bool:
