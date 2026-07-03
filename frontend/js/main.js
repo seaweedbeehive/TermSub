@@ -489,6 +489,8 @@
             const toggleText = document.getElementById('authModeToggleText');
             const toggleBtn = document.getElementById('authModeToggleBtn');
             const wantsUpdatesContainer = document.getElementById('wantsUpdatesContainer');
+            const standardTermsContainer = document.getElementById('standardTermsContainer');
+            const standardTermsCheckbox = document.getElementById('standardTermsCheckbox');
             const passwordInput = document.getElementById('authPassword');
             const authError = document.getElementById('authError');
             const byokError = document.getElementById('byokError');
@@ -511,6 +513,8 @@
             const isLogin = currentStandardMode === 'login';
             if (submitBtn) submitBtn.textContent = isLogin ? 'Sign In' : 'Create Free Account';
             if (wantsUpdatesContainer) wantsUpdatesContainer.classList.toggle('hidden', isLogin);
+            if (standardTermsContainer) standardTermsContainer.classList.toggle('hidden', isLogin);
+            if (standardTermsCheckbox) standardTermsCheckbox.required = !isLogin;
             if (passwordInput) passwordInput.setAttribute('autocomplete', isLogin ? 'current-password' : 'new-password');
             if (toggleText) toggleText.textContent = isLogin ? "Don't have an account?" : 'Already have an account?';
             if (toggleBtn) toggleBtn.textContent = isLogin ? 'Create Free Account' : 'Sign in';
