@@ -1,4 +1,21 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    working_dir: /app
+    command: >
+      sh -c "until pg_isready -h db -p 5432 -U termsub -d termsub; do
+        echo 'Waiting for database...';
+        sleep 1;
+      done;
+      alembic upgrade head"
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
     build:
       context: .
@@ -11,14 +28,17 @@ services:
       - .env
     working_dir: /app
     command: >
-      sh -c "alembic upgrade head &&
       python -m uvicorn app.main:app
       --host 0.0.0.0
       --port 8000
-      --reload"
+      --reload
     depends_on:
-      - db
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   redis:
     image: redis:alpine
@@ -33,13 +53,16 @@ services:
       - .env
     working_dir: /app
     command: >
-      sh -c "alembic upgrade head &&
       celery -A app.core.celery_app worker
       --loglevel=info
-      --concurrency=2"
+      --concurrency=2
     depends_on:
-      - redis
-      - db
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
     volumes:
       - .:/app
 
@@ -53,6 +76,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U termsub -d termsub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
 volumes:
   postgres_data:
