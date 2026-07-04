@@ -11,6 +11,8 @@ For setup instructions, see [README.md](README.md). You have two options:
 - **Docker** — `docker compose up --build` (includes PostgreSQL, Redis, and Celery worker)
 - **Local** — Python 3.11+ virtual environment with Redis running locally
 
+You can also use the deployed app at **https://www.termsub.eedbee.app/app**.
+
 Once the app is running, open **`http://localhost:8000/app`** in your browser and follow the workflow below.
 
 ---

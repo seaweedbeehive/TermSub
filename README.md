@@ -6,6 +6,8 @@ TermSub is an open-source, AI-powered video translation and subtitle editor. It 
 
 [Start Translating Free — 30 min trial](/app) · [View on GitHub](https://github.com/seaweedbeehive/TermSub)
 
+Live app: **https://www.termsub.eedbee.app**
+
 ---
 
 ## Built for content where details matter
@@ -199,7 +201,7 @@ source venv/bin/activate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Open `http://localhost:8000` in your browser.
+Open `http://localhost:8000` in your browser, or use the deployed app at **https://www.termsub.eedbee.app**.
 
 ### API Docs
 
