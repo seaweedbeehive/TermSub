@@ -4,9 +4,7 @@
 
 TermSub is an open-source, AI-powered video translation and subtitle editor. It extracts your key terminology — names, brands, technical terms — before translating, so they stay consistent across every scene and every language. Built for documentaries, research, education, and technical content.
 
-[Start Translating Free — 30 min trial](/app) · [View on GitHub](https://github.com/seaweedbeehive/TermSub)
-
-Live app: **https://www.termsub.eedbee.app**
+[Start Translating Free — 30 min trial](/app) · [View on GitHub](https://github.com/seaweedbeehive/TermSub) · [Live app](https://www.termsub.eedbee.app)
 
 ---
 
@@ -201,7 +199,7 @@ source venv/bin/activate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Open `http://localhost:8000` in your browser, or use the deployed app at **https://www.termsub.eedbee.app**.
+Open `http://localhost:8000` in your browser, or use the deployed app at [https://www.termsub.eedbee.app](https://www.termsub.eedbee.app).
 
 ### API Docs
 
