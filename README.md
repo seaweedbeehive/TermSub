@@ -4,7 +4,7 @@
 
 TermSub is an open-source, AI-powered video translation and subtitle editor. It extracts your key terminology — names, brands, technical terms — before translating, so they stay consistent across every scene and every language. Built for documentaries, research, education, and technical content.
 
-[Start Translating Free — 30 min trial](/app) · [Live app](https://www.termsub.eedbee.app)
+[Live app](https://www.termsub.eedbee.app)
 
 ---
 
