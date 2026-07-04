@@ -3177,6 +3177,14 @@
                 activityLogToggle.addEventListener('click', () => {
                     const collapsed = activityLogContainer.classList.toggle('activity-log-collapsed');
                     activityLogToggle.setAttribute('aria-expanded', (!collapsed).toString());
+                    if (!collapsed) {
+                        // Expand downward: scroll the fully-open log into view so it
+                        // clearly opens below the toggle instead of appearing to push
+                        // earlier content upward out of sight.
+                        setTimeout(() => {
+                            activityLogContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                        }, 50);
+                    }
                 });
             }
 
