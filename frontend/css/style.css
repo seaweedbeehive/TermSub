@@ -60,6 +60,15 @@ body {
     transform: rotate(-90deg);
 }
 
+/* Pulsing status dot for active processing states */
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+.pulse-indicator {
+    animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
 /* Mobile-friendly base improvements */
 @media (max-width: 1023px) {
     #mainApp {
