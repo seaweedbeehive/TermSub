@@ -1412,71 +1412,68 @@
 
         // Supported languages for source/target dropdowns (ISO-639-1 codes).
         // Covers the OpenAI Audio API supported languages plus legacy app languages.
+        // Kept in one flat list, sorted alphabetically by English name.
         const SUPPORTED_LANGUAGES = [
-            // Pinned: 9 most common languages + Persian
-            { code: 'en', name: 'English', nativeName: 'English', group: 'common' },
-            { code: 'zh', name: 'Chinese (Mandarin)', nativeName: '中文', group: 'common' },
-            { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी', group: 'common' },
-            { code: 'es', name: 'Spanish', nativeName: 'Español', group: 'common' },
-            { code: 'fr', name: 'French', nativeName: 'Français', group: 'common' },
-            { code: 'ar', name: 'Arabic', nativeName: 'العربية', group: 'common' },
-            { code: 'bn', name: 'Bengali', nativeName: 'বাংলা', group: 'common' },
-            { code: 'pt', name: 'Portuguese', nativeName: 'Português', group: 'common' },
-            { code: 'ru', name: 'Russian', nativeName: 'Русский', group: 'common' },
-            { code: 'fa', name: 'Persian (Farsi)', nativeName: 'فارسی', group: 'common' },
-            // All other supported languages (alphabetical by English name)
-            { code: 'af', name: 'Afrikaans', nativeName: 'Afrikaans', group: 'all' },
-            { code: 'hy', name: 'Armenian', nativeName: 'Հայերեն', group: 'all' },
-            { code: 'az', name: 'Azerbaijani', nativeName: 'Azərbaycan', group: 'all' },
-            { code: 'be', name: 'Belarusian', nativeName: 'Беларуская', group: 'all' },
-            { code: 'bs', name: 'Bosnian', nativeName: 'Bosanski', group: 'all' },
-            { code: 'bg', name: 'Bulgarian', nativeName: 'Български', group: 'all' },
-            { code: 'ca', name: 'Catalan', nativeName: 'Català', group: 'all' },
-            { code: 'hr', name: 'Croatian', nativeName: 'Hrvatski', group: 'all' },
-            { code: 'cs', name: 'Czech', nativeName: 'Čeština', group: 'all' },
-            { code: 'da', name: 'Danish', nativeName: 'Dansk', group: 'all' },
-            { code: 'nl', name: 'Dutch', nativeName: 'Nederlands', group: 'all' },
-            { code: 'et', name: 'Estonian', nativeName: 'Eesti', group: 'all' },
-            { code: 'fi', name: 'Finnish', nativeName: 'Suomi', group: 'all' },
-            { code: 'gl', name: 'Galician', nativeName: 'Galego', group: 'all' },
-            { code: 'de', name: 'German', nativeName: 'Deutsch', group: 'all' },
-            { code: 'el', name: 'Greek', nativeName: 'Ελληνικά', group: 'all' },
-            { code: 'he', name: 'Hebrew', nativeName: 'עברית', group: 'all' },
-            { code: 'hu', name: 'Hungarian', nativeName: 'Magyar', group: 'all' },
-            { code: 'is', name: 'Icelandic', nativeName: 'Íslenska', group: 'all' },
-            { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia', group: 'all' },
-            { code: 'it', name: 'Italian', nativeName: 'Italiano', group: 'all' },
-            { code: 'ja', name: 'Japanese', nativeName: '日本語', group: 'all' },
-            { code: 'kn', name: 'Kannada', nativeName: 'ಕನ್ನಡ', group: 'all' },
-            { code: 'kk', name: 'Kazakh', nativeName: 'Қазақ', group: 'all' },
-            { code: 'ko', name: 'Korean', nativeName: '한국어', group: 'all' },
-            { code: 'lv', name: 'Latvian', nativeName: 'Latviešu', group: 'all' },
-            { code: 'lt', name: 'Lithuanian', nativeName: 'Lietuvių', group: 'all' },
-            { code: 'mk', name: 'Macedonian', nativeName: 'Македонски', group: 'all' },
-            { code: 'ms', name: 'Malay', nativeName: 'Bahasa Melayu', group: 'all' },
-            { code: 'mr', name: 'Marathi', nativeName: 'मराठी', group: 'all' },
-            { code: 'mi', name: 'Maori', nativeName: 'Māori', group: 'all' },
-            { code: 'ne', name: 'Nepali', nativeName: 'नेपाली', group: 'all' },
-            { code: 'no', name: 'Norwegian', nativeName: 'Norsk', group: 'all' },
-            { code: 'pl', name: 'Polish', nativeName: 'Polski', group: 'all' },
-            { code: 'ro', name: 'Romanian', nativeName: 'Română', group: 'all' },
-            { code: 'sr', name: 'Serbian', nativeName: 'Српски', group: 'all' },
-            { code: 'sk', name: 'Slovak', nativeName: 'Slovenčina', group: 'all' },
-            { code: 'sl', name: 'Slovenian', nativeName: 'Slovenščina', group: 'all' },
-            { code: 'sw', name: 'Swahili', nativeName: 'Kiswahili', group: 'all' },
-            { code: 'sv', name: 'Swedish', nativeName: 'Svenska', group: 'all' },
-            { code: 'tl', name: 'Tagalog (Filipino)', nativeName: 'Tagalog', group: 'all' },
-            { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்', group: 'all' },
-            { code: 'te', name: 'Telugu', nativeName: 'తెలుగు', group: 'all' },
-            { code: 'th', name: 'Thai', nativeName: 'ไทย', group: 'all' },
-            { code: 'tr', name: 'Turkish', nativeName: 'Türkçe', group: 'all' },
-            { code: 'uk', name: 'Ukrainian', nativeName: 'Українська', group: 'all' },
-            { code: 'ur', name: 'Urdu', nativeName: 'اردو', group: 'all' },
-            { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt', group: 'all' },
-            { code: 'cy', name: 'Welsh', nativeName: 'Cymraeg', group: 'all' },
+            { code: 'af', name: 'Afrikaans', nativeName: 'Afrikaans' },
+            { code: 'ar', name: 'Arabic', nativeName: 'العربية' },
+            { code: 'hy', name: 'Armenian', nativeName: 'Հայերեն' },
+            { code: 'az', name: 'Azerbaijani', nativeName: 'Azərbaycan' },
+            { code: 'bn', name: 'Bengali', nativeName: 'বাংলা' },
+            { code: 'be', name: 'Belarusian', nativeName: 'Беларуская' },
+            { code: 'bs', name: 'Bosnian', nativeName: 'Bosanski' },
+            { code: 'bg', name: 'Bulgarian', nativeName: 'Български' },
+            { code: 'ca', name: 'Catalan', nativeName: 'Català' },
+            { code: 'zh', name: 'Chinese (Mandarin)', nativeName: '中文' },
+            { code: 'hr', name: 'Croatian', nativeName: 'Hrvatski' },
+            { code: 'cs', name: 'Czech', nativeName: 'Čeština' },
+            { code: 'da', name: 'Danish', nativeName: 'Dansk' },
+            { code: 'nl', name: 'Dutch', nativeName: 'Nederlands' },
+            { code: 'en', name: 'English', nativeName: 'English' },
+            { code: 'et', name: 'Estonian', nativeName: 'Eesti' },
+            { code: 'fa', name: 'Persian (Farsi)', nativeName: 'فارسی' },
+            { code: 'fi', name: 'Finnish', nativeName: 'Suomi' },
+            { code: 'fr', name: 'French', nativeName: 'Français' },
+            { code: 'gl', name: 'Galician', nativeName: 'Galego' },
+            { code: 'de', name: 'German', nativeName: 'Deutsch' },
+            { code: 'el', name: 'Greek', nativeName: 'Ελληνικά' },
+            { code: 'he', name: 'Hebrew', nativeName: 'עברית' },
+            { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी' },
+            { code: 'hu', name: 'Hungarian', nativeName: 'Magyar' },
+            { code: 'is', name: 'Icelandic', nativeName: 'Íslenska' },
+            { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
+            { code: 'it', name: 'Italian', nativeName: 'Italiano' },
+            { code: 'ja', name: 'Japanese', nativeName: '日本語' },
+            { code: 'kn', name: 'Kannada', nativeName: 'ಕನ್ನಡ' },
+            { code: 'kk', name: 'Kazakh', nativeName: 'Қазақ' },
+            { code: 'ko', name: 'Korean', nativeName: '한국어' },
+            { code: 'lv', name: 'Latvian', nativeName: 'Latviešu' },
+            { code: 'lt', name: 'Lithuanian', nativeName: 'Lietuvių' },
+            { code: 'mk', name: 'Macedonian', nativeName: 'Македонски' },
+            { code: 'ms', name: 'Malay', nativeName: 'Bahasa Melayu' },
+            { code: 'mr', name: 'Marathi', nativeName: 'मराठी' },
+            { code: 'mi', name: 'Maori', nativeName: 'Māori' },
+            { code: 'ne', name: 'Nepali', nativeName: 'नेपाली' },
+            { code: 'no', name: 'Norwegian', nativeName: 'Norsk' },
+            { code: 'pl', name: 'Polish', nativeName: 'Polski' },
+            { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
+            { code: 'ro', name: 'Romanian', nativeName: 'Română' },
+            { code: 'ru', name: 'Russian', nativeName: 'Русский' },
+            { code: 'sr', name: 'Serbian', nativeName: 'Српски' },
+            { code: 'sk', name: 'Slovak', nativeName: 'Slovenčina' },
+            { code: 'sl', name: 'Slovenian', nativeName: 'Slovenščina' },
+            { code: 'es', name: 'Spanish', nativeName: 'Español' },
+            { code: 'sw', name: 'Swahili', nativeName: 'Kiswahili' },
+            { code: 'sv', name: 'Swedish', nativeName: 'Svenska' },
+            { code: 'tl', name: 'Tagalog (Filipino)', nativeName: 'Tagalog' },
+            { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்' },
+            { code: 'te', name: 'Telugu', nativeName: 'తెలుగు' },
+            { code: 'th', name: 'Thai', nativeName: 'ไทย' },
+            { code: 'tr', name: 'Turkish', nativeName: 'Türkçe' },
+            { code: 'uk', name: 'Ukrainian', nativeName: 'Українська' },
+            { code: 'ur', name: 'Urdu', nativeName: 'اردو' },
+            { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
+            { code: 'cy', name: 'Welsh', nativeName: 'Cymraeg' },
         ];
-
-        const PINNED_LANGUAGE_CODES = new Set(['en', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'fa']);
 
         function formatTimecode(seconds) {
             const totalMillis = Math.max(0, Math.round(seconds * 1000));
@@ -3083,19 +3080,10 @@
             const targetLanguageSelect = document.getElementById('targetLanguage');
 
             function buildNativeLanguageOptions() {
-                const common = SUPPORTED_LANGUAGES.filter((l) => l.group === 'common');
-                const all = SUPPORTED_LANGUAGES.filter((l) => l.group === 'all');
                 const formatOption = (lang) =>
                     `<option value="${lang.code}">${lang.name} — ${lang.nativeName}</option>`;
 
-                return (
-                    `<optgroup label="Common languages">` +
-                    common.map(formatOption).join('') +
-                    `</optgroup>` +
-                    `<optgroup label="All languages">` +
-                    all.map(formatOption).join('') +
-                    `</optgroup>`
-                );
+                return SUPPORTED_LANGUAGES.map(formatOption).join('');
             }
 
             function initLanguageDropdown(selectElement, firstOption, initialValue) {
@@ -3127,20 +3115,8 @@
                 });
                 optgroups.push({ value: 'top', label: '' });
 
-                // Common languages
-                SUPPORTED_LANGUAGES.filter((l) => l.group === 'common').forEach((lang) => {
-                    options.push({
-                        code: lang.code,
-                        display: `${lang.name} — ${lang.nativeName}`,
-                        name: lang.name,
-                        nativeName: lang.nativeName,
-                        group: 'common',
-                    });
-                });
-                optgroups.push({ value: 'common', label: 'Common languages' });
-
-                // All other languages
-                SUPPORTED_LANGUAGES.filter((l) => l.group === 'all').forEach((lang) => {
+                // All languages in one alphabetical list (searchable by name or native name)
+                SUPPORTED_LANGUAGES.forEach((lang) => {
                     options.push({
                         code: lang.code,
                         display: `${lang.name} — ${lang.nativeName}`,
@@ -3149,7 +3125,7 @@
                         group: 'all',
                     });
                 });
-                optgroups.push({ value: 'all', label: 'All languages' });
+                optgroups.push({ value: 'all', label: 'Languages' });
 
                 const tom = new TomSelect(selectElement, {
                     options,

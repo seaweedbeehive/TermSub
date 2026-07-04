@@ -21,23 +21,19 @@ body {
     color: var(--ts-text);
 }
 
-/* Desktop no-scroll shell */
-@media (min-width: 1024px) {
-    html, body { height: 100vh; overflow: hidden; }
+/* Allow the app to scroll naturally on all screen sizes. The previous
+   desktop no-scroll shell (100vh + overflow: hidden) broke content that
+   exceeded the viewport, especially on smaller screens. */
+#mainApp {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
 
-    #mainApp {
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .app-header { flex-shrink: 0; }
-    .app-workspace {
-        flex: 1 1 0%;
-        min-height: 0;
-        overflow: hidden;
-    }
+.app-header { flex-shrink: 0; }
+.app-workspace {
+    flex: 1 1 0%;
+    min-height: 0;
 }
 
 /* Collapsible bottom activity log */
