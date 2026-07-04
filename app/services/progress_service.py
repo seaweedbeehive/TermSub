@@ -153,12 +153,17 @@ class ProgressTracker:
         msg = message or f"Starting {step_name}"
         self.info(step_name, msg)
 
-        # Get current progress percent from video
+        # Get current progress percent and status from video.
+        # We deliberately do NOT derive status from the step name: callers are
+        # responsible for setting valid VideoStatus values. Changing status here
+        # produced values like "context_analysis" that violate the database
+        # check constraint.
         video_data = self._get_video_primitives()
         current_percent = video_data["progress_percent"] if video_data else 0
+        current_status = video_data["status"] if video_data else "processing"
 
         self.update_progress(
-            status=step_name.lower().replace(" ", "_"),
+            status=current_status,
             percent=current_percent,
             current_step=step_name,
             step_detail=message,
