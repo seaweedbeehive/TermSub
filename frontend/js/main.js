@@ -324,6 +324,120 @@
         };
 
         // Utility functions
+        function markDownloadedSession() {
+            if (window.jobSession) window.jobSession.markDownloaded();
+        }
+
+        async function fetchVideoData(videoId) {
+            try {
+                const response = await fetch(`/videos/${videoId}`);
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (err) {
+                console.error('[session] Failed to fetch video data:', err);
+                return null;
+            }
+        }
+
+        async function persistTranscription(videoId) {
+            if (!window.jobSession || !videoId) return;
+            const data = await fetchVideoData(videoId);
+            if (data) {
+                window.jobSession.saveTranscription(videoId, {
+                    status: data.status,
+                    segments: data.segments || [],
+                    total_segments: data.total_segments,
+                    source_language: data.source_language,
+                    target_language: data.target_language,
+                });
+            }
+        }
+
+        async function persistTranslation(videoId) {
+            if (!window.jobSession || !videoId) return;
+            const data = await fetchVideoData(videoId);
+            if (data) {
+                window.jobSession.saveTranslation(videoId, {
+                    status: data.status,
+                    segments: data.segments || [],
+                    total_segments: data.total_segments,
+                    source_language: data.source_language,
+                    target_language: data.target_language,
+                });
+            }
+        }
+
+        async function restoreJobSession() {
+            if (!window.jobSession) return;
+            const session = window.jobSession.loadSession();
+            if (!session || !session.jobId) return;
+
+            const { jobId, currentStep, config } = session;
+            if (!jobId) return;
+
+            // Restore basic state
+            currentVideoId = jobId;
+            targetPipelineMode = config?.mode || 'translate';
+
+            // Restore form values
+            const sourceLangSel = document.getElementById('sourceLanguage');
+            const targetLangSel = document.getElementById('targetLanguage');
+            const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+            if (sourceLangSel && config?.sourceLang) sourceLangSel.value = config.sourceLang;
+            if (targetLangSel && config?.targetLang) targetLangSel.value = config.targetLang;
+            if (terminologyCheckbox && config?.terminology !== undefined) {
+                terminologyCheckbox.checked = config.terminology;
+            }
+
+            // Refresh Tom Select wrappers if they exist
+            if (window.termsubSourceLanguageTom) window.termsubSourceLanguageTom.setValue(config?.sourceLang || 'auto');
+            if (window.termsubTargetLanguageTom) window.termsubTargetLanguageTom.setValue(config?.targetLang || '');
+
+            // Fetch fresh job data from backend
+            const data = await fetchVideoData(jobId);
+            if (!data) {
+                console.warn('[session] Could not restore job; clearing session.');
+                window.jobSession.clearSession();
+                return;
+            }
+
+            // Update metadata display
+            const projectTitleEl = document.getElementById('projectTitle');
+            if (projectTitleEl) projectTitleEl.textContent = data.filename || config?.videoName || 'Untitled Project';
+            const projectIdEl = document.getElementById('projectId');
+            if (projectIdEl) projectIdEl.textContent = jobId.substring(0, 8);
+            const statusCardEl = document.getElementById('statusCard');
+            if (statusCardEl) statusCardEl.classList.remove('hidden');
+            const primaryActionEl = document.getElementById('primaryActionContainer');
+            if (primaryActionEl) primaryActionEl.classList.remove('hidden');
+
+            // Swap upload form for compact filename card
+            const uploadFormEl = document.getElementById('uploadForm');
+            if (uploadFormEl) uploadFormEl.classList.add('hidden');
+            const uploadCompleteCardEl = document.getElementById('uploadCompleteCard');
+            if (uploadCompleteCardEl) uploadCompleteCardEl.classList.remove('hidden');
+            const uploadedFilenameEl = document.getElementById('uploadedFilename');
+            if (uploadedFilenameEl) uploadedFilenameEl.textContent = data.filename || config?.videoName || 'Loaded project';
+
+            // Update status and render appropriate panel based on backend status
+            const status = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+            updateStatus({ ...data, status });
+            updateButtonVisibility(status);
+            updateContextBrief(data);
+
+            if (data.segments && (status === 'transcribed' || status === 'completed')) {
+                renderSubtitleTimeline(data.segments);
+            }
+            if (status === 'terms_ready' || status === 'completed') {
+                renderTerms();
+            }
+
+            // Reconnect WebSocket for live updates
+            await connectWebSocket(jobId);
+
+            showToast('Resumed your previous session', 'success');
+        }
+
         function log(message, type = 'info') {
             const logEl = document.getElementById('activityLog');
             const time = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -1997,6 +2111,9 @@
                     isJobRunning = false;
                     hasStartedProcessing = false;
 
+                    // Persist transcription milestone
+                    persistTranscription(currentVideoId);
+
                     // Auto-advance through the selected pipeline
                     if (targetPipelineMode === 'terminology') {
                         log('Auto-advancing to terminology analysis...');
@@ -2031,6 +2148,9 @@
                     hasStartedProcessing = false;
                     updateButtonVisibility('completed');
                     if (data.result?.segments) renderSubtitleTimeline(data.result.segments);
+
+                    // Persist translation milestone
+                    persistTranslation(currentVideoId);
                 } else {
                     log(`${jobType} complete`, 'success');
                 }
@@ -2332,6 +2452,7 @@
                     if (data.status === 'transcribed' && previousStatus !== 'transcribed') {
                         isJobRunning = false;
                         hasStartedProcessing = false;
+                        persistTranscription(currentVideoId);
                         if (targetPipelineMode === 'terminology') {
                             log('Auto-advancing to terminology analysis...');
                             updateButtonVisibility('transcribed');
@@ -2355,6 +2476,7 @@
                         log('Translation complete', 'success');
                         updateButtonVisibility('completed');
                         if (data.segments) renderSubtitleTimeline(data.segments);
+                        persistTranslation(currentVideoId);
                     } else if (data.status === 'error') {
                         log('Processing failed', 'error');
                     }
@@ -2378,6 +2500,8 @@
         }
 
         function resetApp() {
+            if (window.jobSession) window.jobSession.clearSession();
+
             currentVideoId = null;
             currentFileType = 'video';
             timelineHistory = [];
@@ -2583,6 +2707,18 @@
                 const uploadedFilenameEl = document.getElementById('uploadedFilename');
                 if (uploadedFilenameEl) uploadedFilenameEl.textContent = data.filename || 'Untitled Project';
                 
+                // Persist session so a refresh resumes from this job.
+                const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+                if (window.jobSession) {
+                    window.jobSession.saveConfig(currentVideoId, {
+                        sourceLang: sourceLangSel ? sourceLangSel.value : 'auto',
+                        targetLang: targetLangSel ? targetLangSel.value : '',
+                        terminology: terminologyCheckbox ? terminologyCheckbox.checked : true,
+                        videoName: data.filename || 'Untitled Project',
+                        mode: targetPipelineMode || 'translate',
+                    });
+                }
+
                 log('Upload complete: ' + data.filename, 'success');
 
                 updateStatus({ status: 'uploaded', progress_percent: 0 });
@@ -2816,6 +2952,7 @@
                 }, 1000);
 
                 log(`${formatNames[format]} exported`, 'success');
+                markDownloadedSession();
                 
             } catch (err) {
                 log('Export failed: ' + err.message, 'error');
@@ -2850,6 +2987,7 @@
                 }, 1000);
 
                 log('Transcription downloaded', 'success');
+                markDownloadedSession();
                 
             } catch (err) {
                 log('Download failed: ' + err.message, 'error');
@@ -3157,9 +3295,12 @@
                 ''
             );
 
-            // Expose the underlying selects for code that expects them.
+            // Expose the underlying selects and Tom Select instances for code that
+            // expects them (including session restore).
             window.termsubSourceLanguage = sourceLanguageSelect;
             window.termsubTargetLanguage = targetLanguageSelect;
+            window.termsubSourceLanguageTom = sourceTom;
+            window.termsubTargetLanguageTom = targetTom;
 
             // --- Help panel toggle ---
             const helpBtn = document.getElementById('helpBtn');
@@ -3379,7 +3520,7 @@
                 }
 
                 hideAdminView();
-                if (videoId) {
+                if (videoId && !currentVideoId) {
                 currentVideoId = videoId;
                 const videoIdShortEl = document.getElementById('videoIdShort');
                 if (videoIdShortEl) videoIdShortEl.textContent = videoId.substring(0, 8);
@@ -3420,6 +3561,9 @@
                     });
                 }
             }
+
+            // Try to resume a previously saved job session.
+            restoreJobSession();
 
             window.addEventListener('popstate', handleRoute);
             handleRoute();
