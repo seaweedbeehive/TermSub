@@ -1823,13 +1823,33 @@
         let ws = null;
         let wsReconnectAttempts = 0;
         const MAX_WS_RECONNECT_ATTEMPTS = 3;
+        let fallbackPollInterval = null;
+        let fallbackPollCount = 0;
+        let lastPolledStatus = null;
         
-        function connectWebSocket(videoId) {
-            // Close existing connection if any
-            if (ws) {
-                ws.close();
-                ws = null;
+        async function fetchWsToken() {
+            try {
+                const response = await fetch('/api/auth/ws-token', { method: 'POST' });
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (err) {
+                console.error('[WebSocket] Failed to fetch WS token:', err);
+                return null;
             }
+        }
+        
+        function stopPolling() {
+            if (fallbackPollInterval) {
+                clearInterval(fallbackPollInterval);
+                fallbackPollInterval = null;
+            }
+            lastPolledStatus = null;
+        }
+        
+        async function connectWebSocket(videoId) {
+            // Close existing connection and stop any polling from a previous session
+            disconnectWebSocket();
+            stopPolling();
 
             const apiKey = getApiKey();
             let protocols = null;
@@ -1839,8 +1859,18 @@
                 protocols = ['termsub-byok', apiKey];
                 authMode = 'byok';
             } else if (currentUser) {
-                // Standard auth is sent automatically via the HttpOnly cookie.
-                authMode = 'standard';
+                // Standard users obtain a short-lived token via HTTP and send it
+                // through the Sec-WebSocket-Protocol header. This is more reliable
+                // than relying on cookies during the WebSocket upgrade.
+                const tokenData = await fetchWsToken();
+                if (tokenData && tokenData.ws_token && tokenData.subprotocol) {
+                    protocols = [tokenData.subprotocol, tokenData.ws_token];
+                    authMode = 'standard-ws-token';
+                } else {
+                    log('WebSocket auth token unavailable - falling back to status polling', 'warning');
+                    fallbackToPolling(videoId);
+                    return;
+                }
             }
 
             if (authMode === 'none') {
@@ -1864,7 +1894,9 @@
                     wsReconnectAttempts = 0;
                     
                     // Send initial ping
-                    ws.send(JSON.stringify({type: 'ping'}));
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({type: 'ping'}));
+                    }
                 };
                 
                 ws.onmessage = (event) => {
@@ -1893,6 +1925,7 @@
                 ws.onerror = (err) => {
                     console.error('[WebSocket] Error:', err);
                     log('WebSocket error - falling back to status polling', 'error');
+                    fallbackToPolling(videoId);
                 };
                 
                 ws.onclose = () => {
@@ -1904,20 +1937,26 @@
                         wsReconnectAttempts++;
                         log(`WebSocket disconnected. Reconnecting (${wsReconnectAttempts}/${MAX_WS_RECONNECT_ATTEMPTS})...`);
                         setTimeout(() => connectWebSocket(currentVideoId), 2000);
+                    } else if (currentVideoId) {
+                        log('WebSocket reconnect attempts exhausted - falling back to status polling', 'warning');
+                        fallbackToPolling(currentVideoId);
                     }
                 };
                 
             } catch (err) {
                 console.error('[WebSocket] Failed to create connection:', err);
-                log('WebSocket connection failed', 'error');
+                log('WebSocket connection failed - falling back to status polling', 'error');
                 fallbackToPolling(videoId);
             }
         }
         
         function disconnectWebSocket() {
             if (ws) {
-                ws.close();
+                // Prevent the close handler from trying to reconnect
+                const socket = ws;
                 ws = null;
+                socket.onclose = null;
+                socket.close();
                 console.log('[WebSocket] Disconnected by client');
             }
         }
@@ -2250,20 +2289,31 @@
             }
         }
         
-        // Legacy polling fallback (only used if WebSocket fails)
-        let fallbackPollInterval = null;
-        let fallbackPollCount = 0;
+        // HTTP polling fallback — used when the WebSocket can't connect or keeps
+        // dropping. It must fully substitute for the WebSocket: not just show
+        // status, but also drive the pipeline forward (auto-advance) and perform
+        // the post-step UI transitions that normally come from job_complete messages.
         
         function fallbackToPolling(videoId) {
+            // If we already have a working WebSocket, don't poll.
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return;
+            }
+
+            // Don't start duplicate polling loops
+            if (fallbackPollInterval) return;
+
             log('Falling back to HTTP polling (WebSocket unavailable)', 'warning');
             console.log('[FALLBACK] Starting HTTP polling');
             
-            if (fallbackPollInterval) {
-                clearInterval(fallbackPollInterval);
-            }
-            
             fallbackPollCount = 0;
-            fallbackPollInterval = setInterval(async () => {
+            lastPolledStatus = null;
+
+            const poll = async () => {
+                if (!currentVideoId || currentVideoId !== videoId) {
+                    stopPolling();
+                    return;
+                }
                 try {
                     const response = await fetch(`/videos/${videoId}`);
                     const data = await response.json();
@@ -2272,32 +2322,69 @@
                     if (data.status === 'awaiting_choice') {
                         data.status = 'transcribed';
                     }
-                    updateStatus(data);
-                    updateContextBrief(data);
-                    fallbackPollCount++;
 
+                    const previousStatus = lastPolledStatus;
+                    lastPolledStatus = data.status;
+
+                    // Only update UI when the status actually changes, so live term edits
+                    // aren't clobbered every 5 seconds during quiescent states.
+                    if (data.status !== previousStatus) {
+                        updateStatus(data);
+                        updateContextBrief(data);
+                    }
+
+                    fallbackPollCount++;
                     if (fallbackPollCount % 5 === 0) {
                         log(`Fallback poll #${fallbackPollCount}: status=${data.status}`);
                     }
 
+                    // Drive the pipeline forward on transitions.
+                    if (data.status === 'transcribed' && previousStatus !== 'transcribed') {
+                        isJobRunning = false;
+                        hasStartedProcessing = false;
+                        if (targetPipelineMode === 'terminology') {
+                            log('Auto-advancing to terminology analysis...');
+                            updateButtonVisibility('transcribed');
+                            setTimeout(() => analyzeVideo(), 0);
+                        } else if (targetPipelineMode === 'subtitles') {
+                            log('Auto-advancing to translation...');
+                            updateButtonVisibility('transcribed');
+                            setTimeout(() => skipAndTranslate(), 0);
+                        } else {
+                            updateButtonVisibility('transcribed');
+                        }
+                    } else if (data.status === 'terms_ready' && previousStatus !== 'terms_ready') {
+                        isJobRunning = false;
+                        hasStartedProcessing = false;
+                        log('Analysis complete', 'success');
+                        renderTerms();
+                        updateButtonVisibility('terms_ready');
+                    } else if (data.status === 'completed' && previousStatus !== 'completed') {
+                        isJobRunning = false;
+                        hasStartedProcessing = false;
+                        log('Translation complete', 'success');
+                        updateButtonVisibility('completed');
+                        if (data.segments) renderSubtitleTimeline(data.segments);
+                    } else if (data.status === 'error') {
+                        log('Processing failed', 'error');
+                    }
+
+                    // Stop polling once we reach a terminal state.
                     const terminalStatuses = ['terms_ready', 'completed', 'error'];
                     if (targetPipelineMode === 'transcribe') {
                         terminalStatuses.push('transcribed');
                     }
                     if (terminalStatuses.includes(data.status)) {
-                        clearInterval(fallbackPollInterval);
-                        fallbackPollInterval = null;
-                        if (['terms_ready', 'completed'].includes(data.status)) {
-                            renderTerms();
-                        }
-                        if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
-                            renderSubtitleTimeline(data.segments);
-                        }
+                        stopPolling();
                     }
                 } catch (err) {
                     console.error('Fallback poll error:', err);
                 }
-            }, 5000);
+            };
+
+            // Run immediately, then every 5 seconds.
+            poll();
+            fallbackPollInterval = setInterval(poll, 5000);
         }
 
         function resetApp() {
@@ -2362,8 +2449,9 @@
                 </tr>
             `;
             
-            // Disconnect WebSocket
+            // Disconnect WebSocket and stop polling
             disconnectWebSocket();
+            stopPolling();
             
             // Clear URL param
             window.history.replaceState({}, document.title, window.location.pathname);
@@ -2573,8 +2661,9 @@
                 }
 
                 // Do not update the UI to "transcribed" here. The real completion
-                // (and the next pipeline step) is driven by WebSocket job_complete.
-                connectWebSocket(currentVideoId);
+                // (and the next pipeline step) is driven by WebSocket job_complete
+                // or the HTTP polling fallback.
+                await connectWebSocket(currentVideoId);
 
             } catch (err) {
                 log((isTextFile ? 'Parsing' : 'Transcription') + ' failed: ' + err.message, 'error');
@@ -3279,7 +3368,7 @@
             }
 
             // Route handling
-            function handleRoute() {
+            async function handleRoute() {
                 const path = window.location.pathname;
                 const params = new URLSearchParams(window.location.search);
                 const videoId = params.get('video');
@@ -3308,7 +3397,7 @@
                 if (uploadedFilenameEl2) uploadedFilenameEl2.textContent = 'Loaded project';
                 
                 // Connect WebSocket for real-time updates
-                connectWebSocket(videoId);
+                await connectWebSocket(videoId);
                 
                 // Fetch current status
                 fetch(`/videos/${videoId}`)

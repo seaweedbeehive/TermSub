@@ -22,6 +22,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ACCESS_TOKEN_COOKIE = "access_token"
 
+# Subprotocol used to pass a short-lived WebSocket auth token from the client.
+WS_TOKEN_SUBPROTOCOL = "termsub-ws-token"
+
 ALGORITHM = settings.JWT_ALGORITHM
 
 
@@ -49,6 +52,50 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _create_token(
+    user_id: str,
+    ttl: timedelta,
+    extra_claims: dict[str, Any] | None = None,
+) -> str:
+    """Create a signed JWT with the given lifetime and optional claims."""
+    now = datetime.now(UTC)
+    expire = now + ttl
+    payload: dict[str, Any] = {
+        "sub": user_id,
+        "iat": now,
+        "exp": expire,
+        "jti": str(uuid.uuid4()),
+    }
+    if extra_claims:
+        payload.update(extra_claims)
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
+
+
+def _decode_token(
+    token: str,
+    *,
+    required_scope: str | None = None,
+) -> dict[str, Any] | None:
+    """Decode a JWT, optionally requiring a specific scope claim.
+
+    Returns None instead of raising on any validation error so callers can
+    treat invalid/missing tokens uniformly.
+    """
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.InvalidTokenError:
+        return None
+
+    if required_scope is not None and payload.get("scope") != required_scope:
+        return None
+
+    jti = payload.get("jti")
+    if jti and _is_token_revoked(jti):
+        return None
+
+    return payload
+
+
 def create_access_token(user_id: str) -> str:
     """Create a JWT access token valid for 7 days.
 
@@ -58,15 +105,24 @@ def create_access_token(user_id: str) -> str:
     Returns:
         Encoded JWT token string.
     """
-    now = datetime.now(UTC)
-    expire = now + timedelta(days=settings.JWT_EXPIRE_DAYS)
-    payload: dict[str, Any] = {
-        "sub": user_id,
-        "iat": now,
-        "exp": expire,
-        "jti": str(uuid.uuid4()),
-    }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
+    return _create_token(user_id, timedelta(days=settings.JWT_EXPIRE_DAYS))
+
+
+def create_ws_token(user_id: str) -> str:
+    """Create a short-lived token used only for WebSocket authentication.
+
+    The token is valid for 60 seconds and includes a scope claim so it cannot
+    be used as a general access token.
+    """
+    return _create_token(user_id, timedelta(seconds=60), extra_claims={"scope": "ws"})
+
+
+def decode_ws_token(token: str) -> dict[str, Any] | None:
+    """Decode and validate a WebSocket authentication token.
+
+    Returns the token payload if valid, otherwise None.
+    """
+    return _decode_token(token, required_scope="ws")
 
 
 def _get_access_token_from_request(request: Request) -> str | None:

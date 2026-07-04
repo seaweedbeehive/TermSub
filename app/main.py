@@ -21,7 +21,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import admin, auth, export, profile, progress, quota, terms, videos
 from app.core.analytics import log_page_view
-from app.core.auth import ACCESS_TOKEN_COOKIE, RequestIdentity, decode_access_token
+from app.core.auth import (
+    ACCESS_TOKEN_COOKIE,
+    WS_TOKEN_SUBPROTOCOL,
+    RequestIdentity,
+    decode_access_token,
+    decode_ws_token,
+)
 from app.core.config import settings
 from app.core.quota import QuotaManager
 from app.db.session import SessionLocal
@@ -393,14 +399,64 @@ def _extract_ws_identity(
 ) -> tuple[str | None, RequestIdentity | None]:
     """Resolve a WebSocket identity from the HttpOnly cookie or subprotocol.
 
-    Standard users send the JWT in the ``access_token`` cookie; no subprotocol
-    is required. BYOK users send ``["termsub-byok", <openai-api-key>]`` via the
+    Standard browser users first obtain a short-lived WebSocket token from
+    ``POST /api/auth/ws-token`` and send it via the
+    ``Sec-WebSocket-Protocol: ["termsub-ws-token", <token>]`` header. This
+    avoids relying on cookies during the WebSocket upgrade, which some proxies
+    handle poorly, while keeping the long-lived JWT in an HttpOnly cookie.
+
+    BYOK users send ``["termsub-byok", <openai-api-key>]`` via the
     Sec-WebSocket-Protocol header.
+
+    The legacy cookie path is kept as a fallback for API clients/tests.
 
     Returns:
         Tuple of (negotiated_subprotocol, RequestIdentity | None).
     """
-    # Standard users: JWT is sent automatically in the HttpOnly cookie.
+    # Standard users: short-lived WS token via subprotocol (preferred).
+    subprotocols = websocket.scope.get("subprotocols", [])
+    if len(subprotocols) >= 2 and subprotocols[0] == WS_TOKEN_SUBPROTOCOL:
+        ws_token = subprotocols[1]
+        payload = decode_ws_token(ws_token)
+        if not payload:
+            return None, None
+        user_id = payload.get("sub")
+        if not user_id:
+            return None, None
+
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user or not user.is_active or not user.is_email_verified:
+                return None, None
+            if (
+                user.sessions_invalidated_at is not None
+                and payload.get("iat") is not None
+                and datetime.fromtimestamp(payload["iat"], tz=UTC).replace(tzinfo=None)
+                < user.sessions_invalidated_at
+            ):
+                return None, None
+            return WS_TOKEN_SUBPROTOCOL, RequestIdentity(
+                user_id=user_id, is_byok=False, user=user
+            )
+        finally:
+            db.close()
+
+    # BYOK users: API key via subprotocol.
+    if len(subprotocols) >= 2:
+        protocol = subprotocols[0]
+        credential = subprotocols[1]
+
+        if protocol == "termsub-byok":
+            api_key = credential.strip()
+            if api_key:
+                return protocol, RequestIdentity(
+                    user_id=QuotaManager.byok_user_id(api_key),
+                    is_byok=True,
+                    api_key=api_key,
+                )
+
+    # Legacy fallback: HttpOnly cookie (used by tests / API clients).
     token = websocket.cookies.get(ACCESS_TOKEN_COOKIE)
     if token:
         try:
@@ -429,21 +485,6 @@ def _extract_ws_identity(
         except Exception:
             return None, None
 
-    # BYOK users: API key via subprotocol.
-    subprotocols = websocket.scope.get("subprotocols", [])
-    if len(subprotocols) >= 2:
-        protocol = subprotocols[0]
-        credential = subprotocols[1]
-
-        if protocol == "termsub-byok":
-            api_key = credential.strip()
-            if api_key:
-                return protocol, RequestIdentity(
-                    user_id=QuotaManager.byok_user_id(api_key),
-                    is_byok=True,
-                    api_key=api_key,
-                )
-
     return None, None
 
 
@@ -454,7 +495,9 @@ async def websocket_endpoint(
 ) -> None:
     """WebSocket endpoint for real-time video progress updates.
 
-    Standard users authenticate via the HttpOnly ``access_token`` cookie.
+    Standard users authenticate with a short-lived token from
+    ``POST /api/auth/ws-token`` sent via the
+    ``Sec-WebSocket-Protocol: ["termsub-ws-token", <token>]`` header.
     BYOK users authenticate with ``["termsub-byok", api_key]`` via the
     Sec-WebSocket-Protocol header.
 
@@ -496,9 +539,9 @@ async def websocket_endpoint(
 
         # Keep connection alive and handle client messages
         # Use a short receive timeout so we periodically send keepalive traffic.
-        # Render (and many other proxies) close idle WebSocket connections quickly;
-        # sending a message every ~25s prevents that.
-        ws_receive_timeout = 25.0
+        # Some proxies close idle WebSocket connections after only a few seconds;
+        # sending a message every ~10s prevents that.
+        ws_receive_timeout = 10.0
         while True:
             try:
                 data = await asyncio.wait_for(

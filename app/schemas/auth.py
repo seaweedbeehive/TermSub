@@ -52,6 +52,11 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class WsTokenResponse(BaseModel):
+    ws_token: str
+    subprotocol: str
+
+
 class AuthSuccessResponse(BaseModel):
     message: str
 

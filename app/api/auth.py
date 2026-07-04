@@ -13,8 +13,10 @@ from sqlalchemy.orm import Session
 from app.core.admin_auth import require_admin_user
 from app.core.auth import (
     ACCESS_TOKEN_COOKIE,
+    WS_TOKEN_SUBPROTOCOL,
     _get_access_token_from_request,
     create_access_token,
+    create_ws_token,
     generate_verification_token,
     get_current_user,
     hash_password,
@@ -45,6 +47,7 @@ from app.schemas.auth import (
     UserLoginRequest,
     UserResponse,
     UserSignupRequest,
+    WsTokenResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -337,6 +340,20 @@ def reset_password(
 def me(current_user: User = Depends(get_current_user)) -> User:
     """Return information about the currently authenticated user."""
     return current_user
+
+
+@router.post("/ws-token", response_model=WsTokenResponse)
+@rate_limit("ws-token", limit=10, window=60, identifier="user")
+def ws_token(current_user: User = Depends(get_current_user)) -> WsTokenResponse:
+    """Mint a short-lived token used to authenticate a WebSocket connection.
+
+    The token is valid for 60 seconds and must be sent via the
+    Sec-WebSocket-Protocol header when opening ``/ws/videos/{video_id}``.
+    """
+    return WsTokenResponse(
+        ws_token=create_ws_token(str(current_user.id)),
+        subprotocol=WS_TOKEN_SUBPROTOCOL,
+    )
 
 
 @router.post("/logout", response_model=AuthSuccessResponse)
