@@ -404,14 +404,13 @@
             };
 
             if (isError) {
-                const message = data.message || data.current_step || data.error || 'Something went wrong.';
                 currentStepEl.replaceChildren();
-                currentStepEl.appendChild(document.createTextNode(message));
+                currentStepEl.appendChild(document.createTextNode('Something went wrong.'));
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.dataset.openActivityLog = '';
                 btn.className = 'text-blue-400 hover:text-blue-300 underline ml-1';
-                btn.textContent = 'Open activity log for details.';
+                btn.textContent = 'See the description in activity log.';
                 currentStepEl.appendChild(btn);
                 currentStepEl.classList.remove('text-slate-300');
                 currentStepEl.classList.add('text-rose-300');
