@@ -2166,7 +2166,6 @@
             const container = document.getElementById('primaryActionContainer');
             const termsPanel = document.getElementById('termsPanel');
             const subtitleReviewPanel = document.getElementById('subtitleReviewPanel');
-            const howToPanel = document.getElementById('howToPanel');
 
             if (!container) return;
 
@@ -2188,7 +2187,6 @@
             switch (status) {
                 case 'uploaded':
                     primaryBtn?.classList.add('hidden');
-                    if (howToPanel) howToPanel.classList.remove('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
                     break;
@@ -2205,7 +2203,6 @@
                         primaryBtn.onclick = downloadTranscription;
                         exportGrid?.classList.add('hidden');
                         exportHeader?.classList.add('hidden');
-                        if (howToPanel) howToPanel.classList.add('hidden');
                         if (termsPanel) termsPanel.classList.add('hidden');
                         if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
                         // Load original transcription into the timeline so the user can review it
@@ -2224,7 +2221,6 @@
                         primaryBtn.textContent = 'Translate Subtitles';
                         primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
                         primaryBtn.onclick = translateVideo;
-                        if (howToPanel) howToPanel.classList.add('hidden');
                         if (termsPanel) termsPanel.classList.remove('hidden');
                         if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
                         renderTerms();
@@ -2238,14 +2234,12 @@
                     exportGrid?.classList.remove('hidden');
                     exportHeader?.classList.remove('hidden');
                     if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
-                    if (howToPanel) howToPanel.classList.add('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
                     break;
 
                 default:
                     primaryBtn?.classList.add('hidden');
-                    if (howToPanel) howToPanel.classList.remove('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
             }
@@ -2417,8 +2411,6 @@
             if (termsPanelReset) termsPanelReset.classList.add('hidden');
             const subtitleReviewReset = document.getElementById('subtitleReviewPanel');
             if (subtitleReviewReset) subtitleReviewReset.classList.add('hidden');
-            const howToPanelReset = document.getElementById('howToPanel');
-            if (howToPanelReset) howToPanelReset.classList.remove('hidden');
             const timelineGridReset = document.getElementById('timelineCardGrid');
             if (timelineGridReset) timelineGridReset.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
             
@@ -3168,6 +3160,31 @@
             // Expose the underlying selects for code that expects them.
             window.termsubSourceLanguage = sourceLanguageSelect;
             window.termsubTargetLanguage = targetLanguageSelect;
+
+            // --- Help panel toggle ---
+            const helpBtn = document.getElementById('helpBtn');
+            const helpCloseBtn = document.getElementById('helpCloseBtn');
+            const howToPanel = document.getElementById('howToPanel');
+
+            function toggleHelpPanel(show) {
+                if (!howToPanel) return;
+                const willShow = show === undefined ? howToPanel.classList.contains('hidden') : show;
+                howToPanel.classList.toggle('hidden', !willShow);
+            }
+
+            if (helpBtn && howToPanel) {
+                helpBtn.addEventListener('click', () => toggleHelpPanel());
+            }
+            if (helpCloseBtn && howToPanel) {
+                helpCloseBtn.addEventListener('click', () => toggleHelpPanel(false));
+            }
+            // Close when clicking outside the panel or the help button
+            document.addEventListener('click', (e) => {
+                if (!howToPanel || howToPanel.classList.contains('hidden')) return;
+                if (!howToPanel.contains(e.target) && e.target !== helpBtn && !helpBtn?.contains(e.target)) {
+                    toggleHelpPanel(false);
+                }
+            });
 
             // --- Activity Log Collapse ---
             const activityLogToggle = document.getElementById('activityLogToggle');
