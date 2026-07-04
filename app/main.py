@@ -495,10 +495,15 @@ async def websocket_endpoint(
         )
 
         # Keep connection alive and handle client messages
+        # Use a short receive timeout so we periodically send keepalive traffic.
+        # Render (and many other proxies) close idle WebSocket connections quickly;
+        # sending a message every ~25s prevents that.
+        ws_receive_timeout = 25.0
         while True:
             try:
-                # Wait for client messages (optional - clients can send ping/keepalive)
-                data = await websocket.receive_text()
+                data = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=ws_receive_timeout
+                )
                 message = json.loads(data)
 
                 # Handle client messages (e.g., ping)
@@ -508,7 +513,9 @@ async def websocket_endpoint(
             except TimeoutError:
                 # Send keepalive ping
                 try:
-                    await websocket.send_text(json.dumps({"type": "keepalive"}))
+                    await manager.send_to_client(
+                        websocket, {"type": "keepalive"}
+                    )
                 except Exception:
                     break
             except json.JSONDecodeError:
