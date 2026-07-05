@@ -2794,6 +2794,7 @@
         }
 
         async function continueWithConfigCheck(mode) {
+            console.log(`[pipeline] continueWithConfigCheck mode=${mode} currentVideoId=${currentVideoId}`);
             const sourceLangSelect = document.getElementById('sourceLanguage');
             const targetLangSelect = document.getElementById('targetLanguage');
             const sourceLang = window.termsubSourceLanguageTom
@@ -2879,6 +2880,8 @@
         async function startPipeline(mode) {
             const fileInput = document.getElementById('fileInput');
             const targetLangSelect = document.getElementById('targetLanguage');
+
+            console.log(`[pipeline] startPipeline mode=${mode} file=${fileInput?.files?.[0]?.name || 'none'}`);
 
             if (!isAuthenticated()) {
                 showAuthView('standard', 'signup');
@@ -3745,16 +3748,18 @@
             document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
                 const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
                 const mode = reviewTerms ? 'terminology' : 'subtitles';
-                // If the user navigated back to config review and a file is already
-                // uploaded, continue with the existing video instead of re-uploading.
-                if (displayedWizardStep === 0 && currentVideoId) {
+                console.log(`[pipeline] translateSubtitlesBtn clicked mode=${mode} currentVideoId=${currentVideoId} step=${displayedWizardStep}`);
+                // If a video is already uploaded/loaded, continue with it. Otherwise start
+                // a fresh pipeline (requires a file in the input).
+                if (currentVideoId) {
                     continueWithConfigCheck(mode);
                 } else {
                     startPipeline(mode);
                 }
             });
             document.getElementById('originalSubtitlesBtn').addEventListener('click', () => {
-                if (displayedWizardStep === 0 && currentVideoId) {
+                console.log(`[pipeline] originalSubtitlesBtn clicked currentVideoId=${currentVideoId} step=${displayedWizardStep}`);
+                if (currentVideoId) {
                     continueWithConfigCheck('transcribe');
                 } else {
                     startPipeline('transcribe');
