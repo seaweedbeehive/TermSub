@@ -2379,10 +2379,11 @@
         function statusToStep(status) {
             // Map backend statuses to user-facing wizard steps.
             // 3 = completed/export
-            // 2 = terminology/terms review (includes all processing that leads there)
+            // 2 = processing / terminology review (includes translation in progress)
             // 0 = config/upload
-            if (status === 'completed' || status === 'translating') return 3;
+            if (status === 'completed') return 3;
             if (
+                status === 'translating' ||
                 status === 'terms_ready' ||
                 status === 'analyzing' ||
                 status === 'context_ready' ||
@@ -2439,9 +2440,13 @@
         function goBack() {
             console.log(`[wizard] goBack called from step ${displayedWizardStep}`);
             if (displayedWizardStep <= 0) return;
-            // From completed/export (3) → terms review (2).
-            // From terms review (2) → config (0).
-            userWizardStep = displayedWizardStep === 3 ? 2 : 0;
+            // From completed/export (3) → terms review (2) for translation pipelines,
+            // or config (0) for transcribe-only pipelines.
+            if (displayedWizardStep === 3) {
+                userWizardStep = targetPipelineMode === 'transcribe' ? 0 : 2;
+            } else {
+                userWizardStep = 0;
+            }
             console.log(`[wizard] userWizardStep set to ${userWizardStep}`);
             refreshDisplayedStep();
         }
@@ -2487,33 +2492,56 @@
                     break;
 
                 case 2:
-                    // Terminology / processing step. Show terms when ready, otherwise a
-                    // processing placeholder. The primary action only makes sense once
-                    // terms are extracted.
-                    if (termsPanel) termsPanel.classList.remove('hidden');
-
+                    // Processing / review step. For transcribe-only pipelines we show the
+                    // subtitle timeline (or a placeholder) and the download option. For
+                    // translation pipelines we show the terminology panel.
                     {
                         const currentStatus = currentVideoId ? lastKnownStatus : null;
-                        const isTermsReady = currentStatus === 'terms_ready';
-                        if (isTermsReady) {
-                            helperText?.classList.remove('hidden');
-                            primaryBtn.textContent = 'Translate Subtitles';
-                            primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                            primaryBtn.onclick = translateVideo;
-                            primaryBtn.disabled = false;
-                            renderTerms();
+                        const isProcessing = currentStatus && ['queued', 'extracting_audio', 'transcribing', 'analyzing', 'context_ready', 'glossary_extracting', 'translating'].includes(currentStatus);
+
+                        if (targetPipelineMode === 'transcribe') {
+                            if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                            if (isProcessing) {
+                                if (primaryBtn) primaryBtn.classList.add('hidden');
+                            } else {
+                                primaryBtn.textContent = 'Download Subtitles';
+                                primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                                primaryBtn.onclick = downloadTranscription;
+                                primaryBtn.disabled = false;
+                                // Load timeline if available.
+                                if (currentVideoId) {
+                                    fetch(`/videos/${currentVideoId}`)
+                                        .then(r => r.json())
+                                        .then(data => {
+                                            if (data.segments) renderSubtitleTimeline(data.segments);
+                                        })
+                                        .catch(err => console.error('Failed to load transcription:', err));
+                                }
+                            }
                         } else {
-                            if (primaryBtn) primaryBtn.classList.add('hidden');
-                            // Show a processing notice inside the terms panel if empty.
-                            const termsTable = document.getElementById('termsTable');
-                            if (termsTable) {
-                                termsTable.innerHTML = `
-                                    <tr>
-                                        <td colspan="3" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
-                                            Extracting terminology... please wait.
-                                        </td>
-                                    </tr>
-                                `;
+                            // Terminology / translation pipeline.
+                            if (termsPanel) termsPanel.classList.remove('hidden');
+                            const isTermsReady = currentStatus === 'terms_ready';
+                            if (isTermsReady) {
+                                helperText?.classList.remove('hidden');
+                                primaryBtn.textContent = 'Translate Subtitles';
+                                primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                                primaryBtn.onclick = translateVideo;
+                                primaryBtn.disabled = false;
+                                renderTerms();
+                            } else {
+                                if (primaryBtn) primaryBtn.classList.add('hidden');
+                                // Show a processing notice inside the terms panel if empty.
+                                const termsTable = document.getElementById('termsTable');
+                                if (termsTable) {
+                                    termsTable.innerHTML = `
+                                        <tr>
+                                            <td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                                                ${isProcessing ? 'Processing... please wait.' : 'No terms extracted yet.'}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }
                             }
                         }
                     }
@@ -2790,6 +2818,7 @@
                 const doneStatuses = ['transcribed', 'terms_ready', 'completed'];
                 if (doneStatuses.includes(status)) {
                     log('Transcription already complete.', 'info');
+                    updateButtonVisibility(status);
                     return;
                 }
                 await processFile();
@@ -2806,6 +2835,7 @@
                 console.log(`[pipeline] runPipeline terminology freshStatus=${freshStatus}`);
                 if (freshStatus === 'completed') {
                     log('Translation already complete.', 'info');
+                    updateButtonVisibility(freshStatus);
                     return;
                 }
                 if (freshStatus === 'terms_ready' || freshStatus === 'translating') {
@@ -2829,6 +2859,7 @@
                 console.log(`[pipeline] runPipeline subtitles freshStatus=${freshStatus}`);
                 if (freshStatus === 'completed') {
                     log('Translation already complete.', 'info');
+                    updateButtonVisibility(freshStatus);
                     return;
                 }
                 console.log('[pipeline] runPipeline subtitles calling skipAndTranslate');
@@ -2928,7 +2959,12 @@
             targetPipelineMode = mode;
             userWizardStep = null; // user continued forward; release back-lock
             log(`Continuing ${mode} pipeline with uploaded file...`);
-            await runPipeline(mode);
+            setPipelineButtonsDisabled(true);
+            try {
+                await runPipeline(mode);
+            } finally {
+                setPipelineButtonsDisabled(false);
+            }
         }
 
         // Pipeline entry point: validate inputs, set mode, upload, then auto-start processing.
@@ -2967,7 +3003,12 @@
             userWizardStep = null;
             displayedWizardStep = 0;
             log(`Starting ${mode} pipeline...`);
-            await uploadFile(mode);
+            setPipelineButtonsDisabled(true);
+            try {
+                await uploadFile(mode);
+            } finally {
+                setPipelineButtonsDisabled(false);
+            }
         }
 
         // Upload handler
@@ -3117,8 +3158,8 @@
                 }
             }
 
-            // Collapse config scene once processing starts.
-            updateUploadAreaState(0);
+            // Collapse config scene once processing starts; show the compact upload card.
+            updateUploadAreaState(2);
 
             // Reset per-job tracking state.
             currentJobId = null;
@@ -3163,7 +3204,7 @@
 
         // Analyze handler (Multi-Agent Step 1)
         async function analyzeVideo() {
-            if (!currentVideoId) return;
+            if (!currentVideoId || isJobRunning) return;
             
             // Reset per-job tracking state.
             currentJobId = null;
@@ -3191,13 +3232,14 @@
 
                 // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
+                isJobRunning = false;
                 log('Analysis failed: ' + err.message, 'error');
             }
         }
 
         // Translate handler (Multi-Agent Step 2)
         async function translateVideo() {
-            if (!currentVideoId) return;
+            if (!currentVideoId || isJobRunning) return;
             
             // Reset per-job tracking state.
             currentJobId = null;
@@ -3225,12 +3267,13 @@
 
                 // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
+                isJobRunning = false;
                 log('Translation failed: ' + err.message, 'error');
             }
         }
 
         async function skipAndTranslate() {
-            if (!currentVideoId) return;
+            if (!currentVideoId || isJobRunning) return;
             
             console.log(`[pipeline] skipAndTranslate called for ${currentVideoId}`);
             
@@ -3261,6 +3304,7 @@
 
                 // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
+                isJobRunning = false;
                 console.error('[pipeline] skipAndTranslate error:', err);
                 log('Translation failed: ' + err.message, 'error');
             }
@@ -3805,19 +3849,25 @@
             }
 
             // Pipeline buttons
-            document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
+            const translateSubtitlesBtn = document.getElementById('translateSubtitlesBtn');
+            const originalSubtitlesBtn = document.getElementById('originalSubtitlesBtn');
+
+            function setPipelineButtonsDisabled(disabled) {
+                if (translateSubtitlesBtn) translateSubtitlesBtn.disabled = disabled;
+                if (originalSubtitlesBtn) originalSubtitlesBtn.disabled = disabled;
+            }
+
+            translateSubtitlesBtn.addEventListener('click', () => {
                 const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
                 const mode = reviewTerms ? 'terminology' : 'subtitles';
                 console.log(`[pipeline] translateSubtitlesBtn clicked mode=${mode} currentVideoId=${currentVideoId} step=${displayedWizardStep}`);
-                // If a video is already uploaded/loaded, continue with it. Otherwise start
-                // a fresh pipeline (requires a file in the input).
                 if (currentVideoId) {
                     continueWithConfigCheck(mode);
                 } else {
                     startPipeline(mode);
                 }
             });
-            document.getElementById('originalSubtitlesBtn').addEventListener('click', () => {
+            originalSubtitlesBtn.addEventListener('click', () => {
                 console.log(`[pipeline] originalSubtitlesBtn clicked currentVideoId=${currentVideoId} step=${displayedWizardStep}`);
                 if (currentVideoId) {
                     continueWithConfigCheck('transcribe');
