@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.core.auth import create_access_token
 from app.core.config import settings
-from app.core.redis_pubsub import get_sync_redis_client
+from app.core.redis_pool import get_redis_client as get_sync_redis_client
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.user import User

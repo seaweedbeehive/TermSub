@@ -17,6 +17,16 @@ services:
         sync: false
       - key: JWT_SECRET_KEY
         generateValue: true
+      - key: CELERY_WORKER_CONCURRENCY
+        value: "5"
+      - key: CELERY_BROKER_POOL_LIMIT
+        value: "3"
+      - key: CELERY_REDIS_MAX_CONNECTIONS
+        value: "3"
+      - key: CELERY_RESULT_BACKEND_MAX_CONNECTIONS
+        value: "3"
+      - key: REDIS_MAX_CONNECTIONS
+        value: "15"
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL

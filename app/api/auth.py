@@ -30,7 +30,7 @@ from app.core.email import (
     send_welcome_email,
 )
 from app.core.rate_limit import rate_limit
-from app.core.redis_pubsub import get_sync_redis_client
+from app.core.redis_pool import get_redis_client as get_sync_redis_client
 from app.db.session import SessionLocal, get_db
 from app.models.newsletter import NewsletterSignup
 from app.models.user import User

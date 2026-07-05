@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from app.core.auth import create_access_token, hash_password
-from app.core.redis_pubsub import get_sync_redis_client
+from app.core.redis_pool import get_redis_client as get_sync_redis_client
 from app.db.session import SessionLocal
 from app.models.user import User
 

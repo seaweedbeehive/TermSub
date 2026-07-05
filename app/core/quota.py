@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from app.core.redis_pubsub import get_sync_redis_client
+from app.core.redis_pool import get_redis_client as get_sync_redis_client
 
 logger = logging.getLogger(__name__)
 

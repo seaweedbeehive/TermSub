@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.quota import QuotaManager
-from app.core.redis_pubsub import get_sync_redis_client
+from app.core.redis_pool import get_redis_client as get_sync_redis_client
 from app.db.session import get_db
 from app.models.user import User
 

@@ -6,55 +6,16 @@ via its in-memory WebSocket manager.
 
 This decouples Celery workers (separate processes) from the WebSocket
 manager (owned by the FastAPI process).
+
+All Redis clients come from app.core.redis_pool so connections are reused
+and bounded, keeping the app under Render's 50-connection Redis limit.
 """
 
 import asyncio
 import json
 from typing import Any
 
-import redis
-import redis.asyncio as aioredis
-
-from app.core.config import settings
-
-# Default Redis URL — uses the Docker Compose service name
-_DEFAULT_REDIS_URL = "redis://redis:6379/0"
-
-# Shared synchronous Redis client for Celery workers
-_sync_redis_client: redis.Redis | None = None
-
-
-def _get_redis_url() -> str:
-    """Resolve Redis URL from settings or fallback."""
-    return getattr(settings, "REDIS_URL", _DEFAULT_REDIS_URL)
-
-
-def get_sync_redis_client() -> redis.Redis:
-    """Get or create the synchronous Redis client (for Celery workers)."""
-    global _sync_redis_client
-    if _sync_redis_client is None:
-        _sync_redis_client = redis.Redis.from_url(
-            _get_redis_url(), decode_responses=True
-        )
-    return _sync_redis_client
-
-
-def publish_progress(video_id: str, data: dict[str, Any]) -> None:
-    """Publish a progress update to Redis Pub/Sub.
-
-    Called from Celery workers to send real-time updates to the frontend.
-
-    Args:
-        video_id: The video ID this update belongs to.
-        data: Dictionary of progress data (status, progress, message, etc.).
-    """
-    try:
-        client = get_sync_redis_client()
-        message = json.dumps({"video_id": video_id, "data": data})
-        client.publish("video_progress", message)
-    except Exception as e:
-        # Never let a WebSocket publish failure break a background task
-        print(f"[RedisPubSub] Failed to publish progress: {e}")
+from app.core.redis_pool import get_async_redis_client, get_redis_client
 
 
 async def start_redis_listener(websocket_manager: Any) -> None:
@@ -64,15 +25,16 @@ async def start_redis_listener(websocket_manager: Any) -> None:
     lifespan. It listens to the 'video_progress' channel and forwards
     messages to all WebSocket clients watching the given video.
 
+    The async Redis client is taken from the shared async pool; only the
+    pub/sub object is closed on shutdown so the underlying pool stays alive.
+
     Args:
         websocket_manager: The ConnectionManager instance from main.py.
     """
-    redis_url = _get_redis_url()
-    client: aioredis.Redis | None = None
+    client = get_async_redis_client()
+    pubsub = client.pubsub()
 
     try:
-        client = aioredis.from_url(redis_url, decode_responses=True)  # type: ignore[no-untyped-call]
-        pubsub = client.pubsub()
         await pubsub.subscribe("video_progress")
         print("[RedisListener] Subscribed to video_progress channel")
 
@@ -96,5 +58,22 @@ async def start_redis_listener(websocket_manager: Any) -> None:
         print(f"[RedisListener] Fatal error: {e}")
         raise
     finally:
-        if client is not None:
-            await client.close()
+        await pubsub.close()
+
+
+def publish_progress(video_id: str, data: dict[str, Any]) -> None:
+    """Publish a progress update to Redis Pub/Sub.
+
+    Called from Celery workers to send real-time updates to the frontend.
+
+    Args:
+        video_id: The video ID this update belongs to.
+        data: Dictionary of progress data (status, progress, message, etc.).
+    """
+    try:
+        client = get_redis_client()
+        message = json.dumps({"video_id": video_id, "data": data})
+        client.publish("video_progress", message)
+    except Exception as e:
+        # Never let a WebSocket publish failure break a background task
+        print(f"[RedisPubSub] Failed to publish progress: {e}")
