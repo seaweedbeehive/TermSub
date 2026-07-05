@@ -2803,11 +2803,18 @@
                 }
                 const fresh = await fetchVideoData(currentVideoId);
                 const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
-                const analysisDone = ['terms_ready', 'completed'];
-                if (analysisDone.includes(freshStatus)) {
-                    log('Terminology analysis already complete.', 'info');
+                console.log(`[pipeline] runPipeline terminology freshStatus=${freshStatus}`);
+                if (freshStatus === 'completed') {
+                    log('Translation already complete.', 'info');
                     return;
                 }
+                if (freshStatus === 'terms_ready' || freshStatus === 'translating') {
+                    // Terminology already extracted; proceed to translation.
+                    console.log('[pipeline] runPipeline terminology calling translateVideo');
+                    await translateVideo();
+                    return;
+                }
+                console.log('[pipeline] runPipeline terminology calling analyzeVideo');
                 await analyzeVideo();
                 return;
             }
