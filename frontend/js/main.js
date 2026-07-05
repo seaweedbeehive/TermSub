@@ -13,6 +13,7 @@
         let autoWizardStep = 0;      // step implied by backend status
         let userWizardStep = null;   // step user explicitly navigated to via Back
         let displayedWizardStep = 0; // computed: userWizardStep if behind autoWizardStep, else autoWizardStep
+        let lastKnownStatus = null;  // most recent backend status received
         const MAX_TIMELINE_HISTORY = 20;
 
         window.onerror = function(message, source, lineno, colno, error) {
@@ -1537,8 +1538,10 @@
         }
 
         function updateStatus(data) {
-            const cfg = statusConfig[data.status] || statusConfig.uploaded;
-            const isProcessing = ['transcribing', 'extracting_audio', 'analyzing', 'glossary_extracting', 'translating', 'queued'].includes(data.status);
+            const normalizedStatus = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+            lastKnownStatus = normalizedStatus;
+            const cfg = statusConfig[normalizedStatus] || statusConfig.uploaded;
+            const isProcessing = ['transcribing', 'extracting_audio', 'analyzing', 'glossary_extracting', 'translating', 'queued'].includes(normalizedStatus);
             
             // Update Status Badge in Card
             const statusBadge = document.getElementById('statusBadge');
@@ -2374,9 +2377,24 @@
         
         // Wizard step helpers
         function statusToStep(status) {
-            if (status === 'completed') return 3;
-            if (status === 'terms_ready') return 2;
-            if (status === 'transcribed') return 1;
+            // Map backend statuses to user-facing wizard steps.
+            // 3 = completed/export
+            // 2 = terminology/terms review (includes all processing that leads there)
+            // 0 = config/upload
+            if (status === 'completed' || status === 'translating') return 3;
+            if (
+                status === 'terms_ready' ||
+                status === 'analyzing' ||
+                status === 'context_ready' ||
+                status === 'glossary_extracting' ||
+                status === 'transcribed' ||
+                status === 'awaiting_choice' ||
+                status === 'transcribing' ||
+                status === 'extracting_audio' ||
+                status === 'queued'
+            ) {
+                return 2;
+            }
             return 0;
         }
 
@@ -2415,7 +2433,9 @@
 
         function goBack() {
             if (displayedWizardStep <= 0) return;
-            userWizardStep = displayedWizardStep - 1;
+            // From completed/export (3) → terms review (2).
+            // From terms review (2) → config (0).
+            userWizardStep = displayedWizardStep === 3 ? 2 : 0;
             refreshDisplayedStep();
         }
 
@@ -2459,40 +2479,37 @@
                     if (primaryBtn) primaryBtn.classList.add('hidden');
                     break;
 
-                case 1:
-                    // Transcription review.
-                    if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
-
-                    if (targetPipelineMode === 'terminology' || targetPipelineMode === 'subtitles') {
-                        const isTerminology = targetPipelineMode === 'terminology';
-                        primaryBtn.textContent = isTerminology ? 'Continue to Terminology' : 'Continue to Translation';
-                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                        primaryBtn.onclick = isTerminology ? analyzeVideo : skipAndTranslate;
-                    } else {
-                        primaryBtn.textContent = 'Download the subtitles in original language';
-                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                        primaryBtn.onclick = downloadTranscription;
-                    }
-                    // Ensure original transcription is loaded in the timeline.
-                    if (currentVideoId) {
-                        fetch(`/videos/${currentVideoId}`)
-                            .then(r => r.json())
-                            .then(data => {
-                                if (data.segments) renderSubtitleTimeline(data.segments);
-                            })
-                            .catch(err => console.error('Failed to load transcription:', err));
-                    }
-                    break;
-
                 case 2:
-                    // Terminology review.
+                    // Terminology / processing step. Show terms when ready, otherwise a
+                    // processing placeholder. The primary action only makes sense once
+                    // terms are extracted.
                     if (termsPanel) termsPanel.classList.remove('hidden');
 
-                    helperText?.classList.remove('hidden');
-                    primaryBtn.textContent = 'Translate Subtitles';
-                    primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                    primaryBtn.onclick = translateVideo;
-                    renderTerms();
+                    {
+                        const currentStatus = currentVideoId ? lastKnownStatus : null;
+                        const isTermsReady = currentStatus === 'terms_ready';
+                        if (isTermsReady) {
+                            helperText?.classList.remove('hidden');
+                            primaryBtn.textContent = 'Translate Subtitles';
+                            primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                            primaryBtn.onclick = translateVideo;
+                            primaryBtn.disabled = false;
+                            renderTerms();
+                        } else {
+                            if (primaryBtn) primaryBtn.classList.add('hidden');
+                            // Show a processing notice inside the terms panel if empty.
+                            const termsTable = document.getElementById('termsTable');
+                            if (termsTable) {
+                                termsTable.innerHTML = `
+                                    <tr>
+                                        <td colspan="3" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
+                                            Extracting terminology... please wait.
+                                        </td>
+                                    </tr>
+                                `;
+                            }
+                        }
+                    }
                     break;
 
                 case 3:
@@ -2507,9 +2524,10 @@
         }
 
         function updateButtonVisibility(status) {
+            const normalizedStatus = status === 'awaiting_choice' ? 'transcribed' : status;
             // Backend progress updates only move autoWizardStep. The displayed step
             // respects userWizardStep when the user has explicitly navigated back.
-            autoWizardStep = statusToStep(status);
+            autoWizardStep = statusToStep(normalizedStatus);
             refreshDisplayedStep();
         }
         
@@ -3750,17 +3768,6 @@
                     }
                 });
             }
-
-            window.handleTranslateClick = function() {
-                const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
-                const mode = reviewTerms ? 'terminology' : 'subtitles';
-                console.log(`[pipeline] INLINE translate click mode=${mode} currentVideoId=${currentVideoId} auth=${isAuthenticated()}`);
-                if (currentVideoId) {
-                    continueWithConfigCheck(mode);
-                } else {
-                    startPipeline(mode);
-                }
-            };
 
             // Pipeline buttons
             document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
