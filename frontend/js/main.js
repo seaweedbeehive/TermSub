@@ -344,30 +344,14 @@
 
         async function persistTranscription(videoId) {
             if (!window.jobSession || !videoId) return;
-            const data = await fetchVideoData(videoId);
-            if (data) {
-                window.jobSession.saveTranscription(videoId, {
-                    status: data.status,
-                    segments: data.segments || [],
-                    total_segments: data.total_segments,
-                    source_language: data.source_language,
-                    target_language: data.target_language,
-                });
-            }
+            const session = window.jobSession.loadSession() || {};
+            window.jobSession.saveConfig(videoId, session.config || {});
         }
 
         async function persistTranslation(videoId) {
             if (!window.jobSession || !videoId) return;
-            const data = await fetchVideoData(videoId);
-            if (data) {
-                window.jobSession.saveTranslation(videoId, {
-                    status: data.status,
-                    segments: data.segments || [],
-                    total_segments: data.total_segments,
-                    source_language: data.source_language,
-                    target_language: data.target_language,
-                });
-            }
+            const session = window.jobSession.loadSession() || {};
+            window.jobSession.saveConfig(videoId, session.config || {});
         }
 
         async function restoreJobSession() {
@@ -2403,9 +2387,9 @@
         }
 
         function updateUploadAreaState(step) {
-            // Upload-area state is computed once, based only on currentVideoId and the
-            // user's explicit Back navigation. The config controls are shown only when
-            // the user has navigated back to step 0 so they can edit languages.
+            // Upload-area state is computed once, based on currentVideoId.
+            // The config scene (language controls + pipeline buttons) is shown whenever
+            // the wizard is on step 0 so the user can start/continue a pipeline.
             const uploadForm = document.getElementById('uploadForm');
             const configScene = document.getElementById('configScene');
             const uploadCompleteCard = document.getElementById('uploadCompleteCard');
@@ -2417,8 +2401,8 @@
             } else {
                 if (uploadForm) uploadForm.classList.add('hidden');
                 if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
-                const editingConfig = step === 0 && userWizardStep === 0;
-                if (configScene) configScene.classList.toggle('hidden', !editingConfig);
+                // applyWizardStep will show/hide configScene based on step.
+                if (configScene) configScene.classList.add('hidden');
             }
         }
 
@@ -3078,13 +3062,11 @@
             // Collapse config scene once processing starts.
             updateUploadAreaState(0);
 
-            // Reset state for new job
+            // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
-            autoWizardStep = 0;
-            userWizardStep = null;
-            displayedWizardStep = 0;
+            // Keep the wizard step state; backend updates will advance autoWizardStep.
 
             const isTextFile = currentFileType === 'text';
 
@@ -3125,7 +3107,7 @@
         async function analyzeVideo() {
             if (!currentVideoId) return;
             
-            // Reset state for new job
+            // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
@@ -3159,7 +3141,7 @@
         async function translateVideo() {
             if (!currentVideoId) return;
             
-            // Reset state for new job
+            // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
@@ -3192,7 +3174,7 @@
         async function skipAndTranslate() {
             if (!currentVideoId) return;
             
-            // Reset state for new job
+            // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
