@@ -15,6 +15,13 @@
         let displayedWizardStep = 0; // computed: userWizardStep if behind autoWizardStep, else autoWizardStep
         const MAX_TIMELINE_HISTORY = 20;
 
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error('[TERMSUB GLOBAL ERROR]', message, 'at', source, lineno + ':' + colno, error);
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('[TERMSUB UNHANDLED REJECTION]', event.reason);
+        });
+
         // ------------------------------------------------------------------
         // Authentication
         // ------------------------------------------------------------------
@@ -377,14 +384,14 @@
             currentFileType = data.content_type || 'video';
             targetPipelineMode = config?.mode || null;
 
-            // Restore form values via Tom Select instances if present
-            if (window.termsubSourceLanguageTom) {
+            // Restore form values via Tom Select instances if present and functional.
+            if (window.termsubSourceLanguageTom && typeof window.termsubSourceLanguageTom.setValue === 'function') {
                 window.termsubSourceLanguageTom.setValue(config?.sourceLang || 'auto');
             } else {
                 const sourceLangSel = document.getElementById('sourceLanguage');
                 if (sourceLangSel && config?.sourceLang) sourceLangSel.value = config.sourceLang;
             }
-            if (window.termsubTargetLanguageTom) {
+            if (window.termsubTargetLanguageTom && typeof window.termsubTargetLanguageTom.setValue === 'function') {
                 window.termsubTargetLanguageTom.setValue(config?.targetLang || '');
             } else {
                 const targetLangSel = document.getElementById('targetLanguage');
@@ -3743,6 +3750,17 @@
                     }
                 });
             }
+
+            window.handleTranslateClick = function() {
+                const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
+                const mode = reviewTerms ? 'terminology' : 'subtitles';
+                console.log(`[pipeline] INLINE translate click mode=${mode} currentVideoId=${currentVideoId} auth=${isAuthenticated()}`);
+                if (currentVideoId) {
+                    continueWithConfigCheck(mode);
+                } else {
+                    startPipeline(mode);
+                }
+            };
 
             // Pipeline buttons
             document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
