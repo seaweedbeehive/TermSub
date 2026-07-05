@@ -2770,7 +2770,11 @@
         }
 
         async function runPipeline(mode) {
-            if (!currentVideoId) return;
+            console.log(`[pipeline] runPipeline mode=${mode}`);
+            if (!currentVideoId) {
+                console.log('[pipeline] runPipeline aborted: no currentVideoId');
+                return;
+            }
 
             const data = await fetchVideoData(currentVideoId);
             if (!data) {
@@ -2779,6 +2783,7 @@
             }
 
             const status = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+            console.log(`[pipeline] runPipeline current status=${status}`);
             const transcribeDone = ['transcribed', 'analyzing', 'context_ready', 'glossary_extracting', 'terms_ready', 'translating', 'completed'];
 
             if (mode === 'transcribe') {
@@ -2814,10 +2819,12 @@
                 }
                 const fresh = await fetchVideoData(currentVideoId);
                 const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
+                console.log(`[pipeline] runPipeline subtitles freshStatus=${freshStatus}`);
                 if (freshStatus === 'completed') {
                     log('Translation already complete.', 'info');
                     return;
                 }
+                console.log('[pipeline] runPipeline subtitles calling skipAndTranslate');
                 await skipAndTranslate();
                 return;
             }
@@ -2882,7 +2889,15 @@
         }
 
         async function continuePipeline(mode) {
+            const sourceLangSelect = document.getElementById('sourceLanguage');
             const targetLangSelect = document.getElementById('targetLanguage');
+
+            // Read from Tom Select instances when available, falling back to the native selects.
+            const targetLang = window.termsubTargetLanguageTom && typeof window.termsubTargetLanguageTom.getValue === 'function'
+                ? window.termsubTargetLanguageTom.getValue()
+                : (targetLangSelect ? targetLangSelect.value : '');
+
+            console.log(`[pipeline] continuePipeline mode=${mode} targetLang=${targetLang}`);
 
             if (!isAuthenticated()) {
                 showAuthView('standard', 'signup');
@@ -2891,7 +2906,7 @@
                 return;
             }
 
-            if (mode !== 'transcribe' && (!targetLangSelect || !targetLangSelect.value)) {
+            if (mode !== 'transcribe' && !targetLang) {
                 const warningEl = document.getElementById('languageWarning');
                 if (warningEl) warningEl.classList.remove('hidden');
                 if (targetLangSelect) {
@@ -2899,6 +2914,7 @@
                     targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
                 log('Continue blocked: target language is required.', 'warning');
+                showToast('Please select a target language.', 'warning');
                 return;
             }
 
@@ -3209,6 +3225,8 @@
         async function skipAndTranslate() {
             if (!currentVideoId) return;
             
+            console.log(`[pipeline] skipAndTranslate called for ${currentVideoId}`);
+            
             // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
@@ -3222,6 +3240,8 @@
                     method: 'POST'
                 });
                 
+                console.log(`[pipeline] skipAndTranslate response status=${response.status}`);
+                
                 if (!response.ok) {
                     const err = await response.json();
                     throw new Error(err.detail || 'Translation failed');
@@ -3234,6 +3254,7 @@
 
                 // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
+                console.error('[pipeline] skipAndTranslate error:', err);
                 log('Translation failed: ' + err.message, 'error');
             }
         }
