@@ -10,8 +10,9 @@
         let timelineHistory = [];    // Stack of segment snapshots for undo
         let currentTimelineSegments = []; // Last rendered segment state
         let targetPipelineMode = null; // 'transcribe' | 'terminology' | 'subtitles' | null
-        let displayedWizardStep = 0; // 0=config, 1=transcribed, 2=terms_ready, 3=completed
-        let wizardStepLocked = false; // true when user clicked Back; blocks backend auto-advance
+        let autoWizardStep = 0;      // step implied by backend status
+        let userWizardStep = null;   // step user explicitly navigated to via Back
+        let displayedWizardStep = 0; // computed: userWizardStep if behind autoWizardStep, else autoWizardStep
         const MAX_TIMELINE_HISTORY = 20;
 
         // ------------------------------------------------------------------
@@ -372,30 +373,14 @@
         async function restoreJobSession() {
             if (!window.jobSession) return;
             const session = window.jobSession.loadSession();
-            if (!session || !session.jobId) return;
-
-            const { jobId, currentStep, config } = session;
-            if (!jobId) return;
-
-            // Restore basic state
-            currentVideoId = jobId;
-            targetPipelineMode = config?.mode || 'translate';
-
-            // Restore form values
-            const sourceLangSel = document.getElementById('sourceLanguage');
-            const targetLangSel = document.getElementById('targetLanguage');
-            const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
-            if (sourceLangSel && config?.sourceLang) sourceLangSel.value = config.sourceLang;
-            if (targetLangSel && config?.targetLang) targetLangSel.value = config.targetLang;
-            if (terminologyCheckbox && config?.terminology !== undefined) {
-                terminologyCheckbox.checked = config.terminology;
+            if (!session || !session.jobId) {
+                if (session) window.jobSession.clearSession();
+                return;
             }
 
-            // Refresh Tom Select wrappers if they exist
-            if (window.termsubSourceLanguageTom) window.termsubSourceLanguageTom.setValue(config?.sourceLang || 'auto');
-            if (window.termsubTargetLanguageTom) window.termsubTargetLanguageTom.setValue(config?.targetLang || '');
+            const { jobId, config } = session;
 
-            // Fetch fresh job data from backend
+            // Fetch fresh job data from backend; clear stale session if the job is gone.
             const data = await fetchVideoData(jobId);
             if (!data) {
                 console.warn('[session] Could not restore job; clearing session.');
@@ -403,38 +388,50 @@
                 return;
             }
 
-            // Update metadata display
-            const projectTitleEl = document.getElementById('projectTitle');
-            if (projectTitleEl) projectTitleEl.textContent = data.filename || config?.videoName || 'Untitled Project';
-            const projectIdEl = document.getElementById('projectId');
-            if (projectIdEl) projectIdEl.textContent = jobId.substring(0, 8);
+            // Restore basic state
+            currentVideoId = jobId;
+            currentFileType = data.content_type || 'video';
+            targetPipelineMode = config?.mode || null;
+
+            // Restore form values via Tom Select instances if present
+            if (window.termsubSourceLanguageTom) {
+                window.termsubSourceLanguageTom.setValue(config?.sourceLang || 'auto');
+            } else {
+                const sourceLangSel = document.getElementById('sourceLanguage');
+                if (sourceLangSel && config?.sourceLang) sourceLangSel.value = config.sourceLang;
+            }
+            if (window.termsubTargetLanguageTom) {
+                window.termsubTargetLanguageTom.setValue(config?.targetLang || '');
+            } else {
+                const targetLangSel = document.getElementById('targetLanguage');
+                if (targetLangSel && config?.targetLang) targetLangSel.value = config.targetLang;
+            }
+            const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+            if (terminologyCheckbox && config?.terminology !== undefined) {
+                terminologyCheckbox.checked = config.terminology;
+            }
+
+            // Make sure the status and action containers are visible
             const statusCardEl = document.getElementById('statusCard');
             if (statusCardEl) statusCardEl.classList.remove('hidden');
             const primaryActionEl = document.getElementById('primaryActionContainer');
             if (primaryActionEl) primaryActionEl.classList.remove('hidden');
 
-            // Swap upload form for compact filename card
-            const uploadFormEl = document.getElementById('uploadForm');
-            if (uploadFormEl) uploadFormEl.classList.add('hidden');
-            const uploadCompleteCardEl = document.getElementById('uploadCompleteCard');
-            if (uploadCompleteCardEl) uploadCompleteCardEl.classList.remove('hidden');
-            const uploadedFilenameEl = document.getElementById('uploadedFilename');
-            if (uploadedFilenameEl) uploadedFilenameEl.textContent = data.filename || config?.videoName || 'Loaded project';
+            // Update metadata display
+            const projectTitleEl = document.getElementById('projectTitle');
+            if (projectTitleEl) projectTitleEl.textContent = data.filename || config?.videoName || 'Untitled Project';
+            const projectIdEl = document.getElementById('projectId');
+            if (projectIdEl) projectIdEl.textContent = jobId.substring(0, 8);
 
-            // Update status and render appropriate panel based on backend status
             const status = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+
+            autoWizardStep = statusToStep(status);
+            userWizardStep = null;
+            displayedWizardStep = computeDisplayedStep();
+
             updateStatus({ ...data, status });
-
-            // Restore the wizard step to the furthest point reached in this session.
-            // Backend status drives completed work; saved currentStep catches milestones
-            // that may not have a distinct backend status yet (e.g. upload/config).
-            const savedStep = Math.max(0, (currentStep || 1) - 1);
-            const backendStep = statusToStep(status);
-            displayedWizardStep = Math.max(backendStep, savedStep);
-            wizardStepLocked = false;
-            applyWizardStep(displayedWizardStep);
-
             updateContextBrief(data);
+            applyWizardStep(displayedWizardStep);
 
             if (data.segments && (status === 'transcribed' || status === 'completed')) {
                 renderSubtitleTimeline(data.segments);
@@ -2392,11 +2389,43 @@
             return 0;
         }
 
+        function computeDisplayedStep() {
+            // Displayed step = userWizardStep if it is behind autoWizardStep, else autoWizardStep.
+            if (userWizardStep !== null && userWizardStep < autoWizardStep) {
+                return userWizardStep;
+            }
+            return autoWizardStep;
+        }
+
+        function refreshDisplayedStep() {
+            displayedWizardStep = computeDisplayedStep();
+            applyWizardStep(displayedWizardStep);
+        }
+
+        function updateUploadAreaState(step) {
+            // Upload-area state is computed once, based only on currentVideoId and the
+            // user's explicit Back navigation. The config controls are shown only when
+            // the user has navigated back to step 0 so they can edit languages.
+            const uploadForm = document.getElementById('uploadForm');
+            const configScene = document.getElementById('configScene');
+            const uploadCompleteCard = document.getElementById('uploadCompleteCard');
+
+            if (!currentVideoId) {
+                if (uploadForm) uploadForm.classList.remove('hidden');
+                if (configScene) configScene.classList.remove('hidden');
+                if (uploadCompleteCard) uploadCompleteCard.classList.add('hidden');
+            } else {
+                if (uploadForm) uploadForm.classList.add('hidden');
+                if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
+                const editingConfig = step === 0 && userWizardStep === 0;
+                if (configScene) configScene.classList.toggle('hidden', !editingConfig);
+            }
+        }
+
         function goBack() {
             if (displayedWizardStep <= 0) return;
-            displayedWizardStep -= 1;
-            wizardStepLocked = true;
-            applyWizardStep(displayedWizardStep);
+            userWizardStep = displayedWizardStep - 1;
+            refreshDisplayedStep();
         }
 
         function applyWizardStep(step) {
@@ -2408,15 +2437,11 @@
             const container = document.getElementById('primaryActionContainer');
             const termsPanel = document.getElementById('termsPanel');
             const subtitleReviewPanel = document.getElementById('subtitleReviewPanel');
-            const setupPanel = document.getElementById('setupConfigPanel');
-            const uploadForm = document.getElementById('uploadForm');
-            const uploadCompleteCard = document.getElementById('uploadCompleteCard');
-            const dropZone = document.getElementById('dropZone');
             const backBtn = document.getElementById('wizardBackBtn');
 
             if (!container) return;
 
-            // Reset all sub-elements
+            // Reset primary action container.
             if (primaryBtn) {
                 primaryBtn.classList.remove('hidden');
                 primaryBtn.disabled = false;
@@ -2427,51 +2452,37 @@
             exportHeader?.classList.add('hidden');
             container.querySelector('#postTranscribeChoices')?.remove();
 
-            // Back button visibility
+            // Hide all step scenes.
+            if (termsPanel) termsPanel.classList.add('hidden');
+            if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+
+            // Compute upload-area state once based on currentVideoId.
+            updateUploadAreaState(step);
+
+            // Back button visibility.
             if (backBtn) backBtn.classList.toggle('hidden', step <= 0);
 
             switch (step) {
                 case 0:
-                    // Config review: only show setup panel when user explicitly went back.
+                    // Config review: pipeline buttons live in configScene; no primary action.
                     if (primaryBtn) primaryBtn.classList.add('hidden');
-                    if (termsPanel) termsPanel.classList.add('hidden');
-                    if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
-                    if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
-                    if (wizardStepLocked) {
-                        if (uploadForm) uploadForm.classList.remove('hidden');
-                        if (setupPanel) setupPanel.classList.remove('hidden');
-                        if (dropZone) dropZone.classList.add('hidden');
-                    } else {
-                        if (uploadForm) uploadForm.classList.add('hidden');
-                        if (setupPanel) setupPanel.classList.add('hidden');
-                        if (dropZone) dropZone.classList.remove('hidden');
-                    }
                     break;
 
                 case 1:
-                    // Transcription review
-                    if (termsPanel) termsPanel.classList.add('hidden');
+                    // Transcription review.
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
-                    if (uploadForm) uploadForm.classList.add('hidden');
-                    if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
-                    if (setupPanel) setupPanel.classList.add('hidden');
-                    if (dropZone) dropZone.classList.remove('hidden');
 
                     if (targetPipelineMode === 'terminology' || targetPipelineMode === 'subtitles') {
-                        if (wizardStepLocked) {
-                            const isTerminology = targetPipelineMode === 'terminology';
-                            primaryBtn.textContent = isTerminology ? 'Continue to Terminology' : 'Continue to Translation';
-                            primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                            primaryBtn.onclick = isTerminology ? analyzeVideo : skipAndTranslate;
-                        } else {
-                            primaryBtn?.classList.add('hidden');
-                        }
+                        const isTerminology = targetPipelineMode === 'terminology';
+                        primaryBtn.textContent = isTerminology ? 'Continue to Terminology' : 'Continue to Translation';
+                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                        primaryBtn.onclick = isTerminology ? analyzeVideo : skipAndTranslate;
                     } else {
                         primaryBtn.textContent = 'Download the subtitles in original language';
                         primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
                         primaryBtn.onclick = downloadTranscription;
                     }
-                    // Ensure original transcription is loaded in the timeline
+                    // Ensure original transcription is loaded in the timeline.
                     if (currentVideoId) {
                         fetch(`/videos/${currentVideoId}`)
                             .then(r => r.json())
@@ -2483,34 +2494,20 @@
                     break;
 
                 case 2:
-                    // Terminology review
+                    // Terminology review.
                     if (termsPanel) termsPanel.classList.remove('hidden');
-                    if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
-                    if (uploadForm) uploadForm.classList.add('hidden');
-                    if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
-                    if (setupPanel) setupPanel.classList.add('hidden');
-                    if (dropZone) dropZone.classList.remove('hidden');
 
-                    if (targetPipelineMode === 'terminology' || !targetPipelineMode || wizardStepLocked) {
-                        helperText?.classList.remove('hidden');
-                        primaryBtn.textContent = 'Translate Subtitles';
-                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                        primaryBtn.onclick = translateVideo;
-                        renderTerms();
-                    } else {
-                        primaryBtn?.classList.add('hidden');
-                    }
+                    helperText?.classList.remove('hidden');
+                    primaryBtn.textContent = 'Translate Subtitles';
+                    primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                    primaryBtn.onclick = translateVideo;
+                    renderTerms();
                     break;
 
                 case 3:
-                    // Completed / export
-                    if (primaryBtn) primaryBtn.classList.add('hidden');
-                    if (termsPanel) termsPanel.classList.add('hidden');
+                    // Completed / export.
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
-                    if (uploadForm) uploadForm.classList.add('hidden');
-                    if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
-                    if (setupPanel) setupPanel.classList.add('hidden');
-                    if (dropZone) dropZone.classList.remove('hidden');
+                    if (primaryBtn) primaryBtn.classList.add('hidden');
                     exportGrid?.classList.remove('hidden');
                     exportHeader?.classList.remove('hidden');
                     if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
@@ -2519,12 +2516,10 @@
         }
 
         function updateButtonVisibility(status) {
-            const backendStep = statusToStep(status);
-            // Let backend progress advance the wizard, unless the user explicitly went back.
-            if (!wizardStepLocked && backendStep > displayedWizardStep) {
-                displayedWizardStep = backendStep;
-            }
-            applyWizardStep(displayedWizardStep);
+            // Backend progress updates only move autoWizardStep. The displayed step
+            // respects userWizardStep when the user has explicitly navigated back.
+            autoWizardStep = statusToStep(status);
+            refreshDisplayedStep();
         }
         
         function updateContextBrief(data) {
@@ -2673,8 +2668,9 @@
             hasStartedProcessing = false;
             loggedCompletions.clear();
             targetPipelineMode = null;
+            autoWizardStep = 0;
+            userWizardStep = null;
             displayedWizardStep = 0;
-            wizardStepLocked = false;
             
             // Reset upload form
             const fileInputEl = document.getElementById('fileInput');
@@ -2688,10 +2684,10 @@
             }
             const uploadFormReset = document.getElementById('uploadForm');
             if (uploadFormReset) uploadFormReset.classList.remove('hidden');
+            const configSceneReset = document.getElementById('configScene');
+            if (configSceneReset) configSceneReset.classList.remove('hidden');
             const uploadCompleteCardReset = document.getElementById('uploadCompleteCard');
             if (uploadCompleteCardReset) uploadCompleteCardReset.classList.add('hidden');
-            const setupConfigPanelReset = document.getElementById('setupConfigPanel');
-            if (setupConfigPanelReset) setupConfigPanelReset.classList.remove('hidden');
             
             // Hide status and action containers
             const statusCardReset = document.getElementById('statusCard');
@@ -2738,6 +2734,136 @@
             log('New project ready. Upload a file to begin.', 'success');
         }
 
+        async function waitForStatus(videoId, targetStatuses, timeoutMs = 120000) {
+            const start = Date.now();
+            const interval = 1500;
+            while (Date.now() - start < timeoutMs) {
+                const data = await fetchVideoData(videoId);
+                if (!data) {
+                    throw new Error('Could not fetch video status while waiting.');
+                }
+                if (data.status === 'error') {
+                    throw new Error(data.error_message || 'Video processing failed.');
+                }
+                if (targetStatuses.includes(data.status)) {
+                    return data;
+                }
+                await new Promise(resolve => setTimeout(resolve, interval));
+            }
+            throw new Error(`Timed out waiting for status: ${targetStatuses.join(', ')}`);
+        }
+
+        async function runPipeline(mode) {
+            if (!currentVideoId) return;
+
+            const data = await fetchVideoData(currentVideoId);
+            if (!data) {
+                log('Could not fetch current job data.', 'error');
+                return;
+            }
+
+            const status = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+            const transcribeDone = ['transcribed', 'analyzing', 'context_ready', 'glossary_extracting', 'terms_ready', 'translating', 'completed'];
+
+            if (mode === 'transcribe') {
+                const doneStatuses = ['transcribed', 'terms_ready', 'completed'];
+                if (doneStatuses.includes(status)) {
+                    log('Transcription already complete.', 'info');
+                    return;
+                }
+                await processFile();
+                return;
+            }
+
+            if (mode === 'terminology') {
+                if (!transcribeDone.includes(status)) {
+                    log('Waiting for transcription to complete before terminology analysis...');
+                    await waitForStatus(currentVideoId, transcribeDone);
+                }
+                const fresh = await fetchVideoData(currentVideoId);
+                const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
+                const analysisDone = ['terms_ready', 'completed'];
+                if (analysisDone.includes(freshStatus)) {
+                    log('Terminology analysis already complete.', 'info');
+                    return;
+                }
+                await analyzeVideo();
+                return;
+            }
+
+            if (mode === 'subtitles') {
+                if (!transcribeDone.includes(status)) {
+                    log('Waiting for transcription to complete before translation...');
+                    await waitForStatus(currentVideoId, transcribeDone);
+                }
+                const fresh = await fetchVideoData(currentVideoId);
+                const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
+                if (freshStatus === 'completed') {
+                    log('Translation already complete.', 'info');
+                    return;
+                }
+                await skipAndTranslate();
+                return;
+            }
+
+            log(`Unknown pipeline mode: ${mode}`, 'error');
+        }
+
+        async function continueWithConfigCheck(mode) {
+            const sourceLangSelect = document.getElementById('sourceLanguage');
+            const targetLangSelect = document.getElementById('targetLanguage');
+            const sourceLang = window.termsubSourceLanguageTom
+                ? window.termsubSourceLanguageTom.getValue()
+                : (sourceLangSelect ? sourceLangSelect.value : 'auto');
+            const targetLang = window.termsubTargetLanguageTom
+                ? window.termsubTargetLanguageTom.getValue()
+                : (targetLangSelect ? targetLangSelect.value : '');
+
+            const session = window.jobSession ? window.jobSession.loadSession() : null;
+            const saved = session?.config || {};
+
+            const sourceChanged = sourceLang && sourceLang !== (saved.sourceLang || 'auto');
+            const targetChanged = targetLang && targetLang !== saved.targetLang;
+
+            if (sourceChanged || targetChanged) {
+                try {
+                    const patchBody = {};
+                    if (sourceChanged) patchBody.source_language = sourceLang;
+                    if (targetChanged) patchBody.target_language = targetLang;
+
+                    log('Updating video configuration...');
+                    const response = await fetch(`/videos/${currentVideoId}/config`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(patchBody),
+                    });
+                    if (!response.ok) {
+                        const err = await response.json().catch(() => ({}));
+                        throw new Error(err.detail || 'Failed to update video config.');
+                    }
+                    const updated = await response.json();
+                    log(`Updated configuration: ${updated.source_language || 'auto'} → ${updated.target_language}`, 'success');
+
+                    if (window.jobSession) {
+                        window.jobSession.saveSession({
+                            jobId: currentVideoId,
+                            config: {
+                                ...saved,
+                                sourceLang: updated.source_language || 'auto',
+                                targetLang: updated.target_language,
+                            },
+                        });
+                    }
+                } catch (err) {
+                    log('Config update failed: ' + err.message, 'error');
+                    showToast('Could not update language settings.', 'error');
+                    return;
+                }
+            }
+
+            await continuePipeline(mode);
+        }
+
         async function continuePipeline(mode) {
             const targetLangSelect = document.getElementById('targetLanguage');
 
@@ -2760,9 +2886,9 @@
             }
 
             targetPipelineMode = mode;
-            wizardStepLocked = false;
+            userWizardStep = null; // user continued forward; release back-lock
             log(`Continuing ${mode} pipeline with uploaded file...`);
-            await processFile();
+            await runPipeline(mode);
         }
 
         // Pipeline entry point: validate inputs, set mode, upload, then auto-start processing.
@@ -2795,7 +2921,8 @@
             }
 
             targetPipelineMode = mode;
-            wizardStepLocked = false;
+            autoWizardStep = 0;
+            userWizardStep = null;
             displayedWizardStep = 0;
             log(`Starting ${mode} pipeline...`);
             await uploadFile(mode);
@@ -2898,6 +3025,8 @@
                 // Swap upload form for compact filename card
                 const uploadFormEl = document.getElementById('uploadForm');
                 if (uploadFormEl) uploadFormEl.classList.add('hidden');
+                const configSceneEl = document.getElementById('configScene');
+                if (configSceneEl) configSceneEl.classList.add('hidden');
                 const uploadCompleteCardEl = document.getElementById('uploadCompleteCard');
                 if (uploadCompleteCardEl) uploadCompleteCardEl.classList.remove('hidden');
                 const uploadedFilenameEl = document.getElementById('uploadedFilename');
@@ -2946,15 +3075,15 @@
                 }
             }
 
-            // Collapse setup config panel once processing starts
-            const setupPanel = document.getElementById('setupConfigPanel');
-            if (setupPanel) setupPanel.classList.add('hidden');
+            // Collapse config scene once processing starts.
+            updateUploadAreaState(0);
 
             // Reset state for new job
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
-            wizardStepLocked = false;
+            autoWizardStep = 0;
+            userWizardStep = null;
             displayedWizardStep = 0;
 
             const isTextFile = currentFileType === 'text';
@@ -3000,7 +3129,7 @@
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
-            wizardStepLocked = false;
+            userWizardStep = null; // releasing back-lock when starting a forward step
             
             log('Starting Multi-Agent Analysis (Director + Glossary)...');
             log('Director Agent: Analyzing context and style...');
@@ -3034,7 +3163,7 @@
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
-            wizardStepLocked = false;
+            userWizardStep = null; // releasing back-lock when starting a forward step
             
             log('Starting OpenAI Translator Agent...');
             log('Using sliding window translation with glossary constraints');
@@ -3067,7 +3196,7 @@
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
-            wizardStepLocked = false;
+            userWizardStep = null; // releasing back-lock when starting a forward step
             
             log('Skipping terminology review and starting translation...');
             
@@ -3637,14 +3766,14 @@
                 // If the user navigated back to config review and a file is already
                 // uploaded, continue with the existing video instead of re-uploading.
                 if (displayedWizardStep === 0 && currentVideoId) {
-                    continuePipeline(mode);
+                    continueWithConfigCheck(mode);
                 } else {
                     startPipeline(mode);
                 }
             });
             document.getElementById('originalSubtitlesBtn').addEventListener('click', () => {
                 if (displayedWizardStep === 0 && currentVideoId) {
-                    continuePipeline('transcribe');
+                    continueWithConfigCheck('transcribe');
                 } else {
                     startPipeline('transcribe');
                 }
@@ -3761,6 +3890,8 @@
                 // Hide upload form, show compact card for loaded project
                 const uploadFormEl2 = document.getElementById('uploadForm');
                 if (uploadFormEl2) uploadFormEl2.classList.add('hidden');
+                const configSceneEl2 = document.getElementById('configScene');
+                if (configSceneEl2) configSceneEl2.classList.add('hidden');
                 const uploadCompleteCardEl2 = document.getElementById('uploadCompleteCard');
                 if (uploadCompleteCardEl2) uploadCompleteCardEl2.classList.remove('hidden');
                 const uploadedFilenameEl2 = document.getElementById('uploadedFilename');

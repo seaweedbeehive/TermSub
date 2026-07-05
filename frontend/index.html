@@ -393,6 +393,7 @@
             <div class="lg:col-span-1 flex flex-col gap-4">
                 <!-- Upload Card -->
                 <div id="uploadCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shrink-0">
+                    <!-- Upload scene: file drop zone -->
                     <div id="uploadForm" class="space-y-4">
                         <div>
                             <input type="file" id="fileInput" accept="video/*,audio/*,.txt" class="hidden">
@@ -403,7 +404,10 @@
                                 <p class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, MP3, TXT</p>
                             </label>
                         </div>
+                    </div>
 
+                    <!-- Config scene: language controls + pipeline buttons -->
+                    <div id="configScene" class="space-y-4">
                         <div id="setupConfigPanel" class="space-y-4">
                             <div>
                                 <label class="block text-xs font-normal text-slate-400 mb-1 tracking-wide">Source Language</label>

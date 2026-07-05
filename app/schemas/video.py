@@ -28,6 +28,14 @@ class VideoUpdate(BaseModel):
     source_language: str | None = None
 
 
+class VideoConfigUpdate(BaseModel):
+    """Editable configuration fields for an existing video job."""
+
+    source_language: str | None = None
+    target_language: str | None = None
+    skip_glossary: bool | None = None
+
+
 class VideoOut(VideoBase):
     model_config = ConfigDict(from_attributes=True)
 
