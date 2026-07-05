@@ -2412,30 +2412,37 @@
         }
 
         function updateUploadAreaState(step) {
-            // Upload-area state is computed once, based on currentVideoId.
-            // The config scene (language controls + pipeline buttons) is shown whenever
-            // the wizard is on step 0 so the user can start/continue a pipeline.
+            // Upload-area state is computed once, based on currentVideoId and the
+            // current wizard step.
             const uploadForm = document.getElementById('uploadForm');
             const configScene = document.getElementById('configScene');
             const uploadCompleteCard = document.getElementById('uploadCompleteCard');
 
             if (!currentVideoId) {
+                // No job yet: show file drop zone + config controls.
                 if (uploadForm) uploadForm.classList.remove('hidden');
                 if (configScene) configScene.classList.remove('hidden');
                 if (uploadCompleteCard) uploadCompleteCard.classList.add('hidden');
-            } else {
+            } else if (step === 0) {
+                // User navigated back to edit config for an existing job.
                 if (uploadForm) uploadForm.classList.add('hidden');
-                if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
-                // applyWizardStep will show/hide configScene based on step.
+                if (configScene) configScene.classList.remove('hidden');
+                if (uploadCompleteCard) uploadCompleteCard.classList.add('hidden');
+            } else {
+                // Processing/review/export steps: show compact upload card only.
+                if (uploadForm) uploadForm.classList.add('hidden');
                 if (configScene) configScene.classList.add('hidden');
+                if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
             }
         }
 
         function goBack() {
+            console.log(`[wizard] goBack called from step ${displayedWizardStep}`);
             if (displayedWizardStep <= 0) return;
             // From completed/export (3) → terms review (2).
             // From terms review (2) → config (0).
             userWizardStep = displayedWizardStep === 3 ? 2 : 0;
+            console.log(`[wizard] userWizardStep set to ${userWizardStep}`);
             refreshDisplayedStep();
         }
 
