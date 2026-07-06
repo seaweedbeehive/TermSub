@@ -3140,6 +3140,13 @@
             }
         }
 
+        function setPipelineButtonsDisabled(disabled) {
+            const translateSubtitlesBtn = document.getElementById('translateSubtitlesBtn');
+            const originalSubtitlesBtn = document.getElementById('originalSubtitlesBtn');
+            if (translateSubtitlesBtn) translateSubtitlesBtn.disabled = disabled;
+            if (originalSubtitlesBtn) originalSubtitlesBtn.disabled = disabled;
+        }
+
         // Process file handler (handles both video transcription and text parsing)
         async function processFile() {
             if (!currentVideoId) return;
@@ -3851,11 +3858,6 @@
             // Pipeline buttons
             const translateSubtitlesBtn = document.getElementById('translateSubtitlesBtn');
             const originalSubtitlesBtn = document.getElementById('originalSubtitlesBtn');
-
-            function setPipelineButtonsDisabled(disabled) {
-                if (translateSubtitlesBtn) translateSubtitlesBtn.disabled = disabled;
-                if (originalSubtitlesBtn) originalSubtitlesBtn.disabled = disabled;
-            }
 
             translateSubtitlesBtn.addEventListener('click', () => {
                 const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
