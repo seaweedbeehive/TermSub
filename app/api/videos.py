@@ -29,7 +29,7 @@ from app.core.quota import QuotaManager
 from app.core.task_tracker import get_latest_task_id, record_task
 from app.db.session import get_db
 from app.db.session_utils import get_db_session
-from app.models.video import ContentType, Segment, Video, VideoStatus
+from app.models.video import ContentType, Segment, Term, Video, VideoStatus
 from app.schemas.segment import SegmentUpdate
 from app.schemas.video import VideoConfigUpdate, VideoOut
 from app.services.gemini_service import translate_video_sliding_window
@@ -334,24 +334,19 @@ def update_video_config(
     )
 
     if target_language_changed:
-        has_translations = (
-            db.query(Segment)
-            .filter(
-                Segment.video_id == video_id,
-                Segment.translated_text.isnot(None),
-            )
-            .first()
-            is not None
+        # Changing the target language invalidates both existing translations and
+        # extracted terms (terms include target-language translations). Reset the
+        # job to transcribed so terminology analysis and translation re-run.
+        db.query(Segment).filter(Segment.video_id == video_id).update(
+            {Segment.translated_text: None},
+            synchronize_session=False,
         )
-        if has_translations:
-            db.query(Segment).filter(Segment.video_id == video_id).update(
-                {Segment.translated_text: None},
-                synchronize_session=False,
-            )
-            video.status = VideoStatus.TRANSCRIBED.value
-            video.skip_glossary = body.skip_glossary if (
-                body.skip_glossary is not None
-            ) else video.skip_glossary
+        db.query(Term).filter(Term.video_id == video_id).delete(
+            synchronize_session=False
+        )
+        video.status = VideoStatus.TRANSCRIBED.value
+        if body.skip_glossary is not None:
+            video.skip_glossary = body.skip_glossary
 
     if (
         body.skip_glossary is True
