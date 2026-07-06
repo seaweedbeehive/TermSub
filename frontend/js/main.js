@@ -364,6 +364,25 @@
             window.jobSession.saveConfig(videoId, session.config);
         }
 
+        async function restoreSpecificJob(jobId) {
+            if (!window.jobSession) return;
+            const data = await fetchVideoData(jobId);
+            if (!data) {
+                console.warn('[session] Could not restore job from URL; clearing session.');
+                window.jobSession.clearSession();
+                return;
+            }
+            window.jobSession.saveConfig(jobId, {
+                sourceLang: data.source_language || 'auto',
+                targetLang: data.target_language || '',
+                terminology: !data.skip_glossary,
+                skipGlossary: data.skip_glossary,
+                videoName: data.filename || 'Untitled Project',
+                mode: data.skip_glossary ? 'subtitles' : 'terminology',
+            });
+            await restoreJobSession();
+        }
+
         async function restoreJobSession() {
             if (!window.jobSession) return;
             const session = window.jobSession.loadSession();
@@ -401,8 +420,14 @@
                 if (targetLangSel && config?.targetLang) targetLangSel.value = config.targetLang;
             }
             const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
-            if (terminologyCheckbox && config?.terminology !== undefined) {
-                terminologyCheckbox.checked = config.terminology;
+            if (terminologyCheckbox) {
+                // Prefer the explicit skipGlossary flag; fall back to the legacy
+                // terminology value so old sessions still restore correctly.
+                if (config?.skipGlossary !== undefined) {
+                    terminologyCheckbox.checked = !config.skipGlossary;
+                } else if (config?.terminology !== undefined) {
+                    terminologyCheckbox.checked = config.terminology;
+                }
             }
 
             // Make sure the status and action containers are visible
@@ -871,10 +896,9 @@
 
                 // Persist as current session and restore UI.
                 currentVideoId = data.id;
+                // Derive pipeline mode from skip_glossary. Pre-analysis statuses are
+                // still translation pipelines; we should not force transcribe-only.
                 targetPipelineMode = data.skip_glossary ? 'subtitles' : 'terminology';
-                if (data.status === 'transcribed' || data.status === 'awaiting_choice') {
-                    targetPipelineMode = 'transcribe';
-                }
 
                 if (window.jobSession) {
                     window.jobSession.saveConfig(data.id, {
@@ -2596,6 +2620,19 @@
             // respects userWizardStep when the user has explicitly navigated back.
             autoWizardStep = statusToStep(normalizedStatus);
             refreshDisplayedStep();
+            updateSourceLanguageLock(normalizedStatus);
+        }
+
+        function updateSourceLanguageLock(status) {
+            // Source language is only meaningful before transcription. Once the job
+            // has progressed past uploaded, lock the control to avoid misleading no-ops.
+            const locked = status !== 'uploaded';
+            const sourceSelect = document.getElementById('sourceLanguage');
+            if (sourceSelect) sourceSelect.disabled = locked;
+            if (window.termsubSourceLanguageTom && typeof window.termsubSourceLanguageTom.disable === 'function') {
+                if (locked) window.termsubSourceLanguageTom.disable();
+                else window.termsubSourceLanguageTom.enable();
+            }
         }
         
         function updateContextBrief(data) {
@@ -3160,6 +3197,7 @@
                         sourceLang: sourceLangSel ? sourceLangSel.value : 'auto',
                         targetLang: targetLangSel ? targetLangSel.value : '',
                         terminology: terminologyCheckbox ? terminologyCheckbox.checked : true,
+                        skipGlossary: terminologyCheckbox ? !terminologyCheckbox.checked : false,
                         videoName: data.filename || 'Untitled Project',
                         mode: targetPipelineMode || 'translate',
                     });
@@ -3235,6 +3273,16 @@
                 const data = await response.json();
                 if (data.job_id) {
                     currentJobId = data.job_id;
+                }
+
+                // Text files are parsed synchronously; there is no background job
+                // and therefore no WebSocket job_complete. Advance the UI immediately.
+                if (isTextFile && data.status) {
+                    const normalizedStatus = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+                    updateStatus({ status: normalizedStatus, progress_percent: 100 });
+                    updateButtonVisibility(normalizedStatus);
+                    if (data.segments) renderSubtitleTimeline(data.segments);
+                    return;
                 }
 
                 // Do not update the UI to "transcribed" here. The real completion
@@ -4018,51 +4066,9 @@
 
                 hideAdminView();
                 if (videoId && !currentVideoId) {
-                currentVideoId = videoId;
-                const videoIdShortEl = document.getElementById('videoIdShort');
-                if (videoIdShortEl) videoIdShortEl.textContent = videoId.substring(0, 8);
-                const statusCardEl2 = document.getElementById('statusCard');
-                if (statusCardEl2) statusCardEl2.classList.remove('hidden');
-                const primaryActionEl2 = document.getElementById('primaryActionContainer');
-                if (primaryActionEl2) primaryActionEl2.classList.remove('hidden');
-                
-                // Hide upload form, show compact card for loaded project
-                const uploadFormEl2 = document.getElementById('uploadForm');
-                if (uploadFormEl2) uploadFormEl2.classList.add('hidden');
-                const configSceneEl2 = document.getElementById('configScene');
-                if (configSceneEl2) configSceneEl2.classList.add('hidden');
-                const uploadCompleteCardEl2 = document.getElementById('uploadCompleteCard');
-                if (uploadCompleteCardEl2) uploadCompleteCardEl2.classList.remove('hidden');
-                const uploadedFilenameEl2 = document.getElementById('uploadedFilename');
-                if (uploadedFilenameEl2) uploadedFilenameEl2.textContent = 'Loaded project';
-                
-                // Connect WebSocket for real-time updates
-                await connectWebSocket(videoId);
-                
-                // Fetch current status
-                fetch(`/videos/${videoId}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        // Treat "awaiting_choice" as "transcribed" on direct page loads too
-                        if (data.status === 'awaiting_choice') {
-                            data.status = 'transcribed';
-                        }
-                        updateStatus(data);
-                        updateButtonVisibility(data.status);
-                        updateContextBrief(data);
-                        if (data.total_segments) {
-                            const segCountLoad = document.getElementById('segmentCount');
-                            if (segCountLoad) segCountLoad.textContent = data.total_segments;
-                        }
-                        if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
-                            renderSubtitleTimeline(data.segments);
-                        }
-                    });
+                    await restoreSpecificJob(videoId);
                 }
             }
-
-            // Try to resume a previously saved job session.
-            restoreJobSession();
 
             window.addEventListener('popstate', handleRoute);
             handleRoute();
