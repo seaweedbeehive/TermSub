@@ -2838,15 +2838,15 @@
                 const fresh = await fetchVideoData(currentVideoId);
                 const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
                 console.log(`[pipeline] runPipeline terminology freshStatus=${freshStatus}`);
-                if (freshStatus === 'completed') {
-                    log('Translation already complete.', 'info');
+                if (
+                    freshStatus === 'terms_ready' ||
+                    freshStatus === 'translating' ||
+                    freshStatus === 'completed'
+                ) {
+                    // Terms already extracted (or translation already running/complete).
+                    // Stay on the terms panel and let the user click "Translate Subtitles".
+                    log('Terminology already extracted.', 'info');
                     updateButtonVisibility(freshStatus);
-                    return;
-                }
-                if (freshStatus === 'terms_ready' || freshStatus === 'translating') {
-                    // Terminology already extracted; proceed to translation.
-                    console.log('[pipeline] runPipeline terminology calling translateVideo');
-                    await translateVideo();
                     return;
                 }
                 console.log('[pipeline] runPipeline terminology calling analyzeVideo');
@@ -2862,8 +2862,8 @@
                 const fresh = await fetchVideoData(currentVideoId);
                 const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
                 console.log(`[pipeline] runPipeline subtitles freshStatus=${freshStatus}`);
-                if (freshStatus === 'completed') {
-                    log('Translation already complete.', 'info');
+                if (freshStatus === 'completed' || freshStatus === 'translating') {
+                    log(freshStatus === 'completed' ? 'Translation already complete.' : 'Translation already in progress.', 'info');
                     updateButtonVisibility(freshStatus);
                     return;
                 }
