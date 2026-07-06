@@ -145,7 +145,7 @@ def parse_text_file(video_id: str) -> dict[str, Any]:
             # Update video status
             video = db.query(Video).filter(Video.id == video_id).first()
             if video:
-                video.status = VideoStatus.TRANSLATING.value  # Ready for translation
+                video.status = VideoStatus.TRANSCRIBED.value  # Ready for translation
                 video.progress_percent = 100
                 video.total_segments = total_sentences
                 video.processed_segments = total_sentences
@@ -162,7 +162,7 @@ def parse_text_file(video_id: str) -> dict[str, Any]:
         # Return primitives only - ZERO LEAK POLICY
         return {
             "video_id": video_id,
-            "status": VideoStatus.TRANSLATING.value,
+            "status": VideoStatus.TRANSCRIBED.value,
             "segment_count": total_sentences,
             "success": True,
         }

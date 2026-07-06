@@ -2,6 +2,7 @@
         let currentVideoId = null;
         let videoProgressPercent = 0;  // Track progress for WebSocket updates
         let currentFileType = 'video'; // 'video' or 'text' - tracks uploaded file type
+        let currentContentType = 'video'; // backend content_type value
         let loggedCompletions = new Set(); // Track completed jobs to prevent duplicate logs
         let currentJobId = null; // Track current job to ignore stale messages
         let isJobRunning = false; // Silver bullet: prevents stale completion logs
@@ -1476,6 +1477,29 @@
             return hours * 3600 + minutes * 60 + seconds + millis / 1000;
         }
         
+        function renderTextPreview(segments) {
+            const originalEl = document.getElementById('textPreviewOriginal');
+            const translatedEl = document.getElementById('textPreviewTranslated');
+            if (!originalEl || !translatedEl) return;
+
+            // Track the latest rendered state for history snapshots
+            currentTimelineSegments = JSON.parse(JSON.stringify(segments || []));
+            _updateUndoButton();
+
+            if (!segments || segments.length === 0) {
+                originalEl.textContent = 'No text available yet.';
+                translatedEl.textContent = 'No translation available yet.';
+                return;
+            }
+
+            const ordered = [...segments].sort((a, b) => (a.sequence_number || 0) - (b.sequence_number || 0));
+            const originalText = ordered.map(s => s.original_text || '').join('\n\n');
+            const translatedText = ordered.map(s => s.translated_text || s.original_text || '').join('\n\n');
+
+            originalEl.textContent = originalText;
+            translatedEl.textContent = translatedText;
+        }
+
         function renderSubtitleTimeline(segments) {
             const grid = document.getElementById('timelineCardGrid');
             if (!grid) return;
@@ -1772,6 +1796,7 @@
                     return;
                 }
 
+                currentFileType = data.content_type === 'text' ? 'text' : 'video';
                 updateStatus({
                     status: data.status,
                     progress_percent: data.progress_percent || 0,
@@ -1780,8 +1805,12 @@
                 });
 
                 updateButtonVisibility(data.status);
-                if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
-                    renderSubtitleTimeline(data.segments);
+                if (data.segments) {
+                    if (currentFileType === 'text' && (data.status === 'transcribed' || data.status === 'translating' || data.status === 'completed')) {
+                        renderTextPreview(data.segments);
+                    } else if (data.status === 'transcribed' || data.status === 'completed') {
+                        renderSubtitleTimeline(data.segments);
+                    }
                 }
             } catch (err) {
                 console.error('Failed to fetch video status:', err);
@@ -2006,7 +2035,13 @@
                     isJobRunning = false;
                     hasStartedProcessing = false;
                     updateButtonVisibility('completed');
-                    if (data.result?.segments) renderSubtitleTimeline(data.result.segments);
+                    if (data.result?.segments) {
+                        if (currentFileType === 'text') {
+                            renderTextPreview(data.result.segments);
+                        } else {
+                            renderSubtitleTimeline(data.result.segments);
+                        }
+                    }
                 } else {
                     log(`${jobType} complete`, 'success');
                 }
@@ -2115,7 +2150,13 @@
                     }
                     renderTerms();
                     updateButtonVisibility('completed');
-                    if (data.segments) renderSubtitleTimeline(data.segments);
+                    if (data.segments) {
+                        if (currentFileType === 'text') {
+                            renderTextPreview(data.segments);
+                        } else {
+                            renderSubtitleTimeline(data.segments);
+                        }
+                    }
                     break;
                     
                 case 'error':
@@ -2151,6 +2192,7 @@
             ghostLink?.classList.add('hidden');
             exportGrid?.classList.add('hidden');
             exportPanel?.classList.add('hidden');
+            textExportPanel?.classList.add('hidden');
             exportHeader?.classList.add('hidden');
 
             // Remove any stale post-transcribe choice container
@@ -2163,10 +2205,41 @@
                     primaryBtn?.classList.add('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+                    const textPreviewUploaded = document.getElementById('textPreviewPanel');
+                    if (textPreviewUploaded) textPreviewUploaded.classList.add('hidden');
                     break;
 
                 case 'transcribed':
-                    if (targetPipelineMode === 'terminology' || targetPipelineMode === 'subtitles') {
+                    if (currentFileType === 'text') {
+                        // Text files: show preview and either translate or download original.
+                        if (termsPanel) termsPanel.classList.add('hidden');
+                        if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+                        const textPreviewPanel = document.getElementById('textPreviewPanel');
+                        if (textPreviewPanel) textPreviewPanel.classList.remove('hidden');
+                        exportGrid?.classList.add('hidden');
+                        textExportPanel?.classList.add('hidden');
+                        exportHeader?.classList.add('hidden');
+                        if (targetPipelineMode === 'transcribe') {
+                            primaryBtn.textContent = 'Download Original Text';
+                            primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                            primaryBtn.onclick = downloadTranscription;
+                            ghostLink?.classList.add('hidden');
+                        } else {
+                            primaryBtn.textContent = 'Translate Text';
+                            primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                            primaryBtn.onclick = () => skipAndTranslate();
+                            ghostLink?.classList.remove('hidden');
+                            const ghostBtn = document.getElementById('downloadRawTranscriptionLink');
+                            if (ghostBtn) ghostBtn.textContent = 'or download original text';
+                        }
+                        // Load original text into the preview so the user can review it
+                        fetch(`/videos/${currentVideoId}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.segments) renderTextPreview(data.segments);
+                            })
+                            .catch(err => console.error('Failed to load text preview:', err));
+                    } else if (targetPipelineMode === 'terminology' || targetPipelineMode === 'subtitles') {
                         // Auto-advancing to the next pipeline step; don't show any action
                         // button — the WebSocket-driven status updates will update the UI.
                         primaryBtn?.classList.add('hidden');
@@ -2176,6 +2249,7 @@
                         primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
                         primaryBtn.onclick = downloadTranscription;
                         exportGrid?.classList.add('hidden');
+                        textExportPanel?.classList.add('hidden');
                         exportHeader?.classList.add('hidden');
                         if (termsPanel) termsPanel.classList.add('hidden');
                         if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
@@ -2205,18 +2279,58 @@
 
                 case 'completed':
                     primaryBtn?.classList.add('hidden');
-                    exportGrid?.classList.remove('hidden');
-                    exportPanel?.classList.remove('hidden');
-                    exportHeader?.classList.remove('hidden');
-                    if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
                     if (termsPanel) termsPanel.classList.add('hidden');
-                    if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                    if (currentFileType === 'text') {
+                        if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+                        const textPreviewPanel = document.getElementById('textPreviewPanel');
+                        if (textPreviewPanel) textPreviewPanel.classList.remove('hidden');
+                        exportGrid?.classList.add('hidden');
+                        textExportPanel?.classList.remove('hidden');
+                        exportPanel?.classList.remove('hidden');
+                        exportHeader?.classList.remove('hidden');
+                        if (exportHeader) exportHeader.textContent = 'Download Translation';
+                        fetch(`/videos/${currentVideoId}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.segments) renderTextPreview(data.segments);
+                            })
+                            .catch(err => console.error('Failed to load text preview:', err));
+                    } else {
+                        if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                        exportGrid?.classList.remove('hidden');
+                        textExportPanel?.classList.add('hidden');
+                        exportPanel?.classList.remove('hidden');
+                        exportHeader?.classList.remove('hidden');
+                        if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
+                    }
+                    break;
+
+                case 'translating':
+                    primaryBtn?.classList.add('hidden');
+                    if (termsPanel) termsPanel.classList.add('hidden');
+                    if (currentFileType === 'text') {
+                        if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+                        const textPreviewTranslating = document.getElementById('textPreviewPanel');
+                        if (textPreviewTranslating) textPreviewTranslating.classList.remove('hidden');
+                        fetch(`/videos/${currentVideoId}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.segments) renderTextPreview(data.segments);
+                            })
+                            .catch(err => console.error('Failed to load text preview:', err));
+                    } else {
+                        if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                        const textPreviewPanelTranslating = document.getElementById('textPreviewPanel');
+                        if (textPreviewPanelTranslating) textPreviewPanelTranslating.classList.add('hidden');
+                    }
                     break;
 
                 default:
                     primaryBtn?.classList.add('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+                    const textPreviewPanelDefault = document.getElementById('textPreviewPanel');
+                    if (textPreviewPanelDefault) textPreviewPanelDefault.classList.add('hidden');
             }
         }
         
@@ -3266,7 +3380,7 @@
                 }
             });
             
-            // Global Find & Replace handler
+            // Global Find & Replace handler (subtitle timeline)
             document.getElementById('replaceAllBtn').addEventListener('click', async () => {
                 if (!currentVideoId || isSavingSegment) return;
                 pushTimelineHistory();
@@ -3306,6 +3420,50 @@
                 }
             });
             document.getElementById('downloadRawTranscriptionLink').addEventListener('click', downloadTranscription);
+
+            // Text-file Find & Replace handler
+            document.getElementById('replaceAllBtnText').addEventListener('click', async () => {
+                if (!currentVideoId || isSavingSegment) return;
+                if (currentFileType !== 'text') return;
+                pushTimelineHistory();
+                const findInput = document.getElementById('findInputText');
+                const replaceInput = document.getElementById('replaceInputText');
+                const replaceBtn = document.getElementById('replaceAllBtnText');
+                const findText = findInput ? findInput.value.trim() : '';
+                if (!findText) return;
+
+                isSavingSegment = true;
+                if (replaceBtn) {
+                    replaceBtn.textContent = 'Replacing...';
+                    replaceBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+
+                try {
+                    const response = await fetch(`/videos/${currentVideoId}/replace`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ find_text: findText, replace_text: replaceInput ? replaceInput.value : '' })
+                    });
+                    if (!response.ok) throw new Error('Replace failed');
+                    const data = await response.json();
+                    if (data.segments) renderTextPreview(data.segments);
+                    if (findInput) findInput.value = '';
+                    if (replaceInput) replaceInput.value = '';
+                    log('Global replace applied successfully.', 'success');
+                    showToast('Batch replacement complete!', 'success');
+                } catch (err) {
+                    log('Replace failed: ' + err.message, 'error');
+                } finally {
+                    isSavingSegment = false;
+                    if (replaceBtn) {
+                        replaceBtn.textContent = 'Replace All';
+                        replaceBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                }
+            });
+
+            // Text-only export handler
+            document.getElementById('exportTxtOnlyBtn').addEventListener('click', () => exportFormat('txt'));
             document.getElementById('exportSrtBtn').addEventListener('click', () => exportFormat('srt'));
             document.getElementById('exportVttBtn').addEventListener('click', () => exportFormat('vtt'));
             document.getElementById('exportTxtBtn').addEventListener('click', () => exportFormat('txt'));

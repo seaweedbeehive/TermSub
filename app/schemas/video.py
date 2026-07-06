@@ -35,6 +35,7 @@ class VideoOut(VideoBase):
     file_path: str
     status: str
     source_language: str | None
+    content_type: str
     domain: str = "general"
     created_at: datetime
     updated_at: datetime
