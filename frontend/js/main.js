@@ -385,40 +385,30 @@
         }
 
         function updateUserFacingStatus(data) {
-            const currentStepEl = document.getElementById('currentStep');
-            if (!currentStepEl) return;
+            const statusBadge = document.getElementById('statusBadge');
+            if (!statusBadge) return;
 
             const isError = data.status === 'error' || !!data.error;
-            const friendly = {
-                uploaded: 'Upload complete — ready to process.',
-                queued: 'Queued — waiting for an available worker...',
-                extracting_audio: 'Extracting audio from the video...',
-                transcribing: 'Transcribing audio with OpenAI Whisper...',
-                transcribed: 'Transcription complete — review or continue.',
-                analyzing: 'Analyzing content and tone...',
-                context_ready: 'Context analysis complete.',
-                glossary_extracting: 'Extracting key terms...',
-                terms_ready: 'Terms extracted — review them before translating.',
-                translating: 'Translating subtitles with OpenAI GPT-4o...',
-                completed: 'Done — subtitles are ready.',
-            };
 
             if (isError) {
-                currentStepEl.replaceChildren();
-                currentStepEl.appendChild(document.createTextNode('Something went wrong.'));
+                const span = document.createElement('span');
+                span.id = 'statusDot';
+                span.className = 'w-1.5 h-1.5 rounded-full bg-rose-400';
+                statusBadge.replaceChildren();
+                statusBadge.appendChild(span);
+                statusBadge.appendChild(document.createTextNode('Something went wrong.'));
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.dataset.openActivityLog = '';
                 btn.className = 'text-blue-400 hover:text-blue-300 underline ml-1';
                 btn.textContent = 'See the description in activity log.';
-                currentStepEl.appendChild(btn);
-                currentStepEl.classList.remove('text-slate-300');
-                currentStepEl.classList.add('text-rose-300');
+                statusBadge.appendChild(btn);
+                statusBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/20 text-rose-300 text-xs font-normal rounded-full';
             } else {
-                const message = friendly[data.status] || data.current_step || data.message || 'Processing...';
-                currentStepEl.textContent = message;
-                currentStepEl.classList.remove('text-rose-300');
-                currentStepEl.classList.add('text-slate-300');
+                const cfg = statusConfig[data.status] || statusConfig.uploaded;
+                const isProcessing = ['transcribing', 'extracting_audio', 'analyzing', 'glossary_extracting', 'translating', 'queued'].includes(data.status);
+                statusBadge.className = `inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.color} text-xs font-semibold rounded-full transition-colors`;
+                statusBadge.innerHTML = `<span id="statusDot" class="w-1.5 h-1.5 rounded-full ${cfg.dotColor} ${isProcessing ? 'pulse-indicator' : ''}"></span>${cfg.label}`;
             }
         }
 
@@ -1335,19 +1325,6 @@
             const statusBadge = document.getElementById('statusBadge');
             statusBadge.className = `inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.color} text-xs font-semibold rounded-full transition-colors`;
             statusBadge.innerHTML = `<span id="statusDot" class="w-1.5 h-1.5 rounded-full ${cfg.dotColor} ${isProcessing ? 'pulse-indicator' : ''}"></span>${cfg.label}`;
-            
-            // Update user-facing status (replaces the old currentStep / stepDetail text)
-            updateUserFacingStatus(data);
-
-            // Hide the old step-detail box to avoid redundancy
-            const stepDetail = document.getElementById('stepDetail');
-            if (stepDetail) stepDetail.classList.add('hidden');
-
-            // Update segment counters
-            const segmentCountEl = document.getElementById('segmentCount');
-            if (segmentCountEl) segmentCountEl.textContent = `${data.total_segments ?? 0} segments`;
-            const processedCountEl = document.getElementById('processedCount');
-            if (processedCountEl) processedCountEl.textContent = `${data.processed_segments || 0} processed`;
 
             // Show/hide buttons based on status
             updateButtonVisibility(data.status);
@@ -1803,7 +1780,6 @@
                 });
 
                 updateButtonVisibility(data.status);
-                updateContextBrief(data);
                 if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
                     renderSubtitleTimeline(data.segments);
                 }
@@ -2115,10 +2091,6 @@
                     
                 case 'context_ready':
                     log(`Director Agent complete: ${data.tone} tone`, 'context');
-                    // Fetch full Pass 1 context_analysis for the narrative brief
-                    fetch(`/videos/${currentVideoId}`)
-                        .then(r => r.json())
-                        .then(videoData => updateContextBrief(videoData));
                     break;
                     
                 case 'glossary_extracting':
@@ -2281,7 +2253,7 @@
                 container.classList.remove('hidden');
             }
         }
-        
+
         // HTTP polling fallback — used when the WebSocket can't connect or keeps
         // dropping. It must fully substitute for the WebSocket: not just show
         // status, but also drive the pipeline forward (auto-advance) and perform
@@ -2323,7 +2295,6 @@
                     // aren't clobbered every 5 seconds during quiescent states.
                     if (data.status !== previousStatus) {
                         updateStatus(data);
-                        updateContextBrief(data);
                     }
 
                     fallbackPollCount++;
@@ -2418,15 +2389,10 @@
             if (timelineGridReset) timelineGridReset.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
             
             // Reset step & segment counters
-            const segCountReset = document.getElementById('segmentCount');
-            if (segCountReset) segCountReset.textContent = '0 segments';
-            const procCountReset = document.getElementById('processedCount');
-            if (procCountReset) procCountReset.textContent = '0 processed';
-            const stepReset = document.getElementById('currentStep');
-            if (stepReset) {
-                stepReset.textContent = 'Ready to process';
-                stepReset.classList.remove('text-rose-300');
-                stepReset.classList.add('text-slate-300');
+            const statusBadgeReset = document.getElementById('statusBadge');
+            if (statusBadgeReset) {
+                statusBadgeReset.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 text-blue-300 text-xs font-normal rounded-full';
+                statusBadgeReset.innerHTML = '<span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>Uploaded';
             }
             
             // Clear logs and terms
@@ -3208,9 +3174,9 @@
             }
 
             // Clicking the "Open activity log" link in the status line expands the log
-            const currentStepEl = document.getElementById('currentStep');
-            if (currentStepEl) {
-                currentStepEl.addEventListener('click', (e) => {
+            const statusBadgeEl = document.getElementById('statusBadge');
+            if (statusBadgeEl) {
+                statusBadgeEl.addEventListener('click', (e) => {
                     if (e.target.matches('[data-open-activity-log]')) {
                         e.preventDefault();
                         expandActivityLog();
@@ -3412,11 +3378,6 @@
                         }
                         updateStatus(data);
                         updateButtonVisibility(data.status);
-                        updateContextBrief(data);
-                        if (data.total_segments) {
-                            const segCountLoad = document.getElementById('segmentCount');
-                            if (segCountLoad) segCountLoad.textContent = data.total_segments;
-                        }
                         if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
                             renderSubtitleTimeline(data.segments);
                         }
