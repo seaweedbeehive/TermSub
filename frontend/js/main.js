@@ -1740,14 +1740,17 @@
 
         async function updateTerm(termId, value) {
             try {
-                await fetch(`/terms/${termId}`, {
+                const response = await fetch(`/terms/${termId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ standardized_term: value })
                 });
+                if (!response.ok) throw new Error('Server returned ' + response.status);
                 log(`Updated term ${termId.substring(0, 8)}...`, 'success');
+                showToast('Term updated successfully', 'success');
             } catch (err) {
                 log('Failed to update term: ' + err.message, 'error');
+                showToast('Failed to update term', 'error');
             }
         }
 

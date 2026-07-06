@@ -639,13 +639,22 @@ Only include terms that actually appear in the text.
             db_terms = auto_terms + manual_terms
 
             if glossary is not None:
+                # The passed glossary comes from extract_glossary() and was built at
+                # task-start time. User edits made just before clicking Translate may
+                # not be reflected there. Treat database terms as the source of truth,
+                # but keep any passed terms that are not yet persisted.
                 term_map = {t.original_term: t for t in glossary}
                 for t in db_terms:
-                    if (
-                        t.source == TermSource.MANUAL.value
-                        or t.original_term not in term_map
-                    ):
+                    existing = term_map.get(t.original_term)
+                    if existing is None:
                         term_map[t.original_term] = t
+                    elif t.source == TermSource.MANUAL.value:
+                        # Manual/custom terms always win.
+                        term_map[t.original_term] = t
+                    elif t.standardized_term and not existing.standardized_term:
+                        # User-edited auto terms win over the stale extracted version.
+                        term_map[t.original_term] = t
+                    # Otherwise keep the passed term.
                 glossary = list(term_map.values())
             else:
                 glossary = db_terms
