@@ -2459,7 +2459,13 @@
         function goForward() {
             console.log(`[wizard] goForward called from step ${displayedWizardStep}, auto=${autoWizardStep}`);
             if (userWizardStep === null || displayedWizardStep >= autoWizardStep) return;
-            userWizardStep = Math.min(autoWizardStep, displayedWizardStep + 1);
+            // Valid wizard steps are 0, 2, 3 (there is no step 1). Advance to the
+            // next valid step, never to the non-existent step 1.
+            if (displayedWizardStep === 0) {
+                userWizardStep = Math.min(2, autoWizardStep);
+            } else if (displayedWizardStep === 2) {
+                userWizardStep = 3;
+            }
             console.log(`[wizard] userWizardStep set to ${userWizardStep}`);
             refreshDisplayedStep();
         }
