@@ -2162,6 +2162,7 @@
             const helperText = document.getElementById('primaryHelperText');
             const ghostLink = document.getElementById('primaryGhostLink');
             const exportGrid = document.getElementById('primaryExportGrid');
+            const exportPanel = document.getElementById('exportPanel');
             const exportHeader = document.getElementById('exportHeader');
             const container = document.getElementById('primaryActionContainer');
             const termsPanel = document.getElementById('termsPanel');
@@ -2177,6 +2178,7 @@
             helperText?.classList.add('hidden');
             ghostLink?.classList.add('hidden');
             exportGrid?.classList.add('hidden');
+            exportPanel?.classList.add('hidden');
             exportHeader?.classList.add('hidden');
 
             // Remove any stale post-transcribe choice container
@@ -2232,6 +2234,7 @@
                 case 'completed':
                     primaryBtn?.classList.add('hidden');
                     exportGrid?.classList.remove('hidden');
+                    exportPanel?.classList.remove('hidden');
                     exportHeader?.classList.remove('hidden');
                     if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
                     if (termsPanel) termsPanel.classList.add('hidden');
