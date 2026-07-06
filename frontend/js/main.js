@@ -2456,6 +2456,14 @@
             refreshDisplayedStep();
         }
 
+        function goForward() {
+            console.log(`[wizard] goForward called from step ${displayedWizardStep}, auto=${autoWizardStep}`);
+            if (userWizardStep === null || displayedWizardStep >= autoWizardStep) return;
+            userWizardStep = Math.min(autoWizardStep, displayedWizardStep + 1);
+            console.log(`[wizard] userWizardStep set to ${userWizardStep}`);
+            refreshDisplayedStep();
+        }
+
         function applyWizardStep(step) {
             const primaryBtn = document.getElementById('primaryActionBtn');
             const helperText = document.getElementById('primaryHelperText');
@@ -2487,8 +2495,13 @@
             // Compute upload-area state once based on currentVideoId.
             updateUploadAreaState(step);
 
-            // Back button visibility.
+            // Back/Next button visibility.
             if (backBtn) backBtn.classList.toggle('hidden', step <= 0);
+            const nextBtn = document.getElementById('wizardNextBtn');
+            if (nextBtn) {
+                const canGoForward = userWizardStep !== null && displayedWizardStep < autoWizardStep;
+                nextBtn.classList.toggle('hidden', !canGoForward);
+            }
 
             switch (step) {
                 case 0:
@@ -2526,27 +2539,33 @@
                         } else {
                             // Terminology / translation pipeline.
                             if (termsPanel) termsPanel.classList.remove('hidden');
+                            // Always load/render terms when showing this panel; terms may
+                            // still exist after translation completes.
+                            renderTerms();
+
                             const isTermsReady = currentStatus === 'terms_ready';
+                            const isCompleted = currentStatus === 'completed';
                             if (isTermsReady) {
                                 helperText?.classList.remove('hidden');
                                 primaryBtn.textContent = 'Translate Subtitles';
                                 primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
                                 primaryBtn.onclick = translateVideo;
                                 primaryBtn.disabled = false;
-                                renderTerms();
-                            } else {
+                            } else if (isCompleted) {
+                                helperText?.classList.add('hidden');
+                                primaryBtn.textContent = 'Continue to Subtitles';
+                                primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                                primaryBtn.onclick = () => {
+                                    userWizardStep = null;
+                                    refreshDisplayedStep();
+                                };
+                                primaryBtn.disabled = false;
+                            } else if (isProcessing) {
+                                helperText?.classList.add('hidden');
                                 if (primaryBtn) primaryBtn.classList.add('hidden');
-                                // Show a processing notice inside the terms panel if empty.
-                                const termsTable = document.getElementById('termsTable');
-                                if (termsTable) {
-                                    termsTable.innerHTML = `
-                                        <tr>
-                                            <td colspan="4" class="px-3 py-8 text-center text-slate-400 dark:text-[#6B7280] text-sm">
-                                                ${isProcessing ? 'Processing... please wait.' : 'No terms extracted yet.'}
-                                            </td>
-                                        </tr>
-                                    `;
-                                }
+                            } else {
+                                helperText?.classList.add('hidden');
+                                if (primaryBtn) primaryBtn.classList.add('hidden');
                             }
                         }
                     }
@@ -3888,9 +3907,11 @@
             const undoBtn = document.getElementById('undoTimelineBtn');
             if (undoBtn) undoBtn.addEventListener('click', undoTimeline);
 
-            // Wizard back button
+            // Wizard back/next buttons
             const wizardBackBtn = document.getElementById('wizardBackBtn');
             if (wizardBackBtn) wizardBackBtn.addEventListener('click', goBack);
+            const wizardNextBtn = document.getElementById('wizardNextBtn');
+            if (wizardNextBtn) wizardNextBtn.addEventListener('click', goForward);
 
             // Keyboard shortcut: Ctrl+Z / Cmd+Z for undo
             document.addEventListener('keydown', (e) => {
