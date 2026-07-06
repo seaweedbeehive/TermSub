@@ -51,7 +51,11 @@
     }
 
     function markDownloaded() {
-        clearSession();
+        const session = loadSession();
+        if (!session) return;
+        session.config = { ...(session.config || {}), downloaded: true };
+        session.savedAt = now();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
     }
 
     // Expose a minimal API on window so the rest of the vanilla JS app can use

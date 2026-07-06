@@ -322,7 +322,21 @@ def update_video_config(
 
     original_target_language = video.target_language
 
+    # Source language changes are only meaningful before transcription. Once the
+    # job has progressed past uploaded, changing it would be a silent no-op
+    # because transcription is idempotent and won't re-run.
     if body.source_language is not None:
+        if (
+            video.status != VideoStatus.UPLOADED.value
+            and body.source_language != video.source_language
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    'Cannot change source language after transcription has started. '
+                    'Please start a new project for a different source language.'
+                ),
+            )
         video.source_language = body.source_language
     if body.target_language is not None:
         video.target_language = body.target_language
@@ -345,6 +359,12 @@ def update_video_config(
             synchronize_session=False
         )
         video.status = VideoStatus.TRANSCRIBED.value
+        # Reset stale progress metadata so the UI doesn't show a completed/errored state.
+        video.progress_percent = 0
+        video.processed_segments = 0
+        video.current_segment_index = 0
+        video.completed_at = None
+        video.error_message = None
         if body.skip_glossary is not None:
             video.skip_glossary = body.skip_glossary
 

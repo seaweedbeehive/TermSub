@@ -353,13 +353,15 @@
         async function persistTranscription(videoId) {
             if (!window.jobSession || !videoId) return;
             const session = window.jobSession.loadSession() || {};
-            window.jobSession.saveConfig(videoId, session.config || {});
+            if (!session.config || Object.keys(session.config).length === 0) return;
+            window.jobSession.saveConfig(videoId, session.config);
         }
 
         async function persistTranslation(videoId) {
             if (!window.jobSession || !videoId) return;
             const session = window.jobSession.loadSession() || {};
-            window.jobSession.saveConfig(videoId, session.config || {});
+            if (!session.config || Object.keys(session.config).length === 0) return;
+            window.jobSession.saveConfig(videoId, session.config);
         }
 
         async function restoreJobSession() {
@@ -2914,14 +2916,19 @@
             const session = window.jobSession ? window.jobSession.loadSession() : null;
             const saved = session?.config || {};
 
+            const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+            const skipGlossary = terminologyCheckbox ? !terminologyCheckbox.checked : undefined;
+
             const sourceChanged = sourceLang && sourceLang !== (saved.sourceLang || 'auto');
             const targetChanged = targetLang && targetLang !== saved.targetLang;
+            const glossaryChanged = skipGlossary !== undefined && skipGlossary !== (saved.skipGlossary ?? false);
 
-            if (sourceChanged || targetChanged) {
+            if (sourceChanged || targetChanged || glossaryChanged) {
                 try {
                     const patchBody = {};
                     if (sourceChanged) patchBody.source_language = sourceLang;
                     if (targetChanged) patchBody.target_language = targetLang;
+                    if (glossaryChanged) patchBody.skip_glossary = skipGlossary;
 
                     log('Updating video configuration...');
                     const response = await fetch(`/videos/${currentVideoId}/config`, {
@@ -2943,6 +2950,7 @@
                                 ...saved,
                                 sourceLang: updated.source_language || 'auto',
                                 targetLang: updated.target_language,
+                                skipGlossary: updated.skip_glossary,
                             },
                         });
                     }
