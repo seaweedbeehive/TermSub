@@ -709,6 +709,11 @@
         async function loadUser() {
             try {
                 const response = await fetch('/api/auth/me');
+                if (response.status === 401) {
+                    // Not logged in — this is expected for guests and BYOK users.
+                    currentUser = null;
+                    return false;
+                }
                 if (response.status === 403) {
                     console.warn('Email not verified');
                     currentUser = null;

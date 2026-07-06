@@ -172,7 +172,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://cdn.jsdelivr.net; "
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
             "img-src 'self' data: https://img.shields.io; "
-            "connect-src 'self' wss: https://www.google-analytics.com https://*.google-analytics.com; "
+            "connect-src 'self' wss: https://www.google-analytics.com https://*.google-analytics.com https://cdn.jsdelivr.net; "
             "frame-ancestors 'none'; "
             "base-uri 'self'"
         )
