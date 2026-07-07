@@ -2465,9 +2465,24 @@
             fallbackPollInterval = setInterval(poll, 5000);
         }
 
+        function updatePipelineButtonsForFileType() {
+            const translateBtn = document.getElementById('translateSubtitlesBtn');
+            const originalBtn = document.getElementById('originalSubtitlesBtn');
+            if (!translateBtn || !originalBtn) return;
+
+            if (currentFileType === 'text') {
+                translateBtn.innerHTML = '<i class="fa-solid fa-language mr-2"></i>Translate Text';
+                originalBtn.classList.add('hidden');
+            } else {
+                translateBtn.innerHTML = '<i class="fa-solid fa-language mr-2"></i>Translate and Get Subtitles';
+                originalBtn.classList.remove('hidden');
+            }
+        }
+
         function resetApp() {
             currentVideoId = null;
             currentFileType = 'video';
+            updatePipelineButtonsForFileType();
             timelineHistory = [];
             currentTimelineSegments = [];
             currentJobId = null;
@@ -2729,6 +2744,22 @@
                 const data = await response.json();
                 if (data.job_id) {
                     currentJobId = data.job_id;
+                }
+
+                // Text files are parsed synchronously; there is no background job
+                // and therefore no WebSocket job_complete. Advance the UI immediately.
+                if (isTextFile && data.status) {
+                    const normalizedStatus = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+                    updateStatus({ status: normalizedStatus, progress_percent: 100 });
+                    updateButtonVisibility(normalizedStatus);
+                    if (data.segments) renderTextPreview(data.segments);
+                    // For text translations, auto-advance to translation since there
+                    // is no Celery event to trigger it.
+                    if (targetPipelineMode !== 'transcribe') {
+                        log('Auto-advancing to text translation...');
+                        setTimeout(() => skipAndTranslate(), 0);
+                    }
+                    return;
                 }
 
                 // Do not update the UI to "transcribed" here. The real completion
@@ -3311,6 +3342,7 @@
                     // Detect file type for downstream pipeline text
                     const isTextFile = file.name.toLowerCase().endsWith('.txt');
                     currentFileType = isTextFile ? 'text' : 'video';
+                    updatePipelineButtonsForFileType();
                 }
             });
             
