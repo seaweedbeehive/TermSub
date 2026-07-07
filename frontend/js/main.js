@@ -586,6 +586,11 @@
         async function loadUser() {
             try {
                 const response = await fetch('/api/auth/me');
+                if (response.status === 401) {
+                    // Not logged in — expected for guests and BYOK users.
+                    currentUser = null;
+                    return false;
+                }
                 if (response.status === 403) {
                     console.warn('Email not verified');
                     currentUser = null;
@@ -2749,15 +2754,21 @@
                 // Text files are parsed synchronously; there is no background job
                 // and therefore no WebSocket job_complete. Advance the UI immediately.
                 if (isTextFile && data.status) {
-                    const normalizedStatus = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+                    const normalizedStatus = data.status === 'completed' || data.status === 'awaiting_choice' ? 'transcribed' : data.status;
                     updateStatus({ status: normalizedStatus, progress_percent: 100 });
                     updateButtonVisibility(normalizedStatus);
-                    if (data.segments) renderTextPreview(data.segments);
                     // For text translations, auto-advance to translation since there
                     // is no Celery event to trigger it.
                     if (targetPipelineMode !== 'transcribe') {
                         log('Auto-advancing to text translation...');
                         setTimeout(() => skipAndTranslate(), 0);
+                    } else {
+                        fetch()
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.segments) renderTextPreview(data.segments);
+                            })
+                            .catch(err => console.error('Failed to load text preview:', err));
                     }
                     return;
                 }

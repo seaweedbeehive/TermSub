@@ -340,7 +340,7 @@ def transcribe_video_endpoint(
                     daemon=True,
                 ).start()
                 return {
-                    "status": "completed",
+                    "status": "transcribed",
                     "video_id": video_id,
                     "message": "Text file parsed",
                     "total_segments": result.get("segment_count", 0),
