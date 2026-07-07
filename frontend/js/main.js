@@ -2757,11 +2757,11 @@
                     const normalizedStatus = data.status === 'completed' || data.status === 'awaiting_choice' ? 'transcribed' : data.status;
                     updateStatus({ status: normalizedStatus, progress_percent: 100 });
                     updateButtonVisibility(normalizedStatus);
-                    // For text translations, auto-advance to translation since there
-                    // is no Celery event to trigger it.
+                    // For text translations, run the full pipeline (terminology +
+                    // translation) since there is no Celery event to trigger it.
                     if (targetPipelineMode !== 'transcribe') {
                         log('Auto-advancing to text translation...');
-                        setTimeout(() => skipAndTranslate(), 0);
+                        setTimeout(() => translateVideo(), 0);
                     } else {
                         fetch()
                             .then(r => r.json())
@@ -3405,7 +3405,9 @@
             // Pipeline buttons
             document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
                 const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
-                const mode = reviewTerms ? 'terminology' : 'subtitles';
+                // Text files benefit from terminology extraction and should not use
+                // the subtitle-only direct-translation path.
+                const mode = (reviewTerms || currentFileType === 'text') ? 'terminology' : 'subtitles';
                 startPipeline(mode);
             });
             document.getElementById('originalSubtitlesBtn').addEventListener('click', () => startPipeline('transcribe'));
