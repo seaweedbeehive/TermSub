@@ -285,6 +285,7 @@ def build_translation_prompt(
     source_language: str,
     target_language: str,
     style_guide: str = "",
+    plain_text: bool = False,
 ) -> str:
     """Build the translation prompt with context and constraints."""
     from app.core.languages import LANGUAGE_NAMES
@@ -327,29 +328,34 @@ STYLE GUIDE:
         else ""
     )
 
-    prompt = (
-        f"You are executing a professional subtitle translation pass "
-        f"from {source_language} to {target_lang_name}.\n"
-        f"\n"
-        f"{style_section}"
-        f"{full_context_section}"
-        f"{context_before_section}\n"
-        f"\n"
-        f"TRANSLATE THESE SPECIFIC TIMELINE SEGMENTS:\n"
-        f"{segments_text}\n"
-        f"\n"
-        f"{context_after_section}\n"
-        f"\n"
-        f"CRITICAL EDITORIAL & FORMATTING INSTRUCTIONS:\n"
-        f"1. NARRATIVE CONTINUITY: You must use the Full Transcript to understand "
-        f"the overarching story, but rely on the PREVIOUS and FUTURE context to "
-        f"nail the immediate pacing, conversational subtext, and character voice "
-        f"for this specific batch.\n"
+    source_lang_clause = f"from {source_language} " if source_language and source_language != "auto" else ""
+    formatting_instructions = (
         f"2. STRICT BROADCAST STANDARDS: Maximum 42 characters per line. Maximum "
         f"2 lines per subtitle card. If a speaker talks continuously, break their "
         f"speech logically at natural breath pauses, conjunctions, or punctuation "
         f"to match the rhythm of an edit. Never output a single massive block of "
         f"text.\n"
+        if not plain_text
+        else ""
+    )
+    prompt = (
+        f"You are executing a professional translation pass "
+        f"{source_lang_clause}to {target_lang_name}.\n"
+        f"\n"
+        f"{style_section}"
+        f"{full_context_section}"
+        f"{context_before_section}\n"
+        f"\n"
+        f"TRANSLATE THESE SEGMENTS:\n"
+        f"{segments_text}\n"
+        f"\n"
+        f"{context_after_section}\n"
+        f"\n"
+        f"CRITICAL EDITORIAL INSTRUCTIONS:\n"
+        f"1. NARRATIVE CONTINUITY: Use the Full Transcript to understand the "
+        f"overarching story, and rely on PREVIOUS/FUTURE context for coherent "
+        f"pacing and voice.\n"
+        f"{formatting_instructions}"
         f"3. MANDATORY GLOSSARY: You are strictly bound by the glossary rules "
         f"defined in your system instructions. If a term appears, the required "
         f"translation is non-negotiable.\n"
@@ -388,6 +394,7 @@ async def translate_single_batch(
     progress_tracker: Any,
     semaphore: asyncio.Semaphore,
     retry_attempt: int = 0,
+    plain_text: bool = False,
 ) -> BatchResult:
     """Translate a single batch with JSON validation."""
     if not target_language or not str(target_language).strip():
@@ -396,7 +403,7 @@ async def translate_single_batch(
             "target language."
         )
 
-    prompt = build_translation_prompt(batch, source_language, target_language)
+    prompt = build_translation_prompt(batch, source_language, target_language, plain_text=plain_text)
     system_instruction = build_system_instruction(batch, target_language)
 
     logger.debug("Final Glossary being sent to LLM: %s", batch.glossary)
@@ -478,6 +485,7 @@ async def translate_single_batch_with_retry(
     target_language: str,
     progress_tracker: Any,
     semaphore: asyncio.Semaphore,
+    plain_text: bool = False,
 ) -> BatchResult:
     """Translate a single batch with exponential backoff retry.
 
@@ -497,6 +505,7 @@ async def translate_single_batch_with_retry(
                 progress_tracker=progress_tracker,
                 semaphore=semaphore,
                 retry_attempt=attempt,
+                plain_text=plain_text,
             )
         except RateLimitError as e:
             last_error = e
@@ -569,6 +578,7 @@ async def translate_batches_concurrently(
     source_language: str,
     target_language: str,
     progress_tracker: Any,
+    plain_text: bool = False,
 ) -> list[BatchResult]:
     """Translate all batches concurrently with semaphore-controlled concurrency.
 
@@ -590,6 +600,7 @@ async def translate_batches_concurrently(
             target_language=target_language,
             progress_tracker=progress_tracker,
             semaphore=semaphore,
+            plain_text=plain_text,
         )
         for batch in batches
     ]

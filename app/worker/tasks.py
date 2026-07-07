@@ -588,16 +588,17 @@ def translate_video_task(
 
         # Record consumed text-translation characters after successful translation.
         if identity_for_quota and video_for_quota.content_type == ContentType.TEXT.value:
-            translated_chars = sum(
-                len(s.translated_text or "")
-                for s in db.query(Segment)
-                .filter(Segment.video_id == video_id)
-                .all()
-            )
-            quota.record_text_translation(
-                identity_for_quota.user_id,
-                translated_chars,
-            )
+            with get_db_session() as db_quota:
+                translated_chars = sum(
+                    len(s.translated_text or "")
+                    for s in db_quota.query(Segment)
+                    .filter(Segment.video_id == video_id)
+                    .all()
+                )
+                quota.record_text_translation(
+                    identity_for_quota.user_id,
+                    translated_chars,
+                )
 
         # Fetch results with a fresh session
         total = 0
