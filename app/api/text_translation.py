@@ -22,7 +22,7 @@ from app.services.text_translation_service import (
 )
 from app.worker.text_tasks import extract_text_terms_task, translate_text_task
 
-router = APIRouter(prefix="/text", tags=["text"])
+router = APIRouter(prefix="/api/text", tags=["text"])
 
 
 class _SegmentUpdate(BaseModel):
