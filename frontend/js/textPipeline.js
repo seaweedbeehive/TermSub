@@ -102,7 +102,10 @@
     // Parse completion
     // ------------------------------------------------------------------
     function onTextParsed(data) {
-        if (!activeVideoId) return;
+        if (!activeVideoId) {
+            console.error('[textPipeline] onTextParsed: activeVideoId is null');
+            return;
+        }
         const status = data.status === 'completed' || data.status === 'awaiting_choice'
             ? 'transcribed'
             : data.status;
@@ -228,7 +231,10 @@
     // Term extraction
     // ------------------------------------------------------------------
     async function startTermExtraction() {
-        if (!activeVideoId) return;
+        if (!activeVideoId) {
+            console.error('[textPipeline] startTermExtraction: activeVideoId is null');
+            return;
+        }
         _log('Starting text terminology extraction...');
         try {
             const response = await fetch(`/api/text/${activeVideoId}/extract-terms`, {
@@ -317,7 +323,10 @@
     // Translation
     // ------------------------------------------------------------------
     async function startTranslation() {
-        if (!activeVideoId) return;
+        if (!activeVideoId) {
+            console.error('[textPipeline] startTranslation: activeVideoId is null');
+            return;
+        }
         _log('Starting text translation...');
         try {
             const response = await fetch(`/api/text/${activeVideoId}/translate`, {
