@@ -6,6 +6,7 @@ implements its own context-analysis, glossary-extraction, translation, and
 export steps tailored to plain text.
 """
 
+import asyncio
 from typing import Any
 
 from sqlalchemy import func
