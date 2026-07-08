@@ -74,7 +74,7 @@ def _count_translated_characters(video_id: str) -> int:
     return int(total)
 
 
-async def translate_text(
+def translate_text(
     video_id: str,
     identity: RequestIdentity,
 ) -> dict[str, Any]:
@@ -95,8 +95,12 @@ async def translate_text(
         if not check["allowed"]:
             raise RuntimeError(check["reason"])
 
-    # Run translation.
-    result = await translate_text_document(video_id)
+    # Run translation (agent is async; run it in a new event loop).
+    try:
+        loop = asyncio.get_running_loop()
+        result = loop.run_until_complete(translate_text_document(video_id))
+    except RuntimeError:
+        result = asyncio.run(translate_text_document(video_id))
 
     # Record quota consumption for non-BYOK users.
     if not identity.is_byok:
