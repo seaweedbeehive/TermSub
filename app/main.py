@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import admin, auth, export, profile, progress, quota, terms, videos
+from app.api import admin, auth, export, profile, progress, quota, terms, text_translation, videos
 from app.core.analytics import log_page_view
 from app.core.auth import (
     ACCESS_TOKEN_COOKIE,
@@ -289,6 +289,7 @@ app.include_router(videos.router)
 app.include_router(terms.router)
 app.include_router(export.router)
 app.include_router(progress.router)
+app.include_router(text_translation.router)
 
 # Set up WebSocket manager for progress updates
 videos.set_websocket_manager(manager)

@@ -26,7 +26,7 @@ from app.core.task_tracker import update_task_status
 from app.db.session_utils import get_db_session
 from app.models.job_queue import JobStatus
 from app.models.user import User
-from app.models.video import ContentType, Segment, Video, VideoStatus
+from app.models.video import Segment, Video, VideoStatus
 from app.services.whisper_service import transcribe_video
 
 logger = logging.getLogger(__name__)
@@ -540,43 +540,7 @@ def translate_video_task(
             },
         )
 
-        from sqlalchemy import func
-
         from app.services.translation_pipeline import TranslationPipeline
-
-        # Enforce text-translation character quota for non-BYOK users.
-        with get_db_session() as db:
-            video_for_quota = db.query(Video).filter(Video.id == video_id).first()
-            identity_for_quota = None
-            if video_for_quota:
-                from app.core.auth import RequestIdentity
-                if video_for_quota.user_id:
-                    identity_for_quota = RequestIdentity(
-                        user_id=video_for_quota.user_id,
-                        is_byok=False,
-                        api_key=None,
-                    )
-                elif video_for_quota.byok_user_id:
-                    identity_for_quota = RequestIdentity(
-                        user_id=video_for_quota.byok_user_id,
-                        is_byok=True,
-                        api_key=None,
-                    )
-            if identity_for_quota and video_for_quota.content_type == ContentType.TEXT.value:
-                total_chars = (
-                    db.query(func.coalesce(func.sum(func.length(Segment.original_text)), 0))
-                    .filter(Segment.video_id == video_id)
-                    .scalar()
-                    or 0
-                )
-                quota = QuotaManager()
-                check = quota.check_text_translation_allowed(
-                    identity_for_quota.user_id,
-                    int(total_chars),
-                    identity_for_quota.is_byok,
-                )
-                if not check["allowed"]:
-                    raise RuntimeError(check["reason"])
 
         pipeline = TranslationPipeline()
         translate_result = pipeline.translate_with_glossary_sync(video_id)
@@ -585,20 +549,6 @@ def translate_video_task(
             logger.warning(
                 f"[Task] Translation returned non-success: {translate_result}"
             )
-
-        # Record consumed text-translation characters after successful translation.
-        if identity_for_quota and video_for_quota.content_type == ContentType.TEXT.value:
-            with get_db_session() as db_quota:
-                translated_chars = sum(
-                    len(s.translated_text or "")
-                    for s in db_quota.query(Segment)
-                    .filter(Segment.video_id == video_id)
-                    .all()
-                )
-                quota.record_text_translation(
-                    identity_for_quota.user_id,
-                    translated_chars,
-                )
 
         # Fetch results with a fresh session
         total = 0

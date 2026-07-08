@@ -600,10 +600,10 @@
                     </template>
                 </div>
 
-                <!-- Text Preview Panel (for text-file pipeline) -->
+                <!-- Text Side-by-Side Editor (for text-file pipeline) -->
                 <div id="textPreviewPanel" class="hidden flex-1 min-h-0 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-normal text-slate-100 tracking-wide">Text Preview</h2>
+                        <h2 class="text-sm font-normal text-slate-100 tracking-wide">Text Translation Editor</h2>
                         <button id="undoTextBtn" class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors opacity-50 cursor-not-allowed" disabled title="Undo last change (Ctrl+Z)">
                             <i class="fa-solid fa-rotate-left mr-1"></i>Undo
                         </button>
@@ -616,14 +616,16 @@
                         <button id="replaceAllBtnText" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-normal rounded-xl transition-colors tracking-wide">Replace All</button>
                     </div>
                     
-                    <div class="flex-1 overflow-y-auto space-y-4 pr-1">
-                        <div class="space-y-2">
-                            <p class="text-[10px] text-slate-500 uppercase tracking-wider">Original</p>
-                            <div id="textPreviewOriginal" class="text-sm text-slate-300 bg-slate-800/50 border border-slate-700 rounded-xl p-3 whitespace-pre-wrap">No text available yet.</div>
-                        </div>
-                        <div class="space-y-2">
-                            <p class="text-[10px] text-slate-500 uppercase tracking-wider">Translation</p>
-                            <div id="textPreviewTranslated" class="text-sm text-slate-100 bg-slate-800/50 border border-slate-700 rounded-xl p-3 whitespace-pre-wrap">No translation available yet.</div>
+                    <div class="flex-1 overflow-y-auto pr-1">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+                            <div class="space-y-2 min-h-0">
+                                <p class="text-[10px] text-slate-500 uppercase tracking-wider">Original</p>
+                                <div id="textPreviewOriginal" class="text-sm text-slate-300 bg-slate-800/50 border border-slate-700 rounded-xl p-3 whitespace-pre-wrap overflow-y-auto">No text available yet.</div>
+                            </div>
+                            <div class="space-y-2 min-h-0">
+                                <p class="text-[10px] text-slate-500 uppercase tracking-wider">Translation</p>
+                                <div id="textPreviewTranslated" contenteditable="true" class="text-sm text-slate-100 bg-slate-800/50 border border-slate-700 rounded-xl p-3 whitespace-pre-wrap overflow-y-auto focus:ring-2 focus:ring-blue-900/50 outline-none" data-placeholder="No translation available yet.">No translation available yet.</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -860,6 +862,7 @@
     <div id="toastContainer" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.6.1/dist/js/tom-select.complete.min.js"></script>
+    <script src="/static/js/textPipeline.js" defer></script>
     <script src="/static/js/main.js" defer></script>
 </body>
 </html>

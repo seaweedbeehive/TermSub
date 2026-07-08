@@ -35,7 +35,7 @@ from app.agents.translator import (
     get_async_openai_client,
 )
 from app.db.session import SessionLocal
-from app.models.video import Segment, Term, TermSource, Video, VideoStatus
+from app.models.video import ContentType, Segment, Term, TermSource, Video, VideoStatus
 from app.services.gemini_service import translate_video_sliding_window_async
 from app.services.progress_service import get_progress_tracker
 
@@ -701,12 +701,14 @@ Only include terms that actually appear in the text.
             )
             print(f"[TranslatorAgent] Using glossary with {len(glossary_dict)} terms")
 
+            plain_text = video.content_type == ContentType.TEXT.value
             await translate_video_sliding_window_async(
                 video_id=video_id,
                 model_name="gpt-5.4-mini",
                 window_size=DEFAULT_WINDOW_SIZE,
                 overlap=DEFAULT_OVERLAP,
                 glossary=glossary_dict,
+                plain_text=plain_text,
             )
 
             video_status = "unknown"

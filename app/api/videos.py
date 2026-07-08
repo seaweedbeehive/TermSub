@@ -70,6 +70,14 @@ async def _websocket_progress_callback(
 router = APIRouter(prefix="/videos", tags=["videos"])
 
 
+def _reject_text_record(video: Video) -> None:
+    """Raise 400 if the record is a text file (text pipeline has its own API)."""
+    if video.content_type == ContentType.TEXT.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use /api/text endpoints for text files.",
+        )
+
 def require_video_owner(video: Video, identity: RequestIdentity) -> None:
     """Raise 403 if the current user does not own the video.
 
@@ -425,6 +433,7 @@ def analyze_video_endpoint(
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
         require_video_owner(video, identity)
+        _reject_text_record(video)
 
         result = analyze_video_task.delay(video_id, api_key=api_key)
         record_task(video_id, "analyze", result.id)
@@ -466,6 +475,7 @@ def translate_direct_endpoint(
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
         require_video_owner(video, identity)
+        _reject_text_record(video)
 
         # Set skip_glossary flag
         video.skip_glossary = True
@@ -527,6 +537,7 @@ def translate_video_endpoint(
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
         require_video_owner(video, identity)
+        _reject_text_record(video)
 
         # Check prerequisites - be lenient
         valid_statuses = [
@@ -784,6 +795,7 @@ def batch_replace_segments(
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
     require_video_owner(video, identity)
+    _reject_text_record(video)
 
     # Execute SQLite batch REPLACE on translated_text
     result = db.execute(
