@@ -51,3 +51,5 @@ htmlcov/
 
 # Local audit/review documents
 docs/
+# Screenshots
+.screenshots/
