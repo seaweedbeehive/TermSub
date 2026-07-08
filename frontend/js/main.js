@@ -1965,6 +1965,12 @@
         }
         
         function handleWebSocketMessage(data) {
+            // Delegate text-file updates to the dedicated text pipeline.
+            if (currentFileType === 'text' && window.textPipeline) {
+                window.textPipeline.handleStatusUpdate(data);
+                return;
+            }
+
             // Handle both direct status updates and job messages
             let status = data.status;
 
@@ -2176,6 +2182,12 @@
             const subtitleReviewPanel = document.getElementById('subtitleReviewPanel');
 
             if (!container) return;
+
+            // Delegate text-file UI state to the dedicated text pipeline module.
+            if (currentFileType === 'text' && window.textPipeline) {
+                window.textPipeline.updateUI(status);
+                return;
+            }
 
             // Reset all sub-elements
             if (primaryBtn) {
@@ -2684,24 +2696,11 @@
                     currentJobId = data.job_id;
                 }
 
-                // Text files are parsed synchronously; there is no background job
-                // and therefore no WebSocket job_complete. Advance the UI immediately.
+                // Text files are parsed synchronously; hand off to the dedicated
+                // text pipeline UI controller instead of the video flow.
                 if (isTextFile && data.status) {
-                    const normalizedStatus = data.status === 'completed' || data.status === 'awaiting_choice' ? 'transcribed' : data.status;
-                    updateStatus({ status: normalizedStatus, progress_percent: 100 });
-                    updateButtonVisibility(normalizedStatus);
-                    // For text translations, run the full pipeline (terminology +
-                    // translation) since there is no Celery event to trigger it.
-                    if (targetPipelineMode !== 'transcribe') {
-                        log('Auto-advancing to text translation...');
-                        setTimeout(() => translateVideo(), 0);
-                    } else {
-                        fetch()
-                            .then(r => r.json())
-                            .then(data => {
-                                if (data.segments) renderTextPreview(data.segments);
-                            })
-                            .catch(err => console.error('Failed to load text preview:', err));
+                    if (window.textPipeline) {
+                        window.textPipeline.onTextParsed(data);
                     }
                     return;
                 }
@@ -3402,49 +3401,7 @@
             });
             document.getElementById('downloadRawTranscriptionLink').addEventListener('click', downloadTranscription);
 
-            // Text-file Find & Replace handler
-            document.getElementById('replaceAllBtnText').addEventListener('click', async () => {
-                if (!currentVideoId || isSavingSegment) return;
-                if (currentFileType !== 'text') return;
-                pushTimelineHistory();
-                const findInput = document.getElementById('findInputText');
-                const replaceInput = document.getElementById('replaceInputText');
-                const replaceBtn = document.getElementById('replaceAllBtnText');
-                const findText = findInput ? findInput.value.trim() : '';
-                if (!findText) return;
-
-                isSavingSegment = true;
-                if (replaceBtn) {
-                    replaceBtn.textContent = 'Replacing...';
-                    replaceBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                }
-
-                try {
-                    const response = await fetch(`/videos/${currentVideoId}/replace`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ find_text: findText, replace_text: replaceInput ? replaceInput.value : '' })
-                    });
-                    if (!response.ok) throw new Error('Replace failed');
-                    const data = await response.json();
-                    if (data.segments) renderTextPreview(data.segments);
-                    if (findInput) findInput.value = '';
-                    if (replaceInput) replaceInput.value = '';
-                    log('Global replace applied successfully.', 'success');
-                    showToast('Batch replacement complete!', 'success');
-                } catch (err) {
-                    log('Replace failed: ' + err.message, 'error');
-                } finally {
-                    isSavingSegment = false;
-                    if (replaceBtn) {
-                        replaceBtn.textContent = 'Replace All';
-                        replaceBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    }
-                }
-            });
-
-            // Text-only export handler
-            document.getElementById('exportTxtOnlyBtn').addEventListener('click', () => exportFormat('txt'));
+            // Note: text-file find/replace and export are handled by textPipeline.js.
             document.getElementById('exportSrtBtn').addEventListener('click', () => exportFormat('srt'));
             document.getElementById('exportVttBtn').addEventListener('click', () => exportFormat('vtt'));
             document.getElementById('exportTxtBtn').addEventListener('click', () => exportFormat('txt'));

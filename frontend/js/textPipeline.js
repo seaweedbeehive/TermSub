@@ -163,6 +163,18 @@
         return response.json();
     }
 
+    async function refreshVideoStatus() {
+        if (!activeVideoId) return;
+        try {
+            const response = await fetch(`/videos/${activeVideoId}`);
+            if (!response.ok) throw new Error('Failed to load video status');
+            const data = await response.json();
+            if (data.status) updateUI(data.status);
+        } catch (err) {
+            console.error('[textPipeline] Status refresh failed:', err);
+        }
+    }
+
     // ------------------------------------------------------------------
     // Preview rendering
     // ------------------------------------------------------------------
@@ -397,7 +409,7 @@
             } else if (jobType === 'text_translate') {
                 _log('Text translation complete', 'success');
             }
-            fetchVideoStatus();
+            refreshVideoStatus();
             return;
         }
 
