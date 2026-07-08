@@ -2650,6 +2650,7 @@
 
         // Process file handler (handles both video transcription and text parsing)
         async function processFile() {
+            console.log('[main] processFile start, currentVideoId=', currentVideoId, 'currentFileType=', currentFileType);
             if (!currentVideoId) return;
 
             // Target language is only required for pipelines that translate
@@ -2703,8 +2704,11 @@
                 // Text files are parsed synchronously; hand off to the dedicated
                 // text pipeline UI controller instead of the video flow.
                 if (isTextFile && data.status) {
+                    console.log('[main] handing text parse to textPipeline, data=', data);
                     if (window.textPipeline) {
                         window.textPipeline.onTextParsed(data);
+                    } else {
+                        console.error('[main] window.textPipeline missing');
                     }
                     return;
                 }
@@ -3340,6 +3344,7 @@
 
             // Pipeline buttons
             document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
+                console.log('[main] translateSubtitlesBtn clicked, currentFileType=', currentFileType, 'currentVideoId=', currentVideoId);
                 if (currentFileType === 'text') {
                     // Text pipeline: parse first, then terminology/translation.
                     processFile();
