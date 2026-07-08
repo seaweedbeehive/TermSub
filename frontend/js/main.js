@@ -2526,7 +2526,11 @@
 
             targetPipelineMode = mode;
             log(`Starting ${mode} pipeline...`);
-            await uploadFile(mode);
+            const uploaded = await uploadFile(mode);
+            if (uploaded && currentFileType === 'text') {
+                // Text files parse synchronously; hand off to textPipeline.
+                processFile();
+            }
         }
 
         // Upload handler
@@ -2640,7 +2644,10 @@
                 updateStatus({ status: 'uploaded', progress_percent: 0 });
 
                 // Auto-start transcription for every pipeline path
-                processFile();
+                if (currentFileType !== 'text') {
+                    processFile();
+                }
+                return true;
 
             } catch (err) {
                 const errorMsg = err.message || 'Upload failed';
@@ -3345,11 +3352,6 @@
             // Pipeline buttons
             document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
                 console.log('[main] translateSubtitlesBtn clicked, currentFileType=', currentFileType, 'currentVideoId=', currentVideoId);
-                if (currentFileType === 'text') {
-                    // Text pipeline: parse first, then terminology/translation.
-                    processFile();
-                    return;
-                }
                 const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
                 const mode = reviewTerms ? 'terminology' : 'subtitles';
                 startPipeline(mode);
