@@ -355,7 +355,30 @@
 
         switch (status) {
             case 'transcribed':
-                onTextParsed({ status, total_segments: segments.length });
+                // Render the text preview and primary action without re-running
+                // the full parse completion handler (which would recurse via
+                // main.js updateStatus -> updateButtonVisibility).
+                renderOriginalPreview(segments);
+                const skipGlossary = isSkipGlossaryChecked();
+                if (skipGlossary) {
+                    setPrimaryButton(
+                        '<i class="fa-solid fa-language mr-2"></i>Translate Text',
+                        null,
+                        startTranslation
+                    );
+                } else {
+                    setPrimaryButton(
+                        '<i class="fa-solid fa-list-check mr-2"></i>Extract Terms',
+                        null,
+                        startTermExtraction
+                    );
+                }
+                setPrimaryGhost('or download original text', downloadOriginalText);
+                show('textPreviewPanel');
+                hide('termsPanel');
+                hide('subtitleReviewPanel');
+                hide('exportPanel');
+                hide('exportHeader');
                 break;
 
             case 'analyzing':
