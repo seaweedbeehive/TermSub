@@ -2717,6 +2717,9 @@
                     } else {
                         console.error('[main] window.textPipeline missing');
                     }
+                    // Still connect WebSocket so text Celery jobs can report
+                    // completion (terms_ready, completed) back to the UI.
+                    await connectWebSocket(currentVideoId);
                     return;
                 }
 
