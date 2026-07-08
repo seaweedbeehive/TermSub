@@ -2594,6 +2594,10 @@
                 const data = await response.json();
                 currentVideoId = data.id;
                 currentFileType = data.content_type || 'video';
+                if (window.textPipeline) {
+                    window.textPipeline.setVideoId(currentVideoId);
+                    window.textPipeline.setFileType(currentFileType);
+                }
                 
                 // Set Project Metadata
                 const projectTitleEl = document.getElementById('projectTitle');
