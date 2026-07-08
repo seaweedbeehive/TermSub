@@ -360,17 +360,16 @@
                 renderOriginalPreview(segments);
                 const reviewTerms = isSkipGlossaryChecked();
                 if (reviewTerms) {
-                    setPrimaryButton('<i class="fa-solid fa-list-check mr-2"></i>Extracting Terms...', null, null);
-                    setPrimaryGhost(null);
-                    startTermExtraction();
+                    setPrimaryButton('<i class="fa-solid fa-list-check mr-2"></i>Extract Terms', null, startTermExtraction);
+                    setPrimaryGhost('or download original text', downloadOriginalText);
                 } else {
                     setPrimaryButton(
                         '<i class="fa-solid fa-language mr-2"></i>Translate Text',
                         null,
                         startTranslation
                     );
+                    setPrimaryGhost('or download original text', downloadOriginalText);
                 }
-                setPrimaryGhost('or download original text', downloadOriginalText);
                 show('textPreviewPanel');
                 hide('termsPanel');
                 hide('subtitleReviewPanel');
