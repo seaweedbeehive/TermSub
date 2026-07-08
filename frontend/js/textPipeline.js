@@ -346,6 +346,7 @@
     // Status-driven UI updates
     // ------------------------------------------------------------------
     async function updateUI(status) {
+        console.log('[textPipeline] updateUI called with status:', status, 'active:', isActive());
         if (!isActive()) return;
 
         const data = await fetchTextSegments();
@@ -428,6 +429,7 @@
     }
 
     function handleStatusUpdate(payload) {
+        console.log('[textPipeline] handleStatusUpdate:', payload, 'active:', isActive());
         if (!isActive()) return;
 
         if (payload.type === 'job_complete') {
