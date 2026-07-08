@@ -122,19 +122,17 @@
             if (segments) renderOriginalPreview(segments);
         });
 
-        const skipGlossary = isSkipGlossaryChecked();
-        if (skipGlossary) {
+        const reviewTerms = isSkipGlossaryChecked();
+        if (reviewTerms) {
+            // Auto-advance to term extraction so the user sees terms immediately.
+            setPrimaryButton('<i class="fa-solid fa-list-check mr-2"></i>Extracting Terms...', null, null);
+            setPrimaryGhost(null);
+            startTermExtraction();
+        } else {
             setPrimaryButton(
                 '<i class="fa-solid fa-language mr-2"></i>Translate Text',
                 null,
                 startTranslation
-            );
-            setPrimaryGhost('or download original text', downloadOriginalText);
-        } else {
-            setPrimaryButton(
-                '<i class="fa-solid fa-list-check mr-2"></i>Extract Terms',
-                null,
-                startTermExtraction
             );
             setPrimaryGhost('or download original text', downloadOriginalText);
         }
@@ -148,7 +146,7 @@
 
     function isSkipGlossaryChecked() {
         const cb = $('reviewTerminologyCheckbox');
-        return cb ? !cb.checked : false;
+        return cb ? cb.checked : false;
     }
 
     // ------------------------------------------------------------------
@@ -359,18 +357,16 @@
                 // the full parse completion handler (which would recurse via
                 // main.js updateStatus -> updateButtonVisibility).
                 renderOriginalPreview(segments);
-                const skipGlossary = isSkipGlossaryChecked();
-                if (skipGlossary) {
+                const reviewTerms = isSkipGlossaryChecked();
+                if (reviewTerms) {
+                    setPrimaryButton('<i class="fa-solid fa-list-check mr-2"></i>Extracting Terms...', null, null);
+                    setPrimaryGhost(null);
+                    startTermExtraction();
+                } else {
                     setPrimaryButton(
                         '<i class="fa-solid fa-language mr-2"></i>Translate Text',
                         null,
                         startTranslation
-                    );
-                } else {
-                    setPrimaryButton(
-                        '<i class="fa-solid fa-list-check mr-2"></i>Extract Terms',
-                        null,
-                        startTermExtraction
                     );
                 }
                 setPrimaryGhost('or download original text', downloadOriginalText);
