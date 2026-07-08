@@ -446,6 +446,8 @@ def analyze_video_endpoint(
             "job_type": "analyze",
             "message": "Analysis queued",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[API Analyze] Error: {e}")
         traceback.print_exc()

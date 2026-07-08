@@ -70,7 +70,7 @@ def test_byok_upload_and_transcribe_text_file() -> None:
     )
     assert transcribe_response.status_code == 200, transcribe_response.text
     data = transcribe_response.json()
-    assert data["status"] == "completed"
+    assert data["status"] == "transcribed"
     assert data["total_segments"] > 0
 
 

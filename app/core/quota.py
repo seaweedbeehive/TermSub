@@ -66,6 +66,9 @@ class QuotaManager:
     def _video_estimated_minutes_key(video_id: str) -> str:
         return f"quota:video_estimated_minutes:{video_id}"
 
+    def _text_chars_key(self, user_id: str) -> str:
+        return f"quota:{user_id}:text_characters"
+
     @staticmethod
     def byok_user_id(api_key: str) -> str:
         """Return a stable, opaque identifier for a BYOK API key."""
