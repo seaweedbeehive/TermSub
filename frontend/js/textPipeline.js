@@ -173,6 +173,7 @@
             const data = await response.json();
             if (data.status) updateUI(data.status);
         } catch (err) {
+            console.error('[textPipeline] refreshVideoStatus failed:', err);
         }
     }
 
