@@ -25,7 +25,7 @@ ALLOWED_VIDEO_EXTENSIONS = {
     ".m4a",
     ".ogg",
 }
-ALLOWED_TEXT_EXTENSIONS = {".txt", ".srt", ".vtt"}
+ALLOWED_TEXT_EXTENSIONS = {".txt"}
 ALLOWED_EXTENSIONS = ALLOWED_VIDEO_EXTENSIONS | ALLOWED_TEXT_EXTENSIONS
 
 # Allowed MIME types for content validation
