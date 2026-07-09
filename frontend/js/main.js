@@ -2712,7 +2712,6 @@
                 if (isTextFile && data.status) {
                     if (window.textPipeline) {
                         window.textPipeline.onTextParsed(data);
-                    } else {
                     }
                     // Still connect WebSocket so text Celery jobs can report
                     // completion (terms_ready, completed) back to the UI.
