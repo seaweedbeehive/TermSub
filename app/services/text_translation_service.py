@@ -96,12 +96,15 @@ def translate_text(
         if not check["allowed"]:
             raise RuntimeError(check["reason"])
 
-    # Run translation (agent is async; run it in a new event loop).
+    # Run translation (agent is async; run it in a dedicated event loop).
+    # Celery worker threads may not have a loop, and nested loops are not
+    # allowed, so always create a fresh one on this thread.
+    loop = asyncio.new_event_loop()
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.set_event_loop(loop)
         result = loop.run_until_complete(translate_text_document(video_id))
-    except RuntimeError:
-        result = asyncio.run(translate_text_document(video_id))
+    finally:
+        loop.close()
 
     # Record quota consumption for non-BYOK users.
     if not identity.is_byok:
