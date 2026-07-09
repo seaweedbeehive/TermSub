@@ -159,7 +159,8 @@ def get_segments_or_404(
         raise HTTPException(status_code=404, detail="Video not found")
     require_video_owner(video, identity)
 
-    # Check if translation is complete
+    # Check if processing is complete. Text records use the same COMPLETED
+    # status as videos, so no special-case handling is needed.
     if video.status != VideoStatus.COMPLETED.value:
         raise HTTPException(status_code=400, detail="Translation is still in progress")
 
