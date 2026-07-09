@@ -104,7 +104,6 @@
     // ------------------------------------------------------------------
     function onTextParsed(data) {
         if (!activeVideoId) {
-            console.error('[textPipeline] onTextParsed: activeVideoId is null');
             return;
         }
         const status = data.status === 'completed' || data.status === 'awaiting_choice'
@@ -173,7 +172,6 @@
             const data = await response.json();
             if (data.status) updateUI(data.status);
         } catch (err) {
-            console.error('[textPipeline] Status refresh failed:', err);
         }
     }
 
@@ -231,7 +229,6 @@
     // ------------------------------------------------------------------
     async function startTermExtraction() {
         if (!activeVideoId) {
-            console.error('[textPipeline] startTermExtraction: activeVideoId is null');
             return;
         }
         _log('Starting text terminology extraction...');
@@ -323,7 +320,6 @@
     // ------------------------------------------------------------------
     async function startTranslation() {
         if (!activeVideoId) {
-            console.error('[textPipeline] startTranslation: activeVideoId is null');
             return;
         }
         _log('Starting text translation...');
@@ -347,7 +343,6 @@
     // Status-driven UI updates
     // ------------------------------------------------------------------
     async function updateUI(status) {
-        console.log('[textPipeline] updateUI called with status:', status, 'active:', isActive());
         if (!isActive()) return;
 
         const data = await fetchTextSegments();
@@ -429,7 +424,6 @@
     }
 
     function handleStatusUpdate(payload) {
-        console.log('[textPipeline] handleStatusUpdate:', payload, 'active:', isActive());
         if (!isActive()) return;
 
         if (payload.type === 'job_complete') {
