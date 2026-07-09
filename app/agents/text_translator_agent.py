@@ -202,7 +202,10 @@ async def translate_text_document(
     """
     progress_tracker = get_progress_tracker(video_id, None)
 
-    with SessionLocal() as db:
+    # Keep the session open for the whole translation so segment objects
+    # remain bound while batches read original_text and write translated_text.
+    db = SessionLocal()
+    try:
         video = db.query(Video).filter(Video.id == video_id).first()
         if not video:
             raise ValueError(f"Text record not found: {video_id}")
@@ -233,11 +236,15 @@ async def translate_text_document(
         video.status = VideoStatus.TRANSLATING.value
         db.commit()
 
-    total_segments = len(segments)
-    full_text = "\n\n".join(
-        f"[{seg.sequence_number}] {seg.original_text}" for seg in segments
-    )
-    system_instruction = _build_system_instruction(glossary, target_language)
+        total_segments = len(segments)
+        full_text = "\n\n".join(
+            f"[{seg.sequence_number}] {seg.original_text}" for seg in segments
+        )
+        system_instruction = _build_system_instruction(glossary, target_language)
+
+    except Exception:
+        db.close()
+        raise
 
     progress_tracker.start_step(
         "TEXT_TRANSLATING",
@@ -294,20 +301,21 @@ async def translate_text_document(
 
     # Save translations
     saved_count = 0
-    with SessionLocal() as db:
-        for seg in db.query(Segment).filter(Segment.video_id == video_id).all():
-            translated = translations.get(seg.sequence_number)
-            if translated:
-                seg.translated_text = translated
-                saved_count += 1
+    for seg in db.query(Segment).filter(Segment.video_id == video_id).all():
+        translated = translations.get(seg.sequence_number)
+        if translated:
+            seg.translated_text = translated
+            saved_count += 1
 
-        video = db.query(Video).filter(Video.id == video_id).first()
-        if video:
-            video.status = VideoStatus.COMPLETED.value
-            video.progress_percent = 100
-            video.processed_segments = saved_count
-            video.current_step = f"Translation complete: {saved_count}/{total_segments} segments"
-            db.commit()
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if video:
+        video.status = VideoStatus.COMPLETED.value
+        video.progress_percent = 100
+        video.processed_segments = saved_count
+        video.current_step = f"Translation complete: {saved_count}/{total_segments} segments"
+        db.commit()
+
+    db.close()
 
     progress_tracker.end_step(
         f"Text translation complete: {saved_count}/{total_segments} segments"
