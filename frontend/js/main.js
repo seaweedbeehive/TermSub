@@ -2657,7 +2657,6 @@
 
         // Process file handler (handles both video transcription and text parsing)
         async function processFile() {
-            console.log('[main] processFile start, currentVideoId=', currentVideoId, 'currentFileType=', currentFileType);
             if (!currentVideoId) return;
 
             // Target language is only required for pipelines that translate
@@ -2711,11 +2710,9 @@
                 // Text files are parsed synchronously; hand off to the dedicated
                 // text pipeline UI controller instead of the video flow.
                 if (isTextFile && data.status) {
-                    console.log('[main] handing text parse to textPipeline, data=', data);
                     if (window.textPipeline) {
                         window.textPipeline.onTextParsed(data);
                     } else {
-                        console.error('[main] window.textPipeline missing');
                     }
                     // Still connect WebSocket so text Celery jobs can report
                     // completion (terms_ready, completed) back to the UI.
@@ -3354,7 +3351,6 @@
 
             // Pipeline buttons
             document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
-                console.log('[main] translateSubtitlesBtn clicked, currentFileType=', currentFileType, 'currentVideoId=', currentVideoId);
                 const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
                 const mode = reviewTerms ? 'terminology' : 'subtitles';
                 startPipeline(mode);
