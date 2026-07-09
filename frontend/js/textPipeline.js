@@ -14,6 +14,7 @@
     let activeVideoId = null;
     let isTextMode = false;
     let hasExtractedTerms = false;
+    let _lastStatus = uploaded;
 
     // ------------------------------------------------------------------
     // DOM helpers
