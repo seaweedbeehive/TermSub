@@ -481,8 +481,8 @@
         if (!activeVideoId) return;
         // Reuse the existing export endpoint for original text.
         try {
-            const response = await fetch(`/videos/${activeVideoId}/export?kind=transcription`, {
-                method: 'POST',
+            const response = await fetch(`/${activeVideoId}/transcription`, {
+                method: 'GET',
             });
             if (!response.ok) throw new Error('Original text download failed');
             const blob = await response.blob();
