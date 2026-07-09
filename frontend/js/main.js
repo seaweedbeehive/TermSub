@@ -327,7 +327,7 @@
         // Utility functions
         function log(message, type = 'info') {
             const logEl = document.getElementById('activityLog');
-            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            const now = new Date(); const time = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
 
             if (logEl.children.length === 1 && logEl.children[0].textContent.includes('Waiting')) {
                 logEl.replaceChildren();
