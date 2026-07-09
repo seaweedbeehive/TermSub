@@ -127,10 +127,9 @@ def export_text_translation(video_id: str) -> str:
             .order_by(Segment.sequence_number)
             .all()
         )
-
-    translated_sentences = []
-    for seg in segments:
-        text = seg.translated_text or seg.original_text or ""
-        translated_sentences.append(text.strip())
+        translated_sentences = []
+        for seg in segments:
+            text = seg.translated_text or seg.original_text or ""
+            translated_sentences.append(text.strip())
 
     return "\n\n".join(translated_sentences)
