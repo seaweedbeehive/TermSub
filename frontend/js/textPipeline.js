@@ -55,6 +55,7 @@
     // Status helpers
     // ------------------------------------------------------------------
     function _updateStatus(data) {
+        if (data && data.status) _lastStatus = data.status;
         if (window.updateStatus) window.updateStatus(data);
     }
 
