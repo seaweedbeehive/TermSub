@@ -3161,7 +3161,15 @@
             formData.append('source_language', sourceLangSelect.value);
 
             log('Uploading file...');
-            
+
+            // Show an immediate "Uploading" status so users on slow connections
+            // see feedback before the multipart request completes.
+            const statusCardEl = document.getElementById('statusCard');
+            if (statusCardEl) statusCardEl.classList.remove('hidden');
+            const primaryActionEl = document.getElementById('primaryActionContainer');
+            if (primaryActionEl) primaryActionEl.classList.remove('hidden');
+            updateStatus({ status: 'uploaded', progress_percent: 0 });
+
             try {
                 const response = await fetch('/videos/upload', {
                     method: 'POST',
