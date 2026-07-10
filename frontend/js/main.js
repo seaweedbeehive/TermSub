@@ -2,6 +2,7 @@
         let currentVideoId = null;
         let videoProgressPercent = 0;  // Track progress for WebSocket updates
         let currentFileType = 'video'; // 'video' or 'text' - tracks uploaded file type
+        let currentContentType = 'video'; // backend content_type value
         let loggedCompletions = new Set(); // Track completed jobs to prevent duplicate logs
         let currentJobId = null; // Track current job to ignore stale messages
         let isJobRunning = false; // Silver bullet: prevents stale completion logs
@@ -326,7 +327,7 @@
         // Utility functions
         function log(message, type = 'info') {
             const logEl = document.getElementById('activityLog');
-            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            const now = new Date(); const time = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
 
             if (logEl.children.length === 1 && logEl.children[0].textContent.includes('Waiting')) {
                 logEl.replaceChildren();
@@ -585,6 +586,11 @@
         async function loadUser() {
             try {
                 const response = await fetch('/api/auth/me');
+                if (response.status === 401) {
+                    // Not logged in — expected for guests and BYOK users.
+                    currentUser = null;
+                    return false;
+                }
                 if (response.status === 403) {
                     console.warn('Email not verified');
                     currentUser = null;
@@ -1476,6 +1482,29 @@
             return hours * 3600 + minutes * 60 + seconds + millis / 1000;
         }
         
+        function renderTextPreview(segments) {
+            const originalEl = document.getElementById('textPreviewOriginal');
+            const translatedEl = document.getElementById('textPreviewTranslated');
+            if (!originalEl || !translatedEl) return;
+
+            // Track the latest rendered state for history snapshots
+            currentTimelineSegments = JSON.parse(JSON.stringify(segments || []));
+            _updateUndoButton();
+
+            if (!segments || segments.length === 0) {
+                originalEl.textContent = 'No text available yet.';
+                translatedEl.textContent = 'No translation available yet.';
+                return;
+            }
+
+            const ordered = [...segments].sort((a, b) => (a.sequence_number || 0) - (b.sequence_number || 0));
+            const originalText = ordered.map(s => s.original_text || '').join('\n\n');
+            const translatedText = ordered.map(s => s.translated_text || s.original_text || '').join('\n\n');
+
+            originalEl.textContent = originalText;
+            translatedEl.textContent = translatedText;
+        }
+
         function renderSubtitleTimeline(segments) {
             const grid = document.getElementById('timelineCardGrid');
             if (!grid) return;
@@ -1775,6 +1804,8 @@
                     return;
                 }
 
+                currentFileType = data.content_type === 'text' ? 'text' : 'video';
+                if (window.textPipeline) window.textPipeline.setFileType(currentFileType);
                 updateStatus({
                     status: data.status,
                     progress_percent: data.progress_percent || 0,
@@ -1783,7 +1814,7 @@
                 });
 
                 updateButtonVisibility(data.status);
-                if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
+                if (data.segments && (data.status === 'transcribed' || data.status === 'completed')) {
                     renderSubtitleTimeline(data.segments);
                 }
             } catch (err) {
@@ -1937,6 +1968,12 @@
         }
         
         function handleWebSocketMessage(data) {
+            // Delegate text-file updates to the dedicated text pipeline.
+            if (currentFileType === 'text' && window.textPipeline) {
+                window.textPipeline.handleStatusUpdate(data);
+                return;
+            }
+
             // Handle both direct status updates and job messages
             let status = data.status;
 
@@ -2009,7 +2046,9 @@
                     isJobRunning = false;
                     hasStartedProcessing = false;
                     updateButtonVisibility('completed');
-                    if (data.result?.segments) renderSubtitleTimeline(data.result.segments);
+                    if (data.result?.segments) {
+                        renderSubtitleTimeline(data.result.segments);
+                    }
                 } else {
                     log(`${jobType} complete`, 'success');
                 }
@@ -2118,7 +2157,9 @@
                     }
                     renderTerms();
                     updateButtonVisibility('completed');
-                    if (data.segments) renderSubtitleTimeline(data.segments);
+                    if (data.segments) {
+                        renderSubtitleTimeline(data.segments);
+                    }
                     break;
                     
                 case 'error':
@@ -2145,6 +2186,12 @@
 
             if (!container) return;
 
+            // Delegate text-file UI state to the dedicated text pipeline module.
+            if (currentFileType === 'text' && window.textPipeline) {
+                window.textPipeline.updateUI(status);
+                return;
+            }
+
             // Reset all sub-elements
             if (primaryBtn) {
                 primaryBtn.classList.remove('hidden');
@@ -2154,6 +2201,7 @@
             ghostLink?.classList.add('hidden');
             exportGrid?.classList.add('hidden');
             exportPanel?.classList.add('hidden');
+            textExportPanel?.classList.add('hidden');
             exportHeader?.classList.add('hidden');
 
             // Remove any stale post-transcribe choice container
@@ -2166,6 +2214,8 @@
                     primaryBtn?.classList.add('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+                    const textPreviewUploaded = document.getElementById('textPreviewPanel');
+                    if (textPreviewUploaded) textPreviewUploaded.classList.add('hidden');
                     break;
 
                 case 'transcribed':
@@ -2179,6 +2229,7 @@
                         primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
                         primaryBtn.onclick = downloadTranscription;
                         exportGrid?.classList.add('hidden');
+                        textExportPanel?.classList.add('hidden');
                         exportHeader?.classList.add('hidden');
                         if (termsPanel) termsPanel.classList.add('hidden');
                         if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
@@ -2208,18 +2259,31 @@
 
                 case 'completed':
                     primaryBtn?.classList.add('hidden');
+                    if (termsPanel) termsPanel.classList.add('hidden');
+                    if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
                     exportGrid?.classList.remove('hidden');
+                    textExportPanel?.classList.add('hidden');
                     exportPanel?.classList.remove('hidden');
                     exportHeader?.classList.remove('hidden');
                     if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
+                    break;
+
+                case 'translating':
+                    primaryBtn?.classList.add('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
-                    if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                    {
+                        if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                        const textPreviewPanelTranslating = document.getElementById('textPreviewPanel');
+                        if (textPreviewPanelTranslating) textPreviewPanelTranslating.classList.add('hidden');
+                    }
                     break;
 
                 default:
                     primaryBtn?.classList.add('hidden');
                     if (termsPanel) termsPanel.classList.add('hidden');
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+                    const textPreviewPanelDefault = document.getElementById('textPreviewPanel');
+                    if (textPreviewPanelDefault) textPreviewPanelDefault.classList.add('hidden');
             }
         }
         
@@ -2354,9 +2418,24 @@
             fallbackPollInterval = setInterval(poll, 5000);
         }
 
+        function updatePipelineButtonsForFileType() {
+            const translateBtn = document.getElementById('translateSubtitlesBtn');
+            const originalBtn = document.getElementById('originalSubtitlesBtn');
+            if (!translateBtn || !originalBtn) return;
+
+            if (currentFileType === 'text') {
+                translateBtn.innerHTML = '<i class="fa-solid fa-language mr-2"></i>Translate Text';
+                originalBtn.classList.add('hidden');
+            } else {
+                translateBtn.innerHTML = '<i class="fa-solid fa-language mr-2"></i>Translate and Get Subtitles';
+                originalBtn.classList.remove('hidden');
+            }
+        }
+
         function resetApp() {
             currentVideoId = null;
             currentFileType = 'video';
+            updatePipelineButtonsForFileType();
             timelineHistory = [];
             currentTimelineSegments = [];
             currentJobId = null;
@@ -2450,7 +2529,11 @@
 
             targetPipelineMode = mode;
             log(`Starting ${mode} pipeline...`);
-            await uploadFile(mode);
+            const uploaded = await uploadFile(mode);
+            if (uploaded && currentFileType === 'text') {
+                // Text files parse synchronously; hand off to textPipeline.
+                processFile();
+            }
         }
 
         // Upload handler
@@ -2518,6 +2601,10 @@
                 const data = await response.json();
                 currentVideoId = data.id;
                 currentFileType = data.content_type || 'video';
+                if (window.textPipeline) {
+                    window.textPipeline.setVideoId(currentVideoId);
+                    window.textPipeline.setFileType(currentFileType);
+                }
                 
                 // Set Project Metadata
                 const projectTitleEl = document.getElementById('projectTitle');
@@ -2560,7 +2647,10 @@
                 updateStatus({ status: 'uploaded', progress_percent: 0 });
 
                 // Auto-start transcription for every pipeline path
-                processFile();
+                if (currentFileType !== 'text') {
+                    processFile();
+                }
+                return true;
 
             } catch (err) {
                 const errorMsg = err.message || 'Upload failed';
@@ -2618,6 +2708,18 @@
                 const data = await response.json();
                 if (data.job_id) {
                     currentJobId = data.job_id;
+                }
+
+                // Text files are parsed synchronously; hand off to the dedicated
+                // text pipeline UI controller instead of the video flow.
+                if (isTextFile && data.status) {
+                    if (window.textPipeline) {
+                        window.textPipeline.onTextParsed(data);
+                    }
+                    // Still connect WebSocket so text Celery jobs can report
+                    // completion (terms_ready, completed) back to the UI.
+                    await connectWebSocket(currentVideoId);
+                    return;
                 }
 
                 // Do not update the UI to "transcribed" here. The real completion
@@ -3200,6 +3302,7 @@
                     // Detect file type for downstream pipeline text
                     const isTextFile = file.name.toLowerCase().endsWith('.txt');
                     currentFileType = isTextFile ? 'text' : 'video';
+                    updatePipelineButtonsForFileType();
                 }
             });
             
@@ -3269,7 +3372,7 @@
                 }
             });
             
-            // Global Find & Replace handler
+            // Global Find & Replace handler (subtitle timeline)
             document.getElementById('replaceAllBtn').addEventListener('click', async () => {
                 if (!currentVideoId || isSavingSegment) return;
                 pushTimelineHistory();
@@ -3309,6 +3412,8 @@
                 }
             });
             document.getElementById('downloadRawTranscriptionLink').addEventListener('click', downloadTranscription);
+
+            // Note: text-file find/replace and export are handled by textPipeline.js.
             document.getElementById('exportSrtBtn').addEventListener('click', () => exportFormat('srt'));
             document.getElementById('exportVttBtn').addEventListener('click', () => exportFormat('vtt'));
             document.getElementById('exportTxtBtn').addEventListener('click', () => exportFormat('txt'));

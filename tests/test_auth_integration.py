@@ -208,5 +208,5 @@ def test_authenticated_text_upload_and_transcribe(
     )
     assert transcribe_response.status_code == 200
     data = transcribe_response.json()
-    assert data["status"] == "completed"
+    assert data["status"] == "transcribed"
     assert data["total_segments"] >= 1

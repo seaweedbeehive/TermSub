@@ -19,6 +19,8 @@ from app.core.auth import (
     create_ws_token,
     generate_verification_token,
     get_current_user,
+    get_current_user_or_byok,
+    RequestIdentity,
     hash_password,
     hash_token,
     verify_password,
@@ -337,9 +339,38 @@ def reset_password(
 
 
 @router.get("/me", response_model=UserResponse)
-def me(current_user: User = Depends(get_current_user)) -> User:
-    """Return information about the currently authenticated user."""
-    return current_user
+def me(
+    request: Request,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> UserResponse:
+    """Return information about the currently authenticated user.
+
+    Supports both standard JWT users and BYOK users (X-API-Key).
+    """
+    if identity.is_byok:
+        return UserResponse(
+            id=identity.user_id,
+            email="",
+            is_email_verified=True,
+            wants_updates=False,
+            is_active=True,
+            is_admin=False,
+            api_key_mode="byok",
+            is_byok=True,
+        )
+    user = identity.user
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        is_email_verified=user.is_email_verified,
+        wants_updates=user.wants_updates,
+        is_active=user.is_active,
+        is_admin=user.is_admin,
+        api_key_mode=user.api_key_mode or "standard",
+        is_byok=False,
+    )
 
 
 @router.post("/ws-token", response_model=WsTokenResponse)

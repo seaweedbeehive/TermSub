@@ -540,8 +540,6 @@ def translate_video_task(
             },
         )
 
-        from sqlalchemy import func
-
         from app.services.translation_pipeline import TranslationPipeline
 
         pipeline = TranslationPipeline()

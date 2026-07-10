@@ -523,6 +523,11 @@
                                 <i class="fa-solid fa-code mr-1"></i>JSON
                             </button>
                         </div>
+                        <div id="textExportPanel" class="hidden">
+                            <button type="button" id="exportTxtOnlyBtn" class="w-full py-2 px-3 bg-emerald-700 hover:bg-emerald-800 dark:bg-emerald-800 dark:hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors">
+                                <i class="fa-solid fa-file-text mr-1"></i>Download TXT
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -559,7 +564,7 @@
                 <!-- Subtitle Review Timeline -->
                 <div id="subtitleReviewPanel" class="hidden flex-1 min-h-0 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-normal text-slate-100 tracking-wide">Translated Subtitle Timeline</h2>
+                        <h2 id="subtitleReviewTitle" class="text-sm font-normal text-slate-100 tracking-wide">Translated Subtitle Timeline</h2>
                         <button id="undoTimelineBtn" class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors opacity-50 cursor-not-allowed" disabled title="Undo last change (Ctrl+Z)">
                             <i class="fa-solid fa-rotate-left mr-1"></i>Undo
                         </button>
@@ -609,6 +614,36 @@
                             </div>
                         </div>
                     </template>
+                </div>
+
+                <!-- Text Side-by-Side Editor (for text-file pipeline) -->
+                <div id="textPreviewPanel" class="hidden flex-1 min-h-0 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-normal text-slate-100 tracking-wide">Text Translation Editor</h2>
+                        <button id="undoTextBtn" class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors opacity-50 cursor-not-allowed" disabled title="Undo last change (Ctrl+Z)">
+                            <i class="fa-solid fa-rotate-left mr-1"></i>Undo
+                        </button>
+                    </div>
+
+                    <!-- Global Find & Replace Bar -->
+                    <div class="flex items-center gap-2 mb-3">
+                        <input type="text" id="findInputText" placeholder="Find text..." class="flex-1 text-xs border border-slate-700 bg-slate-800 rounded-xl px-2 py-1 text-slate-100 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all">
+                        <input type="text" id="replaceInputText" placeholder="Replace with..." class="flex-1 text-xs border border-slate-700 bg-slate-800 rounded-xl px-2 py-1 text-slate-100 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all">
+                        <button id="replaceAllBtnText" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-normal rounded-xl transition-colors tracking-wide">Replace All</button>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto pr-1">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+                            <div class="space-y-2 min-h-0">
+                                <p class="text-[10px] text-slate-500 uppercase tracking-wider">Original</p>
+                                <div id="textPreviewOriginal" class="text-sm text-slate-300 bg-slate-800/50 border border-slate-700 rounded-xl p-3 whitespace-pre-wrap overflow-y-auto">No text available yet.</div>
+                            </div>
+                            <div class="space-y-2 min-h-0">
+                                <p class="text-[10px] text-slate-500 uppercase tracking-wider">Translation</p>
+                                <div id="textPreviewTranslated" contenteditable="true" class="text-sm text-slate-100 bg-slate-800/50 border border-slate-700 rounded-xl p-3 whitespace-pre-wrap overflow-y-auto focus:ring-2 focus:ring-blue-900/50 outline-none" data-placeholder="No translation available yet.">No translation available yet.</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -861,6 +896,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.6.1/dist/js/tom-select.complete.min.js"></script>
     <script src="/static/js/jobSession.js" defer></script>
+    <script src="/static/js/textPipeline.js" defer></script>
     <script src="/static/js/main.js" defer></script>
 </body>
 </html>

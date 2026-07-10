@@ -44,6 +44,7 @@ class VideoOut(VideoBase):
     status: str
     content_type: str
     source_language: str | None
+    content_type: str
     domain: str = "general"
     created_at: datetime
     updated_at: datetime
