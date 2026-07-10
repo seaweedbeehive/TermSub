@@ -14,7 +14,7 @@
     let activeVideoId = null;
     let isTextMode = false;
     let hasExtractedTerms = false;
-    let _lastStatus = uploaded;
+    let _lastStatus = 'uploaded';
 
     // ------------------------------------------------------------------
     // DOM helpers
@@ -483,7 +483,7 @@
         if (!activeVideoId) return;
         // Reuse the existing export endpoint for original text.
         try {
-            const response = await fetch(`/${activeVideoId}/transcription`, {
+            const response = await fetch(`/export/${activeVideoId}/transcription`, {
                 method: 'GET',
             });
             if (!response.ok) throw new Error('Original text download failed');
