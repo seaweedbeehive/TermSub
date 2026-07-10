@@ -325,6 +325,9 @@
                                 <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
                             </button>
                             <div id="userMenuDropdown" class="hidden absolute right-0 mt-2 w-44 bg-slate-900 border border-slate-800 rounded-xl shadow-xl py-1 z-[9995]">
+                                <button id="myJobsBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 transition-colors">
+                                    <i class="fa-solid fa-clock-rotate-left w-5 text-slate-400"></i> My Jobs
+                                </button>
                                 <button id="profileBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 transition-colors">
                                     <i class="fa-solid fa-id-card w-5 text-slate-400"></i> Profile
                                 </button>
@@ -390,6 +393,7 @@
             <div class="lg:col-span-1 flex flex-col gap-4">
                 <!-- Upload Card -->
                 <div id="uploadCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shrink-0">
+                    <!-- Upload scene: file drop zone -->
                     <div id="uploadForm" class="space-y-4">
                         <div>
                             <input type="file" id="fileInput" accept="video/*,audio/*,.txt" class="hidden">
@@ -400,7 +404,10 @@
                                 <p class="text-xs text-slate-500 mt-1">MP4, MOV, AVI, MP3, TXT</p>
                             </label>
                         </div>
+                    </div>
 
+                    <!-- Config scene: language controls + pipeline buttons -->
+                    <div id="configScene" class="space-y-4">
                         <div id="setupConfigPanel" class="space-y-4">
                             <div>
                                 <label class="block text-xs font-normal text-slate-400 mb-1 tracking-wide">Source Language</label>
@@ -482,10 +489,19 @@
                 <!-- Primary Action Container -->
                 <div id="primaryActionContainer" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 hidden shrink-0">
                     <p id="primaryHelperText" class="text-xs text-amber-400 mb-2 hidden">💡 Review and edit your Extracted Terms before translating.</p>
-                    
+
                     <button id="primaryActionBtn" class="w-full py-3 px-4 text-white text-sm font-normal rounded-xl transition-colors tracking-wide">
                         Action
                     </button>
+
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <button id="wizardBackBtn" type="button" class="hidden py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-normal rounded-xl transition-colors tracking-wide">
+                            <i class="fa-solid fa-arrow-left mr-1"></i>Back
+                        </button>
+                        <button id="wizardNextBtn" type="button" class="hidden py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-normal rounded-xl transition-colors tracking-wide">
+                            Next<i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
                     
                     <div id="primaryGhostLink" class="mt-2 text-center hidden">
                         <button type="button" id="downloadRawTranscriptionLink" class="text-xs text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] underline">or download raw transcription</button>
@@ -620,6 +636,23 @@
                 <a href="https://buymeacoffee.com/eedbee" target="_blank" rel="noopener noreferrer" class="text-amber-400 hover:text-amber-300 transition-colors">Buy me a coffee</a>
             </div>
         </footer>
+    </div>
+
+    <!-- My Jobs Modal -->
+    <div id="myJobsModal" class="hidden fixed inset-0 z-[9997] flex items-center justify-center bg-black/60 backdrop-blur-sm" aria-hidden="true">
+        <div class="bg-white dark:bg-[#1A1A1E] border border-slate-200 dark:border-[#2A2A30] rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col relative">
+            <div class="p-6 border-b border-slate-200 dark:border-[#2A2A30] flex items-center justify-between shrink-0">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-[#E2E2E8]">My Jobs</h3>
+                <button id="myJobsModalClose" type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-[#E2E2E8] transition-colors" aria-label="Close modal">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div id="myJobsContent" class="overflow-y-auto p-6">
+                <div id="myJobsList" class="space-y-3">
+                    <p class="text-sm text-slate-500 dark:text-[#8A8F98]">Loading your jobs...</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Profile Modal -->
@@ -827,6 +860,7 @@
     <div id="toastContainer" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.6.1/dist/js/tom-select.complete.min.js"></script>
+    <script src="/static/js/jobSession.js" defer></script>
     <script src="/static/js/main.js" defer></script>
 </body>
 </html>
