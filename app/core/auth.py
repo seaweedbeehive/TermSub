@@ -126,18 +126,16 @@ def decode_ws_token(token: str) -> dict[str, Any] | None:
 
 
 def _get_access_token_from_request(request: Request) -> str | None:
-    """Read the JWT from the HttpOnly cookie, falling back to Authorization header.
+    """Read the JWT from the Authorization header, falling back to the cookie.
 
-    The cookie is the normal path for browser clients; the Authorization header
-    fallback keeps programmatic access (tests, API clients) working.
+    Programmatic clients and tests explicitly send an Authorization header,
+    so it takes precedence over the HttpOnly cookie. Browser clients that rely
+    on the cookie still work when no header is present.
     """
-    token = request.cookies.get(ACCESS_TOKEN_COOKIE)
-    if token:
-        return token
     auth = request.headers.get("Authorization")
     if auth and auth.lower().startswith("bearer "):
         return auth[7:].strip()
-    return None
+    return request.cookies.get(ACCESS_TOKEN_COOKIE)
 
 
 def _is_token_revoked(jti: str) -> bool:

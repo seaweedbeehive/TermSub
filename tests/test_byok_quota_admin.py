@@ -298,7 +298,7 @@ def test_analytics_logging() -> None:
 
 
 def test_websocket_accepts_valid_subprotocol_token() -> None:
-    """WebSocket connects when the JWT of a verified user is supplied via Sec-WebSocket-Protocol."""
+    """WebSocket connects when a short-lived WS token is supplied via Sec-WebSocket-Protocol."""
     db = SessionLocal()
     try:
         user = User(
@@ -314,10 +314,17 @@ def test_websocket_accepts_valid_subprotocol_token() -> None:
     finally:
         db.close()
 
+    # Obtain a dedicated WS token; access tokens are not accepted here.
+    headers = {"Authorization": f"Bearer {token}"}
+    ws_token_response = client.post("/api/auth/ws-token", headers=headers)
+    assert ws_token_response.status_code == 200, ws_token_response.text
+    ws_token = ws_token_response.json()["ws_token"]
+    subprotocol = ws_token_response.json()["subprotocol"]
+
     with client.websocket_connect(
-        "/ws/videos/test-video", subprotocols=["termsub-auth", token]
+        "/ws/videos/test-video", subprotocols=[subprotocol, ws_token]
     ) as ws:
-        assert ws.accepted_subprotocol == "termsub-auth"
+        assert ws.accepted_subprotocol == subprotocol
         data = ws.receive_json()
         assert data["type"] == "connected"
 

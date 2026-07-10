@@ -123,7 +123,7 @@ def test_transcribe_is_idempotent_when_already_transcribed(
     )
     assert first_response.status_code == 200
     first_data = first_response.json()
-    assert first_data["status"] == "completed"
+    assert first_data["status"] == "transcribed"
     assert first_data["total_segments"] >= 1
 
     second_response = client.post(

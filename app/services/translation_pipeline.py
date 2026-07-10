@@ -624,6 +624,8 @@ Only include terms that actually appear in the text.
                     f"Video {video_id} is in ERROR status, aborting translation"
                 )
 
+            plain_text = video.content_type == ContentType.TEXT.value
+
             auto_terms = (
                 db.query(Term)
                 .filter(Term.video_id == video_id, Term.source == TermSource.AUTO.value)
@@ -710,7 +712,6 @@ Only include terms that actually appear in the text.
             )
             print(f"[TranslatorAgent] Using glossary with {len(glossary_dict)} terms")
 
-            plain_text = video.content_type == ContentType.TEXT.value
             await translate_video_sliding_window_async(
                 video_id=video_id,
                 model_name="gpt-5.4-mini",

@@ -103,18 +103,20 @@ def test_expired_verification_token_is_rejected() -> None:
     )
     assert signup_response.status_code == 201
 
+    expired_token = f"expired-token-{uuid.uuid4().hex[:8]}"
+
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
         assert user is not None
-        user.email_verification_token = hash_token("expired-token")
+        user.email_verification_token = hash_token(expired_token)
         user.email_verification_token_expires_at = datetime.utcnow() - timedelta(
             seconds=1
         )
         db.commit()
 
         verify_response = client.get(
-            "/api/auth/verify?token=expired-token"
+            f"/api/auth/verify?token={expired_token}"
         )
         assert verify_response.status_code == 400
         assert verify_response.json()["detail"] == "Verification link expired"

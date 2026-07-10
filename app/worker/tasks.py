@@ -18,6 +18,8 @@ from celery.exceptions import (
     SoftTimeLimitExceeded,
 )
 
+from sqlalchemy import func
+
 from app.core.celery_app import celery_app
 from app.core.openai_key_context import byok_api_key
 from app.core.quota import QuotaManager
