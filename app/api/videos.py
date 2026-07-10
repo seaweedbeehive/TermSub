@@ -316,6 +316,7 @@ def update_video_config(
         VideoStatus.UPLOADED.value,
         VideoStatus.TRANSCRIBED.value,
         VideoStatus.TERMS_READY.value,
+        VideoStatus.TRANSLATING.value,
         VideoStatus.COMPLETED.value,
         VideoStatus.ERROR.value,
     }
@@ -355,7 +356,19 @@ def update_video_config(
         body.target_language != original_target_language
     )
 
-    if target_language_changed:
+    # Changing the target language or toggling glossary extraction after terms were
+    # ready (or translation completed) invalidates prior results so the pipeline
+    # can re-run cleanly from transcription.
+    if (
+        target_language_changed
+        or (
+            body.skip_glossary is False
+            and video.status in {
+                VideoStatus.TRANSCRIBED.value,
+                VideoStatus.COMPLETED.value,
+            }
+        )
+    ):
         # Changing the target language invalidates both existing translations and
         # extracted terms (terms include target-language translations). Reset the
         # job to transcribed so terminology analysis and translation re-run.
@@ -683,6 +696,24 @@ def translate_video_endpoint(
                     f"Video status is {video.status}. Need terms_ready or transcribed."
                 ),
             )
+
+        # Re-translation from completed or translating requires clearing previous
+        # results so the new glossary is applied and the worker won't skip work.
+        if video.status in {
+            VideoStatus.COMPLETED.value,
+            VideoStatus.TRANSLATING.value,
+        }:
+            video.status = VideoStatus.TERMS_READY.value
+            video.progress_percent = 0
+            video.processed_segments = 0
+            video.current_segment_index = 0
+            video.completed_at = None
+            video.error_message = None
+            db.query(Segment).filter(Segment.video_id == video_id).update(
+                {Segment.translated_text: None},
+                synchronize_session=False,
+            )
+            db.commit()
 
         result = translate_video_task.delay(video_id, api_key=api_key)
         record_task(video_id, "translate", result.id)
