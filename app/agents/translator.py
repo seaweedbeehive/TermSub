@@ -269,11 +269,13 @@ def build_system_instruction(batch: TranslationBatch, target_language: str = "")
             lines.append(
                 f"If the source text contains {term}, you MUST use the "
                 f"{translation} for the provided {term}. "
-                f"However, you are allowed to add necessary grammatical suffixes, "
-                f"prefixes, or particles "
-                f"appropriate to ensure the sentence is grammatically perfect in the "
-                f"target language. "
-                f"The core meaning of the term must not change."
+                f"The core meaning of the term must not change, but grammatical "
+                f"correctness ALWAYS takes priority over inserting the glossary "
+                f"form unchanged: conjugate verbs, adjust for gender/number/case, "
+                f"add or drop suffixes/prefixes/particles, and reorder words as "
+                f"needed so the sentence reads naturally in the target language. "
+                f"Never output a raw infinitive, dictionary form, or otherwise "
+                f"ungrammatical fragment just to match the glossary text exactly."
             )
         lines.append("")
         lines.append("You must obey these rules for every translation you produce.")

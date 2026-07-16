@@ -75,6 +75,9 @@ Guidelines:
 - Focus on terms that appear multiple times or are central to the topic.
 - The "original" and "name" fields must be in the document's source language; do NOT translate them.
 - Provide standard {target_lang_name} translations for the target fields.
+- Do NOT include ordinary, everyday words (common verbs, generic nouns) just to
+  reach the target count. If the document doesn't contain {term_budget}
+  genuine specialized terms, return fewer.
 """
 
 
@@ -145,6 +148,11 @@ Respond in JSON format:
     }}
   ]
 }}
+
+Guidelines:
+- Do NOT include ordinary, everyday words (common verbs, generic nouns) just to
+  reach the target count. If the document doesn't contain {term_budget}
+  genuine specialized terms, return fewer.
 """
 
 

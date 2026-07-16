@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.auth import RequestIdentity, get_current_user_or_byok
@@ -127,11 +128,41 @@ async def translate_text_endpoint(
         )
 
     if video.status == VideoStatus.COMPLETED.value:
-        return {
-            "video_id": video_id,
-            "status": video.status,
-            "message": "Translation already complete",
-        }
+        # Re-translation after term edits: clear stale results so the new
+        # glossary is applied and the worker recomputes every segment.
+        #
+        # Use an atomic UPDATE...WHERE instead of read-then-write so two
+        # concurrent requests can't both observe status == COMPLETED and both
+        # queue a task: only one UPDATE can win the row, the other sees
+        # rowcount == 0 and backs off instead of double-queueing.
+        claim_result = db.execute(
+            update(Video)
+            .where(
+                Video.id == video_id,
+                Video.status == VideoStatus.COMPLETED.value,
+            )
+            .values(
+                status=VideoStatus.TERMS_READY.value,
+                progress_percent=0,
+                processed_segments=0,
+                current_segment_index=0,
+                completed_at=None,
+                error_message=None,
+            )
+        )
+        db.commit()
+        if claim_result.rowcount == 0:
+            # Another request already claimed the re-translation.
+            return {
+                "video_id": video_id,
+                "status": VideoStatus.TRANSLATING.value,
+                "message": "Translation already in progress",
+            }
+        db.query(Segment).filter(Segment.video_id == video_id).update(
+            {Segment.translated_text: None},
+            synchronize_session=False,
+        )
+        db.commit()
 
     task = translate_text_task.delay(
         video_id,

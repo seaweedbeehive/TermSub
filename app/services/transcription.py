@@ -178,11 +178,26 @@ def transcribe_with_openai(
     # ------------------------------------------------------------------
     # The modern openai SDK returns a Transcription pydantic model;
     # fall back to dict-style access for maximum compatibility.
-    segments_raw = getattr(response, "segments", None) or response.get("segments", [])
-    words_raw = getattr(response, "words", None) or response.get("words", [])
-    detected_language = getattr(response, "language", None) or response.get(
-        "language", language or "en"
-    )
+    #
+    # Use `is None` rather than `or` to distinguish "attribute is absent"
+    # from "attribute is present but falsy" (e.g. an empty segments list for
+    # silent audio). `or` would incorrectly fall through to `.get()`, which
+    # doesn't exist on the pydantic response object and raises AttributeError.
+    segments_raw = getattr(response, "segments", None)
+    if segments_raw is None:
+        segments_raw = response.get("segments", []) if isinstance(response, dict) else []
+
+    words_raw = getattr(response, "words", None)
+    if words_raw is None:
+        words_raw = response.get("words", []) if isinstance(response, dict) else []
+
+    detected_language = getattr(response, "language", None)
+    if detected_language is None:
+        detected_language = (
+            response.get("language", language or "en")
+            if isinstance(response, dict)
+            else (language or "en")
+        )
 
     # Whisper sometimes reports the first segment as starting at 0.0 even when
     # the audio begins with silence. The word-level timestamp of the first spoken

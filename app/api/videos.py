@@ -16,7 +16,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, selectinload
 
@@ -686,6 +686,7 @@ def translate_video_endpoint(
             VideoStatus.TRANSCRIBING.value,
             VideoStatus.UPLOADED.value,
             VideoStatus.TRANSCRIBED.value,
+            VideoStatus.COMPLETED.value,
         ]
 
         if video.status not in valid_statuses:
@@ -697,18 +698,47 @@ def translate_video_endpoint(
                 ),
             )
 
-        # Re-translation from completed or translating requires clearing previous
-        # results so the new glossary is applied and the worker won't skip work.
-        if video.status in {
-            VideoStatus.COMPLETED.value,
-            VideoStatus.TRANSLATING.value,
-        }:
-            video.status = VideoStatus.TERMS_READY.value
-            video.progress_percent = 0
-            video.processed_segments = 0
-            video.current_segment_index = 0
-            video.completed_at = None
-            video.error_message = None
+        # A translation is already running for this video; don't queue a second
+        # concurrent task that would race the first one over the same segments.
+        if video.status == VideoStatus.TRANSLATING.value:
+            return {
+                "video_id": video_id,
+                "status": video.status,
+                "message": "Translation already in progress",
+            }
+
+        # Re-translation from completed requires clearing previous results so
+        # the new/edited glossary is applied and the worker recomputes every
+        # segment instead of treating the job as already finished.
+        #
+        # Use an atomic UPDATE...WHERE instead of read-then-write so two
+        # concurrent requests can't both observe status == COMPLETED and both
+        # queue a task: only one UPDATE can win the row, the other sees
+        # rowcount == 0 and backs off instead of double-queueing.
+        if video.status == VideoStatus.COMPLETED.value:
+            claim_result = db.execute(
+                update(Video)
+                .where(
+                    Video.id == video_id,
+                    Video.status == VideoStatus.COMPLETED.value,
+                )
+                .values(
+                    status=VideoStatus.TERMS_READY.value,
+                    progress_percent=0,
+                    processed_segments=0,
+                    current_segment_index=0,
+                    completed_at=None,
+                    error_message=None,
+                )
+            )
+            db.commit()
+            if claim_result.rowcount == 0:
+                # Another request already claimed the re-translation.
+                return {
+                    "video_id": video_id,
+                    "status": VideoStatus.TRANSLATING.value,
+                    "message": "Translation already in progress",
+                }
             db.query(Segment).filter(Segment.video_id == video_id).update(
                 {Segment.translated_text: None},
                 synchronize_session=False,

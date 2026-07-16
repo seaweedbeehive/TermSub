@@ -161,6 +161,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Without an explicit Cache-Control, browsers apply heuristic caching
+        # to /static assets (no revalidation for a while), so a JS/CSS fix can
+        # silently fail to reach an already-visited user until they hard
+        # refresh. Force revalidation on every load; ETag/Last-Modified still
+        # let the browser skip the download via 304 when content is unchanged.
+        if request.url.path.startswith("/static"):
+            response.headers["Cache-Control"] = "no-cache"
         # Only send HSTS over HTTPS (or when the request claims HTTPS via a trusted proxy)
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = (

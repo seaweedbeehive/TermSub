@@ -2502,7 +2502,11 @@
             const helperText = document.getElementById('primaryHelperText');
             const ghostLink = document.getElementById('primaryGhostLink');
             const exportGrid = document.getElementById('primaryExportGrid');
-            const exportHeader = document.getElementById('exportHeader');
+            // exportPanel is the visibility-controlling wrapper around the
+            // export grid (and its "Download Subtitles & Translations"
+            // header text) — unhiding just the grid isn't enough, since the
+            // wrapper itself defaults to hidden in the HTML.
+            const exportPanel = document.getElementById('exportPanel');
             const container = document.getElementById('primaryActionContainer');
             const termsPanel = document.getElementById('termsPanel');
             const subtitleReviewPanel = document.getElementById('subtitleReviewPanel');
@@ -2518,7 +2522,7 @@
             helperText?.classList.add('hidden');
             ghostLink?.classList.add('hidden');
             exportGrid?.classList.add('hidden');
-            exportHeader?.classList.add('hidden');
+            exportPanel?.classList.add('hidden');
             container.querySelector('#postTranscribeChoices')?.remove();
 
             // Hide all step scenes.
@@ -2609,8 +2613,7 @@
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
                     if (primaryBtn) primaryBtn.classList.add('hidden');
                     exportGrid?.classList.remove('hidden');
-                    exportHeader?.classList.remove('hidden');
-                    if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
+                    exportPanel?.classList.remove('hidden');
                     break;
             }
         }
@@ -2920,15 +2923,18 @@
                 const fresh = await fetchVideoData(currentVideoId);
                 const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
                 console.log(`[pipeline] runPipeline terminology freshStatus=${freshStatus}`);
-                if (
-                    freshStatus === 'terms_ready' ||
-                    freshStatus === 'translating' ||
-                    freshStatus === 'completed'
-                ) {
-                    // Terms already extracted (or translation already running/complete).
-                    // Stay on the terms panel and let the user click "Translate Subtitles".
-                    log('Terminology already extracted.', 'info');
+                if (freshStatus === 'translating') {
+                    // A translation is already running; avoid queueing a second one.
+                    log('Translation already in progress.', 'info');
                     updateButtonVisibility(freshStatus);
+                    return;
+                }
+                if (freshStatus === 'terms_ready' || freshStatus === 'completed') {
+                    // Terms are extracted (and reviewed/edited); apply them by
+                    // translating. This also covers re-translating a completed
+                    // job after the user edits a term.
+                    console.log('[pipeline] runPipeline terminology calling translateVideo');
+                    await translateVideo();
                     return;
                 }
                 console.log('[pipeline] runPipeline terminology calling analyzeVideo');
@@ -3776,7 +3782,12 @@
                 const loaded = await loadUser();
                 if (!loaded) {
                     updateUserDisplay();
+                    return;
                 }
+                // Resume any in-progress/completed job from a previous session
+                // (e.g. after a page refresh) so the user doesn't land back on
+                // a blank upload screen once their translation is ready.
+                await restoreJobSession();
             })();
 
             // Language dropdown population with Tom Select

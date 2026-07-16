@@ -92,9 +92,14 @@ IMPORTANT: The original term MUST be written exactly as it appears in the transc
 def _calculate_term_budget(segment_count: int) -> int:
     """Calculate a dynamic term budget based on transcript length.
 
-    Short videos get ~10 terms, long films get up to 100.
+    A floor of 10 forced short transcripts (a couple of sentences) to yield
+    10 "key terms" regardless of content, which pushed the model into
+    labeling ordinary words (e.g. "use", "detect") as glossary terms. A
+    lower floor lets very short inputs get a handful of genuine terms
+    instead of a quota of invented ones; longer transcripts still scale up
+    to 100.
     """
-    return min(max(10, segment_count // 5), 100)
+    return min(max(3, segment_count // 3), 100)
 
 
 def _get_openai_client(api_key: str | None = None) -> OpenAI:
@@ -178,7 +183,11 @@ Guidelines:
 - For each term, provide the SINGLE best standard {target_language} translation
 - Prioritize terms that appear multiple times in the transcript
 - Include multi-word concepts (e.g., "cognitive behavioral therapy", not just "therapy")
-- If a term has multiple valid translations, choose the most common/academic one"""  # noqa: E501
+- If a term has multiple valid translations, choose the most common/academic one
+- Do NOT include ordinary, everyday words (common verbs, generic nouns) just to
+  reach the target count. If the transcript doesn't contain {term_budget}
+  genuine specialized terms, return fewer. A short list of real terminology
+  is better than a padded list of common vocabulary."""  # noqa: E501
 
 
 def analyze_video_context(
@@ -600,7 +609,10 @@ Guidelines:
 - Focus on terms that appear multiple times in the transcript
 - Use the most common/academic {target_language} translation
 - Include multi-word concepts (e.g., "cognitive behavioral therapy")
-- Prioritize terms central to the topic"""  # noqa: E501
+- Prioritize terms central to the topic
+- Do NOT include ordinary, everyday words (common verbs, generic nouns) just to
+  reach the target count. Return fewer terms if the transcript doesn't contain
+  {term_budget} genuine specialized terms."""  # noqa: E501
 
         progress_tracker.update_progress(
             status=VideoStatus.GLOSSARY_EXTRACTING.value,

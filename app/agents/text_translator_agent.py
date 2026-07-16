@@ -68,8 +68,13 @@ def _build_system_instruction(glossary: dict[str, str], target_language: str) ->
             lines.append(f"{term} == {translation}")
             lines.append(
                 f"If the source text contains {term}, you MUST use "
-                f"{translation}. You may add grammatical suffixes/prefixes as "
-                f"needed, but the core meaning must not change."
+                f"{translation}. The core meaning must not change, but "
+                f"grammatical correctness ALWAYS takes priority over inserting "
+                f"the glossary form unchanged: conjugate verbs, adjust for "
+                f"gender/number/case, add or drop suffixes/prefixes/particles, "
+                f"and reorder words as needed so the sentence reads naturally. "
+                f"Never output a raw infinitive, dictionary form, or otherwise "
+                f"ungrammatical fragment just to match the glossary text exactly."
             )
         lines.append("")
         lines.append("Obey these rules for every translation.")
