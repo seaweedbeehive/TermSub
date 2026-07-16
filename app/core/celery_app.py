@@ -29,7 +29,7 @@ celery_app = Celery(
     "termsub",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.worker.tasks"],
+    include=["app.worker.tasks", "app.worker.text_tasks"],
 )
 
 celery_app.conf.update(

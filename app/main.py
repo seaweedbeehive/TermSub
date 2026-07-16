@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import admin, auth, export, profile, progress, quota, terms, videos
+from app.api import admin, auth, export, jobs, profile, progress, quota, terms, text_translation, videos
 from app.core.analytics import log_page_view
 from app.core.auth import (
     ACCESS_TOKEN_COOKIE,
@@ -161,6 +161,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Without an explicit Cache-Control, browsers apply heuristic caching
+        # to /static assets (no revalidation for a while), so a JS/CSS fix can
+        # silently fail to reach an already-visited user until they hard
+        # refresh. Force revalidation on every load; ETag/Last-Modified still
+        # let the browser skip the download via 304 when content is unchanged.
+        if request.url.path.startswith("/static"):
+            response.headers["Cache-Control"] = "no-cache"
         # Only send HSTS over HTTPS (or when the request claims HTTPS via a trusted proxy)
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = (
@@ -168,11 +175,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
-            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://cdn.jsdelivr.net; "
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
             "img-src 'self' data: https://img.shields.io; "
-            "connect-src 'self' wss: https://www.google-analytics.com https://*.google-analytics.com; "
+            "connect-src 'self' wss: https://www.google-analytics.com https://*.google-analytics.com https://cdn.jsdelivr.net; "
             "frame-ancestors 'none'; "
             "base-uri 'self'"
         )
@@ -285,10 +292,12 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(quota.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(profile.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
 app.include_router(videos.router)
 app.include_router(terms.router)
 app.include_router(export.router)
 app.include_router(progress.router)
+app.include_router(text_translation.router)
 
 # Set up WebSocket manager for progress updates
 videos.set_websocket_manager(manager)

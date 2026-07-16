@@ -298,6 +298,7 @@ async def translate_video_sliding_window_async(
     window_size: int = DEFAULT_WINDOW_SIZE,
     overlap: int = DEFAULT_OVERLAP,
     glossary: dict[str, str] | None = None,
+    plain_text: bool = False,
 ) -> dict[str, Any]:
     """Async sliding window translation with concurrent batch processing.
 
@@ -389,6 +390,7 @@ async def translate_video_sliding_window_async(
             source_language=source_language,
             target_language=target_language,
             progress_tracker=progress_tracker,
+            plain_text=plain_text,
         )
         elapsed = time.time() - start_time
 

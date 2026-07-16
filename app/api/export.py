@@ -10,7 +10,7 @@ from app.api.videos import require_video_owner
 from app.core.analytics import log_usage_event
 from app.core.auth import RequestIdentity, get_current_user_or_byok
 from app.db.session_utils import get_db_session
-from app.models.video import Segment, Video, VideoStatus
+from app.models.video import ContentType, Segment, Video, VideoStatus
 from app.utils.timecode import format_timestamp, format_timestamp_vtt
 
 router = APIRouter(prefix="/export", tags=["export"])
@@ -112,6 +112,17 @@ def generate_txt(segments: list[Segment]) -> str:
     return "\n\n".join(lines)
 
 
+def generate_original_txt(segments: list[Segment]) -> str:
+    """Generate plain text file content from original segment text."""
+    lines = []
+    for segment in segments:
+        text = segment.original_text or ""
+        text = f"{text}\u200f"
+        lines.append(text)
+
+    return "\n\n".join(lines)
+
+
 def generate_json(video: Video, segments: list[Segment]) -> dict[str, Any]:
     """Generate JSON export with full metadata."""
     return {
@@ -148,7 +159,8 @@ def get_segments_or_404(
         raise HTTPException(status_code=404, detail="Video not found")
     require_video_owner(video, identity)
 
-    # Check if translation is complete
+    # Check if processing is complete. Text records use the same COMPLETED
+    # status as videos, so no special-case handling is needed.
     if video.status != VideoStatus.COMPLETED.value:
         raise HTTPException(status_code=400, detail="Translation is still in progress")
 
@@ -320,7 +332,7 @@ def export_original_transcription(
     video_id: str,
     identity: RequestIdentity = Depends(get_current_user_or_byok),
 ) -> Response:
-    """Export the ORIGINAL transcription (before translation) as SRT."""
+    """Export the ORIGINAL transcription (before translation) as SRT or TXT."""
     with get_db_session() as db:
         video = db.query(Video).filter(Video.id == video_id).first()
         if not video:
@@ -341,16 +353,23 @@ def export_original_transcription(
                 detail="No segments found. Transcription may not be complete.",
             )
 
-        # Generate SRT from original text while the session is still open.
-        srt_content = generate_original_srt(segments)
-        download_name = sanitize_filename(video.filename) + "_transcription.srt"
+        # Text files export as plain text; videos export as SRT.
+        if video.content_type == ContentType.TEXT.value:
+            file_content = generate_original_txt(segments)
+            download_name = sanitize_filename(video.filename) + "_transcription.txt"
+            export_kind = "txt"
+        else:
+            file_content = generate_original_srt(segments)
+            download_name = sanitize_filename(video.filename) + "_transcription.srt"
+            export_kind = "transcription"
+
         _log_export(
             identity,
             video.id,
             video.filename,
             video.source_language,
             video.target_language,
-            "transcription",
+            export_kind,
         )
 
     headers = {
@@ -358,4 +377,4 @@ def export_original_transcription(
         "Content-Type": "text/plain; charset=utf-8",
     }
 
-    return Response(content=srt_content.encode("utf-8"), headers=headers)
+    return Response(content=file_content.encode("utf-8"), headers=headers)

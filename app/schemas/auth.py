@@ -69,6 +69,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_admin: bool
     api_key_mode: str
+    is_byok: bool = False
 
     class Config:
         from_attributes = True

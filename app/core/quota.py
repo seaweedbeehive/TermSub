@@ -14,6 +14,12 @@ logger = logging.getLogger(__name__)
 # Standard trial users get 30 minutes of transcribed audio in total.
 DEFAULT_TRIAL_MINUTES = 30
 
+# Standard trial users get 100 pages of translated text in total.
+# We approximate 1 page as 3,000 characters (≈ 500 words).
+DEFAULT_TRIAL_TEXT_PAGES = 100
+CHARACTERS_PER_PAGE = 3000
+DEFAULT_TRIAL_TEXT_CHARACTERS = DEFAULT_TRIAL_TEXT_PAGES * CHARACTERS_PER_PAGE
+
 # BYOK abuse limits.
 BYOK_MAX_UPLOAD_MB = 500
 BYOK_MAX_CONCURRENT_JOBS = 10
@@ -59,6 +65,9 @@ class QuotaManager:
     @staticmethod
     def _video_estimated_minutes_key(video_id: str) -> str:
         return f"quota:video_estimated_minutes:{video_id}"
+
+    def _text_chars_key(self, user_id: str) -> str:
+        return f"quota:{user_id}:text_characters"
 
     @staticmethod
     def byok_user_id(api_key: str) -> str:
@@ -352,6 +361,52 @@ class QuotaManager:
                 detail="Quota service unavailable",
             ) from exc
 
+    def check_text_translation_allowed(
+        self,
+        user_id: str,
+        character_count: int,
+        is_byok: bool = False,
+    ) -> dict[str, Any]:
+        """Check whether a text translation is within the user's page allowance."""
+        if is_byok:
+            return {
+                "allowed": True,
+                "reason": None,
+                "is_unlimited": True,
+            }
+
+        current_chars = self._get_float(self._text_chars_key(user_id))
+        trial_chars = DEFAULT_TRIAL_TEXT_CHARACTERS
+        if current_chars + character_count > trial_chars:
+            remaining_chars = max(0.0, trial_chars - current_chars)
+            remaining_pages = round(remaining_chars / CHARACTERS_PER_PAGE, 1)
+            return {
+                "allowed": False,
+                "reason": (
+                    f"Text translation quota exceeded. You have approximately {remaining_pages} page(s) remaining."
+                ),
+                "is_unlimited": False,
+            }
+
+        return {
+            "allowed": True,
+            "reason": None,
+            "is_unlimited": False,
+        }
+
+    def record_text_translation(self, user_id: str, character_count: int) -> None:
+        """Increment the user's consumed text-translation characters."""
+        try:
+            self._redis.incrbyfloat(
+                self._text_chars_key(user_id), float(character_count)
+            )
+        except Exception as exc:
+            logger.error("Redis increment failed for text quota %s: %s", user_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Quota service unavailable",
+            ) from exc
+
     def get_quota_status(self, user_id: str, is_byok: bool = False) -> dict[str, Any]:
         """Return remaining quota for the UI.
 
@@ -369,11 +424,15 @@ class QuotaManager:
                 "trial_minutes": None,
                 "minutes_used": None,
                 "minutes_remaining": None,
+                "trial_text_pages": None,
+                "text_pages_used": None,
+                "text_pages_remaining": None,
                 "byok_max_upload_mb": BYOK_MAX_UPLOAD_MB,
                 "byok_max_concurrent_jobs": BYOK_MAX_CONCURRENT_JOBS,
             }
 
         current_minutes = self._get_float(self._minutes_key(user_id))
+        current_text_chars = self._get_float(self._text_chars_key(user_id))
 
         return {
             "is_unlimited": False,
@@ -382,5 +441,12 @@ class QuotaManager:
             "minutes_used": round(current_minutes, 2),
             "minutes_remaining": round(
                 max(0.0, self.trial_minutes - current_minutes), 2
+            ),
+            "trial_text_pages": DEFAULT_TRIAL_TEXT_PAGES,
+            "text_pages_used": round(current_text_chars / CHARACTERS_PER_PAGE, 1),
+            "text_pages_remaining": round(
+                max(0.0, DEFAULT_TRIAL_TEXT_CHARACTERS - current_text_chars)
+                / CHARACTERS_PER_PAGE,
+                1,
             ),
         }

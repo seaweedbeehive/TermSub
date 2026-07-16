@@ -2,6 +2,7 @@
         let currentVideoId = null;
         let videoProgressPercent = 0;  // Track progress for WebSocket updates
         let currentFileType = 'video'; // 'video' or 'text' - tracks uploaded file type
+        let currentContentType = 'video'; // backend content_type value
         let loggedCompletions = new Set(); // Track completed jobs to prevent duplicate logs
         let currentJobId = null; // Track current job to ignore stale messages
         let isJobRunning = false; // Silver bullet: prevents stale completion logs
@@ -10,7 +11,18 @@
         let timelineHistory = [];    // Stack of segment snapshots for undo
         let currentTimelineSegments = []; // Last rendered segment state
         let targetPipelineMode = null; // 'transcribe' | 'terminology' | 'subtitles' | null
+        let autoWizardStep = 0;      // step implied by backend status
+        let userWizardStep = null;   // step user explicitly navigated to via Back
+        let displayedWizardStep = 0; // computed: userWizardStep if behind autoWizardStep, else autoWizardStep
+        let lastKnownStatus = null;  // most recent backend status received
         const MAX_TIMELINE_HISTORY = 20;
+
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error('[TERMSUB GLOBAL ERROR]', message, 'at', source, lineno + ':' + colno, error);
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('[TERMSUB UNHANDLED REJECTION]', event.reason);
+        });
 
         // ------------------------------------------------------------------
         // Authentication
@@ -324,6 +336,148 @@
         };
 
         // Utility functions
+        function markDownloadedSession() {
+            if (window.jobSession) window.jobSession.markDownloaded();
+        }
+
+        async function fetchVideoData(videoId) {
+            try {
+                const response = await fetch(`/videos/${videoId}`);
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (err) {
+                console.error('[session] Failed to fetch video data:', err);
+                return null;
+            }
+        }
+
+        async function persistTranscription(videoId) {
+            if (!window.jobSession || !videoId) return;
+            const session = window.jobSession.loadSession() || {};
+            if (!session.config || Object.keys(session.config).length === 0) return;
+            window.jobSession.saveConfig(videoId, session.config);
+        }
+
+        async function persistTranslation(videoId) {
+            if (!window.jobSession || !videoId) return;
+            const session = window.jobSession.loadSession() || {};
+            if (!session.config || Object.keys(session.config).length === 0) return;
+            window.jobSession.saveConfig(videoId, session.config);
+        }
+
+        async function restoreSpecificJob(jobId) {
+            if (!window.jobSession) return;
+            const data = await fetchVideoData(jobId);
+            if (!data) {
+                console.warn('[session] Could not restore job from URL; clearing session.');
+                window.jobSession.clearSession();
+                return;
+            }
+            window.jobSession.saveConfig(jobId, {
+                sourceLang: data.source_language || 'auto',
+                targetLang: data.target_language || '',
+                terminology: !data.skip_glossary,
+                skipGlossary: data.skip_glossary,
+                videoName: data.filename || 'Untitled Project',
+                mode: data.skip_glossary ? 'subtitles' : 'terminology',
+            });
+            await restoreJobSession();
+        }
+
+        async function restoreJobSession() {
+            if (!window.jobSession) return;
+            const session = window.jobSession.loadSession();
+            if (!session || !session.jobId) {
+                if (session) window.jobSession.clearSession();
+                return;
+            }
+
+            const { jobId, config } = session;
+
+            // Fetch fresh job data from backend; clear stale session if the job is gone.
+            const data = await fetchVideoData(jobId);
+            if (!data) {
+                console.warn('[session] Could not restore job; clearing session.');
+                window.jobSession.clearSession();
+                return;
+            }
+
+            // Restore basic state
+            currentVideoId = jobId;
+            currentFileType = data.content_type || 'video';
+            targetPipelineMode = config?.mode || null;
+
+            if (window.textPipeline) {
+                window.textPipeline.setVideoId(currentVideoId);
+                window.textPipeline.setFileType(currentFileType);
+            }
+
+            // Restore form values via Tom Select instances if present and functional.
+            if (window.termsubSourceLanguageTom && typeof window.termsubSourceLanguageTom.setValue === 'function') {
+                window.termsubSourceLanguageTom.setValue(config?.sourceLang || 'auto');
+            } else {
+                const sourceLangSel = document.getElementById('sourceLanguage');
+                if (sourceLangSel && config?.sourceLang) sourceLangSel.value = config.sourceLang;
+            }
+            if (window.termsubTargetLanguageTom && typeof window.termsubTargetLanguageTom.setValue === 'function') {
+                window.termsubTargetLanguageTom.setValue(config?.targetLang || '');
+            } else {
+                const targetLangSel = document.getElementById('targetLanguage');
+                if (targetLangSel && config?.targetLang) targetLangSel.value = config.targetLang;
+            }
+            const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+            if (terminologyCheckbox) {
+                // Prefer the explicit skipGlossary flag; fall back to the legacy
+                // terminology value so old sessions still restore correctly.
+                if (config?.skipGlossary !== undefined) {
+                    terminologyCheckbox.checked = !config.skipGlossary;
+                } else if (config?.terminology !== undefined) {
+                    terminologyCheckbox.checked = config.terminology;
+                }
+            }
+
+            // Make sure the status and action containers are visible
+            const statusCardEl = document.getElementById('statusCard');
+            if (statusCardEl) statusCardEl.classList.remove('hidden');
+            const primaryActionEl = document.getElementById('primaryActionContainer');
+            if (primaryActionEl) primaryActionEl.classList.remove('hidden');
+
+            // Update metadata display
+            const projectTitleEl = document.getElementById('projectTitle');
+            if (projectTitleEl) projectTitleEl.textContent = data.filename || config?.videoName || 'Untitled Project';
+            const projectIdEl = document.getElementById('projectId');
+            if (projectIdEl) projectIdEl.textContent = jobId.substring(0, 8);
+
+            const status = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+
+            if (currentFileType === 'text' && window.textPipeline) {
+                updateStatus({ ...data, status });
+                updateContextBrief(data);
+                await connectWebSocket(jobId);
+                return;
+            }
+
+            autoWizardStep = statusToStep(status);
+            userWizardStep = null;
+            displayedWizardStep = computeDisplayedStep();
+
+            updateStatus({ ...data, status });
+            updateContextBrief(data);
+            applyWizardStep(displayedWizardStep);
+
+            if (data.segments && (status === 'transcribed' || status === 'completed')) {
+                renderSubtitleTimeline(data.segments);
+            }
+            if (status === 'terms_ready' || status === 'completed') {
+                renderTerms();
+            }
+
+            // Reconnect WebSocket for live updates
+            await connectWebSocket(jobId);
+
+            showToast('Resumed your previous session', 'success');
+        }
+
         function log(message, type = 'info') {
             const logEl = document.getElementById('activityLog');
             const time = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -585,6 +739,11 @@
         async function loadUser() {
             try {
                 const response = await fetch('/api/auth/me');
+                if (response.status === 401) {
+                    // Not logged in — this is expected for guests and BYOK users.
+                    currentUser = null;
+                    return false;
+                }
                 if (response.status === 403) {
                     console.warn('Email not verified');
                     currentUser = null;
@@ -664,6 +823,101 @@
             modal.classList.add('hidden');
             modal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
+        }
+
+        function openMyJobsModal() {
+            const modal = document.getElementById('myJobsModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            loadMyJobs();
+        }
+
+        function closeMyJobsModal() {
+            const modal = document.getElementById('myJobsModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        async function loadMyJobs() {
+            const listEl = document.getElementById('myJobsList');
+            if (!listEl) return;
+            listEl.innerHTML = '<p class="text-sm text-slate-500 dark:text-[#8A8F98]">Loading your jobs...</p>';
+
+            try {
+                const response = await fetch('/api/jobs?limit=50');
+                if (!response.ok) throw new Error('Failed to load jobs');
+                const data = await response.json();
+                renderMyJobs(data.items || []);
+            } catch (err) {
+                listEl.innerHTML = `<p class="text-sm text-red-400">${err.message || 'Could not load jobs.'}</p>`;
+            }
+        }
+
+        function renderMyJobs(jobs) {
+            const listEl = document.getElementById('myJobsList');
+            if (!listEl) return;
+
+            if (jobs.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-slate-500 dark:text-[#8A8F98]">No jobs yet. Upload a file to get started.</p>';
+                return;
+            }
+
+            listEl.innerHTML = jobs.map((job) => {
+                const source = job.source_language ? job.source_language.toUpperCase() : 'Auto';
+                const target = job.target_language ? job.target_language.toUpperCase() : '-';
+                const date = formatDate(job.updated_at);
+                return `
+                    <div class="bg-slate-50 dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-[#2A2A30] p-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-medium text-slate-900 dark:text-[#E2E2E8] truncate">${escapeHtml(job.video_filename || 'Untitled')}</p>
+                                <p class="text-xs text-slate-500 dark:text-[#8A8F98] mt-1">${source} → ${target} · <span class="capitalize">${job.status.replace(/_/g, ' ')}</span> · ${date}</p>
+                            </div>
+                            <button type="button" data-job-id="${job.id}" class="my-jobs-resume-btn px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors shrink-0">
+                                Resume
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            listEl.querySelectorAll('.my-jobs-resume-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const jobId = btn.dataset.jobId;
+                    if (jobId) resumeJob(jobId);
+                });
+            });
+        }
+
+        async function resumeJob(jobId) {
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`);
+                if (!response.ok) throw new Error('Failed to load job details');
+                const data = await response.json();
+
+                // Persist as current session and restore UI.
+                currentVideoId = data.id;
+                // Derive pipeline mode from skip_glossary. Pre-analysis statuses are
+                // still translation pipelines; we should not force transcribe-only.
+                targetPipelineMode = data.skip_glossary ? 'subtitles' : 'terminology';
+
+                if (window.jobSession) {
+                    window.jobSession.saveConfig(data.id, {
+                        sourceLang: data.source_language || 'auto',
+                        targetLang: data.target_language || '',
+                        terminology: !data.skip_glossary,
+                        videoName: data.filename || 'Untitled Project',
+                        mode: targetPipelineMode,
+                    });
+                }
+
+                closeMyJobsModal();
+                await restoreJobSession();
+            } catch (err) {
+                showToast(err.message || 'Could not resume job.', 'error');
+            }
         }
 
         function openDeleteAccountModal() {
@@ -1318,13 +1572,20 @@
         }
 
         function updateStatus(data) {
-            const cfg = statusConfig[data.status] || statusConfig.uploaded;
-            const isProcessing = ['transcribing', 'extracting_audio', 'analyzing', 'glossary_extracting', 'translating', 'queued'].includes(data.status);
-            
+            const normalizedStatus = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+            lastKnownStatus = normalizedStatus;
+            const cfg = statusConfig[normalizedStatus] || statusConfig.uploaded;
+            const isProcessing = ['transcribing', 'extracting_audio', 'analyzing', 'glossary_extracting', 'translating', 'queued'].includes(normalizedStatus);
+
             // Update Status Badge in Card
             const statusBadge = document.getElementById('statusBadge');
-            statusBadge.className = `inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.color} text-xs font-semibold rounded-full transition-colors`;
-            statusBadge.innerHTML = `<span id="statusDot" class="w-1.5 h-1.5 rounded-full ${cfg.dotColor} ${isProcessing ? 'pulse-indicator' : ''}"></span>${cfg.label}`;
+            if (statusBadge) {
+                statusBadge.className = `inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.color} text-xs font-semibold rounded-full transition-colors`;
+                statusBadge.innerHTML = `<span id="statusDot" class="w-1.5 h-1.5 rounded-full ${cfg.dotColor} ${isProcessing ? 'pulse-indicator' : ''}"></span>${cfg.label}`;
+            }
+
+            // Update user-facing status line
+            updateUserFacingStatus(data);
 
             // Show/hide buttons based on status
             updateButtonVisibility(data.status);
@@ -1740,17 +2001,14 @@
 
         async function updateTerm(termId, value) {
             try {
-                const response = await fetch(`/terms/${termId}`, {
+                await fetch(`/terms/${termId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ standardized_term: value })
                 });
-                if (!response.ok) throw new Error('Server returned ' + response.status);
                 log(`Updated term ${termId.substring(0, 8)}...`, 'success');
-                showToast('Term updated successfully', 'success');
             } catch (err) {
                 log('Failed to update term: ' + err.message, 'error');
-                showToast('Failed to update term', 'error');
             }
         }
 
@@ -1783,6 +2041,7 @@
                 });
 
                 updateButtonVisibility(data.status);
+                updateContextBrief(data);
                 if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
                     renderSubtitleTimeline(data.segments);
                 }
@@ -1937,6 +2196,12 @@
         }
         
         function handleWebSocketMessage(data) {
+            // Delegate text-file updates to the dedicated text pipeline.
+            if (currentFileType === 'text' && window.textPipeline) {
+                window.textPipeline.handleStatusUpdate(data);
+                return;
+            }
+
             // Handle both direct status updates and job messages
             let status = data.status;
 
@@ -1976,6 +2241,9 @@
                     isJobRunning = false;
                     hasStartedProcessing = false;
 
+                    // Persist transcription milestone
+                    persistTranscription(currentVideoId);
+
                     // Auto-advance through the selected pipeline
                     if (targetPipelineMode === 'terminology') {
                         log('Auto-advancing to terminology analysis...');
@@ -2010,6 +2278,9 @@
                     hasStartedProcessing = false;
                     updateButtonVisibility('completed');
                     if (data.result?.segments) renderSubtitleTimeline(data.result.segments);
+
+                    // Persist translation milestone
+                    persistTranslation(currentVideoId);
                 } else {
                     log(`${jobType} complete`, 'success');
                 }
@@ -2094,6 +2365,10 @@
                     
                 case 'context_ready':
                     log(`Director Agent complete: ${data.tone} tone`, 'context');
+                    // Fetch full Pass 1 context_analysis for the narrative brief
+                    fetch(`/videos/${currentVideoId}`)
+                        .then(r => r.json())
+                        .then(videoData => updateContextBrief(videoData));
                     break;
                     
                 case 'glossary_extracting':
@@ -2132,20 +2407,114 @@
             }
         }
         
-        function updateButtonVisibility(status) {
+        // Wizard step helpers
+        function statusToStep(status) {
+            // Map backend statuses to user-facing wizard steps.
+            // 3 = completed/export
+            // 2 = processing / terminology review (includes translation in progress)
+            // 0 = config/upload
+            if (status === 'completed') return 3;
+            if (
+                status === 'translating' ||
+                status === 'terms_ready' ||
+                status === 'analyzing' ||
+                status === 'context_ready' ||
+                status === 'glossary_extracting' ||
+                status === 'transcribed' ||
+                status === 'awaiting_choice' ||
+                status === 'transcribing' ||
+                status === 'extracting_audio' ||
+                status === 'queued'
+            ) {
+                return 2;
+            }
+            return 0;
+        }
+
+        function computeDisplayedStep() {
+            // Displayed step = userWizardStep if it is behind autoWizardStep, else autoWizardStep.
+            if (userWizardStep !== null && userWizardStep < autoWizardStep) {
+                return userWizardStep;
+            }
+            return autoWizardStep;
+        }
+
+        function refreshDisplayedStep() {
+            displayedWizardStep = computeDisplayedStep();
+            applyWizardStep(displayedWizardStep);
+        }
+
+        function updateUploadAreaState(step) {
+            // Upload-area state is computed once, based on currentVideoId and the
+            // current wizard step.
+            const uploadForm = document.getElementById('uploadForm');
+            const configScene = document.getElementById('configScene');
+            const uploadCompleteCard = document.getElementById('uploadCompleteCard');
+
+            if (!currentVideoId) {
+                // No job yet: show file drop zone + config controls.
+                if (uploadForm) uploadForm.classList.remove('hidden');
+                if (configScene) configScene.classList.remove('hidden');
+                if (uploadCompleteCard) uploadCompleteCard.classList.add('hidden');
+            } else if (step === 0) {
+                // User navigated back to edit config for an existing job.
+                if (uploadForm) uploadForm.classList.add('hidden');
+                if (configScene) configScene.classList.remove('hidden');
+                if (uploadCompleteCard) uploadCompleteCard.classList.add('hidden');
+            } else {
+                // Processing/review/export steps: show compact upload card only.
+                if (uploadForm) uploadForm.classList.add('hidden');
+                if (configScene) configScene.classList.add('hidden');
+                if (uploadCompleteCard) uploadCompleteCard.classList.remove('hidden');
+            }
+        }
+
+        function goBack() {
+            console.log(`[wizard] goBack called from step ${displayedWizardStep}`);
+            if (displayedWizardStep <= 0) return;
+            // From completed/export (3) → terms review (2) for translation pipelines,
+            // or config (0) for transcribe-only pipelines.
+            if (displayedWizardStep === 3) {
+                userWizardStep = targetPipelineMode === 'transcribe' ? 0 : 2;
+            } else {
+                userWizardStep = 0;
+            }
+            console.log(`[wizard] userWizardStep set to ${userWizardStep}`);
+            refreshDisplayedStep();
+        }
+
+        function goForward() {
+            console.log(`[wizard] goForward called from step ${displayedWizardStep}, auto=${autoWizardStep}`);
+            if (userWizardStep === null || displayedWizardStep >= autoWizardStep) return;
+            // Valid wizard steps are 0, 2, 3 (there is no step 1). Advance to the
+            // next valid step, never to the non-existent step 1.
+            if (displayedWizardStep === 0) {
+                userWizardStep = Math.min(2, autoWizardStep);
+            } else if (displayedWizardStep === 2) {
+                userWizardStep = 3;
+            }
+            console.log(`[wizard] userWizardStep set to ${userWizardStep}`);
+            refreshDisplayedStep();
+        }
+
+        function applyWizardStep(step) {
             const primaryBtn = document.getElementById('primaryActionBtn');
             const helperText = document.getElementById('primaryHelperText');
             const ghostLink = document.getElementById('primaryGhostLink');
             const exportGrid = document.getElementById('primaryExportGrid');
+            // exportPanel is the visibility-controlling wrapper around the
+            // export grid (and its "Download Subtitles & Translations"
+            // header text) — unhiding just the grid isn't enough, since the
+            // wrapper itself defaults to hidden in the HTML.
             const exportPanel = document.getElementById('exportPanel');
-            const exportHeader = document.getElementById('exportHeader');
             const container = document.getElementById('primaryActionContainer');
             const termsPanel = document.getElementById('termsPanel');
             const subtitleReviewPanel = document.getElementById('subtitleReviewPanel');
+            const backBtn = document.getElementById('wizardBackBtn');
 
             if (!container) return;
 
-            // Reset all sub-elements
+            // Reset primary action container.
             if (primaryBtn) {
                 primaryBtn.classList.remove('hidden');
                 primaryBtn.disabled = false;
@@ -2154,72 +2523,125 @@
             ghostLink?.classList.add('hidden');
             exportGrid?.classList.add('hidden');
             exportPanel?.classList.add('hidden');
-            exportHeader?.classList.add('hidden');
+            container.querySelector('#postTranscribeChoices')?.remove();
 
-            // Remove any stale post-transcribe choice container
-            const oldChoices = container.querySelector('#postTranscribeChoices');
-            if (oldChoices) oldChoices.remove();
+            // Hide all step scenes.
+            if (termsPanel) termsPanel.classList.add('hidden');
+            if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
 
-            // Configure UI based on pipeline state
-            switch (status) {
-                case 'uploaded':
-                    primaryBtn?.classList.add('hidden');
-                    if (termsPanel) termsPanel.classList.add('hidden');
-                    if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+            // Compute upload-area state once based on currentVideoId.
+            updateUploadAreaState(step);
+
+            // Back/Next button visibility.
+            if (backBtn) backBtn.classList.toggle('hidden', step <= 0);
+            const nextBtn = document.getElementById('wizardNextBtn');
+            if (nextBtn) {
+                const canGoForward = userWizardStep !== null && displayedWizardStep < autoWizardStep;
+                nextBtn.classList.toggle('hidden', !canGoForward);
+            }
+
+            switch (step) {
+                case 0:
+                    // Config review: pipeline buttons live in configScene; no primary action.
+                    if (primaryBtn) primaryBtn.classList.add('hidden');
                     break;
 
-                case 'transcribed':
-                    if (targetPipelineMode === 'terminology' || targetPipelineMode === 'subtitles') {
-                        // Auto-advancing to the next pipeline step; don't show any action
-                        // button — the WebSocket-driven status updates will update the UI.
-                        primaryBtn?.classList.add('hidden');
-                    } else {
-                        // Transcribe-only (or no mode): transcribed is the final state
-                        primaryBtn.textContent = 'Download the subtitles in original language';
-                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                        primaryBtn.onclick = downloadTranscription;
-                        exportGrid?.classList.add('hidden');
-                        exportHeader?.classList.add('hidden');
-                        if (termsPanel) termsPanel.classList.add('hidden');
-                        if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
-                        // Load original transcription into the timeline so the user can review it
-                        fetch(`/videos/${currentVideoId}`)
-                            .then(r => r.json())
-                            .then(data => {
-                                if (data.segments) renderSubtitleTimeline(data.segments);
-                            })
-                            .catch(err => console.error('Failed to load transcription:', err));
+                case 2:
+                    // Processing / review step. For transcribe-only pipelines we show the
+                    // subtitle timeline (or a placeholder) and the download option. For
+                    // translation pipelines we show the terminology panel.
+                    {
+                        const currentStatus = currentVideoId ? lastKnownStatus : null;
+                        const isProcessing = currentStatus && ['queued', 'extracting_audio', 'transcribing', 'analyzing', 'context_ready', 'glossary_extracting', 'translating'].includes(currentStatus);
+
+                        if (targetPipelineMode === 'transcribe') {
+                            if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                            if (isProcessing) {
+                                if (primaryBtn) primaryBtn.classList.add('hidden');
+                            } else {
+                                primaryBtn.textContent = 'Download Subtitles';
+                                primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                                primaryBtn.onclick = downloadTranscription;
+                                primaryBtn.disabled = false;
+                                // Load timeline if available.
+                                if (currentVideoId) {
+                                    fetch(`/videos/${currentVideoId}`)
+                                        .then(r => r.json())
+                                        .then(data => {
+                                            if (data.segments) renderSubtitleTimeline(data.segments);
+                                        })
+                                        .catch(err => console.error('Failed to load transcription:', err));
+                                }
+                            }
+                        } else {
+                            // Terminology / translation pipeline.
+                            if (termsPanel) termsPanel.classList.remove('hidden');
+                            // Always load/render terms when showing this panel; terms may
+                            // still exist after translation completes.
+                            renderTerms();
+
+                            const isTermsReady = currentStatus === 'terms_ready';
+                            const isCompleted = currentStatus === 'completed';
+                            if (isTermsReady) {
+                                helperText?.classList.remove('hidden');
+                                primaryBtn.textContent = 'Translate Subtitles';
+                                primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                                primaryBtn.onclick = translateVideo;
+                                primaryBtn.disabled = false;
+                            } else if (isCompleted) {
+                                helperText?.classList.add('hidden');
+                                primaryBtn.textContent = 'Continue to Subtitles';
+                                primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                                primaryBtn.onclick = () => {
+                                    userWizardStep = null;
+                                    refreshDisplayedStep();
+                                };
+                                primaryBtn.disabled = false;
+                            } else if (isProcessing) {
+                                helperText?.classList.add('hidden');
+                                if (primaryBtn) primaryBtn.classList.add('hidden');
+                            } else {
+                                helperText?.classList.add('hidden');
+                                if (primaryBtn) primaryBtn.classList.add('hidden');
+                            }
+                        }
                     }
                     break;
 
-                case 'terms_ready':
-                    if (targetPipelineMode === 'terminology' || !targetPipelineMode) {
-                        helperText?.classList.remove('hidden');
-                        primaryBtn.textContent = 'Translate Subtitles';
-                        primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                        primaryBtn.onclick = translateVideo;
-                        if (termsPanel) termsPanel.classList.remove('hidden');
-                        if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
-                        renderTerms();
-                    } else {
-                        primaryBtn?.classList.add('hidden');
-                    }
-                    break;
-
-                case 'completed':
-                    primaryBtn?.classList.add('hidden');
+                case 3:
+                    // Completed / export.
+                    if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                    if (primaryBtn) primaryBtn.classList.add('hidden');
                     exportGrid?.classList.remove('hidden');
                     exportPanel?.classList.remove('hidden');
-                    exportHeader?.classList.remove('hidden');
-                    if (exportHeader) exportHeader.textContent = 'Download Subtitles & Translations';
-                    if (termsPanel) termsPanel.classList.add('hidden');
-                    if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
                     break;
+            }
+        }
 
-                default:
-                    primaryBtn?.classList.add('hidden');
-                    if (termsPanel) termsPanel.classList.add('hidden');
-                    if (subtitleReviewPanel) subtitleReviewPanel.classList.add('hidden');
+        function updateButtonVisibility(status) {
+            const normalizedStatus = status === 'awaiting_choice' ? 'transcribed' : status;
+            // Text pipeline has its own UI controller.
+            if (currentFileType === 'text' && window.textPipeline) {
+                window.textPipeline.updateUI(normalizedStatus);
+                updateSourceLanguageLock(normalizedStatus);
+                return;
+            }
+            // Backend progress updates only move autoWizardStep. The displayed step
+            // respects userWizardStep when the user has explicitly navigated back.
+            autoWizardStep = statusToStep(normalizedStatus);
+            refreshDisplayedStep();
+            updateSourceLanguageLock(normalizedStatus);
+        }
+
+        function updateSourceLanguageLock(status) {
+            // Source language is only meaningful before transcription. Once the job
+            // has progressed past uploaded, lock the control to avoid misleading no-ops.
+            const locked = status !== 'uploaded';
+            const sourceSelect = document.getElementById('sourceLanguage');
+            if (sourceSelect) sourceSelect.disabled = locked;
+            if (window.termsubSourceLanguageTom && typeof window.termsubSourceLanguageTom.disable === 'function') {
+                if (locked) window.termsubSourceLanguageTom.disable();
+                else window.termsubSourceLanguageTom.enable();
             }
         }
         
@@ -2256,7 +2678,7 @@
                 container.classList.remove('hidden');
             }
         }
-
+        
         // HTTP polling fallback — used when the WebSocket can't connect or keeps
         // dropping. It must fully substitute for the WebSocket: not just show
         // status, but also drive the pipeline forward (auto-advance) and perform
@@ -2298,6 +2720,7 @@
                     // aren't clobbered every 5 seconds during quiescent states.
                     if (data.status !== previousStatus) {
                         updateStatus(data);
+                        updateContextBrief(data);
                     }
 
                     fallbackPollCount++;
@@ -2309,6 +2732,7 @@
                     if (data.status === 'transcribed' && previousStatus !== 'transcribed') {
                         isJobRunning = false;
                         hasStartedProcessing = false;
+                        persistTranscription(currentVideoId);
                         if (targetPipelineMode === 'terminology') {
                             log('Auto-advancing to terminology analysis...');
                             updateButtonVisibility('transcribed');
@@ -2332,6 +2756,7 @@
                         log('Translation complete', 'success');
                         updateButtonVisibility('completed');
                         if (data.segments) renderSubtitleTimeline(data.segments);
+                        persistTranslation(currentVideoId);
                     } else if (data.status === 'error') {
                         log('Processing failed', 'error');
                     }
@@ -2354,9 +2779,27 @@
             fallbackPollInterval = setInterval(poll, 5000);
         }
 
+        function updatePipelineButtonsForFileType() {
+            const translateBtn = document.getElementById('translateSubtitlesBtn');
+            const originalBtn = document.getElementById('originalSubtitlesBtn');
+            if (!translateBtn || !originalBtn) return;
+
+            if (currentFileType === 'text') {
+                translateBtn.innerHTML = '<i class="fa-solid fa-language mr-2"></i>Translate Text';
+                originalBtn.classList.add('hidden');
+            } else {
+                translateBtn.innerHTML = '<i class="fa-solid fa-language mr-2"></i>Translate and Get Subtitles';
+                originalBtn.classList.remove('hidden');
+            }
+        }
+
         function resetApp() {
+            if (window.jobSession) window.jobSession.clearSession();
+            if (window.textPipeline) window.textPipeline.reset();
+
             currentVideoId = null;
             currentFileType = 'video';
+            updatePipelineButtonsForFileType();
             timelineHistory = [];
             currentTimelineSegments = [];
             currentJobId = null;
@@ -2364,6 +2807,9 @@
             hasStartedProcessing = false;
             loggedCompletions.clear();
             targetPipelineMode = null;
+            autoWizardStep = 0;
+            userWizardStep = null;
+            displayedWizardStep = 0;
             
             // Reset upload form
             const fileInputEl = document.getElementById('fileInput');
@@ -2371,13 +2817,16 @@
             const fileLabelEl = document.getElementById('fileLabel');
             if (fileLabelEl) fileLabelEl.textContent = 'Click to select file';
             const dropZoneEl = document.getElementById('dropZone');
-            if (dropZoneEl) dropZoneEl.classList.remove('border-blue-400', 'bg-blue-50');
+            if (dropZoneEl) {
+                dropZoneEl.classList.remove('border-blue-400', 'bg-blue-50');
+                dropZoneEl.classList.remove('hidden');
+            }
             const uploadFormReset = document.getElementById('uploadForm');
             if (uploadFormReset) uploadFormReset.classList.remove('hidden');
+            const configSceneReset = document.getElementById('configScene');
+            if (configSceneReset) configSceneReset.classList.remove('hidden');
             const uploadCompleteCardReset = document.getElementById('uploadCompleteCard');
             if (uploadCompleteCardReset) uploadCompleteCardReset.classList.add('hidden');
-            const setupConfigPanelReset = document.getElementById('setupConfigPanel');
-            if (setupConfigPanelReset) setupConfigPanelReset.classList.remove('hidden');
             
             // Hide status and action containers
             const statusCardReset = document.getElementById('statusCard');
@@ -2391,7 +2840,7 @@
             const timelineGridReset = document.getElementById('timelineCardGrid');
             if (timelineGridReset) timelineGridReset.innerHTML = '<div class="text-slate-400 dark:text-[#6B7280] text-center py-8">No subtitles available yet.</div>';
             
-            // Reset step & segment counters
+            // Reset status badge
             const statusBadgeReset = document.getElementById('statusBadge');
             if (statusBadgeReset) {
                 statusBadgeReset.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 text-blue-300 text-xs font-normal rounded-full';
@@ -2419,10 +2868,221 @@
             log('New project ready. Upload a file to begin.', 'success');
         }
 
+        async function waitForStatus(videoId, targetStatuses, timeoutMs = 120000) {
+            const start = Date.now();
+            const interval = 1500;
+            while (Date.now() - start < timeoutMs) {
+                const data = await fetchVideoData(videoId);
+                if (!data) {
+                    throw new Error('Could not fetch video status while waiting.');
+                }
+                if (data.status === 'error') {
+                    throw new Error(data.error_message || 'Video processing failed.');
+                }
+                if (targetStatuses.includes(data.status)) {
+                    return data;
+                }
+                await new Promise(resolve => setTimeout(resolve, interval));
+            }
+            throw new Error(`Timed out waiting for status: ${targetStatuses.join(', ')}`);
+        }
+
+        async function runPipeline(mode) {
+            console.log(`[pipeline] runPipeline mode=${mode}`);
+            if (!currentVideoId) {
+                console.log('[pipeline] runPipeline aborted: no currentVideoId');
+                return;
+            }
+
+            const data = await fetchVideoData(currentVideoId);
+            if (!data) {
+                log('Could not fetch current job data.', 'error');
+                return;
+            }
+
+            const status = data.status === 'awaiting_choice' ? 'transcribed' : data.status;
+            console.log(`[pipeline] runPipeline current status=${status}`);
+            const transcribeDone = ['transcribed', 'analyzing', 'context_ready', 'glossary_extracting', 'terms_ready', 'translating', 'completed'];
+
+            if (mode === 'transcribe') {
+                const doneStatuses = ['transcribed', 'terms_ready', 'completed'];
+                if (doneStatuses.includes(status)) {
+                    log('Transcription already complete.', 'info');
+                    updateButtonVisibility(status);
+                    return;
+                }
+                await processFile();
+                return;
+            }
+
+            if (mode === 'terminology') {
+                if (!transcribeDone.includes(status)) {
+                    log('Waiting for transcription to complete before terminology analysis...');
+                    await waitForStatus(currentVideoId, transcribeDone);
+                }
+                const fresh = await fetchVideoData(currentVideoId);
+                const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
+                console.log(`[pipeline] runPipeline terminology freshStatus=${freshStatus}`);
+                if (freshStatus === 'translating') {
+                    // A translation is already running; avoid queueing a second one.
+                    log('Translation already in progress.', 'info');
+                    updateButtonVisibility(freshStatus);
+                    return;
+                }
+                if (freshStatus === 'terms_ready' || freshStatus === 'completed') {
+                    // Terms are extracted (and reviewed/edited); apply them by
+                    // translating. This also covers re-translating a completed
+                    // job after the user edits a term.
+                    console.log('[pipeline] runPipeline terminology calling translateVideo');
+                    await translateVideo();
+                    return;
+                }
+                console.log('[pipeline] runPipeline terminology calling analyzeVideo');
+                await analyzeVideo();
+                return;
+            }
+
+            if (mode === 'subtitles') {
+                if (!transcribeDone.includes(status)) {
+                    log('Waiting for transcription to complete before translation...');
+                    await waitForStatus(currentVideoId, transcribeDone);
+                }
+                const fresh = await fetchVideoData(currentVideoId);
+                const freshStatus = fresh?.status === 'awaiting_choice' ? 'transcribed' : fresh?.status;
+                console.log(`[pipeline] runPipeline subtitles freshStatus=${freshStatus}`);
+                if (freshStatus === 'completed' || freshStatus === 'translating') {
+                    log(freshStatus === 'completed' ? 'Translation already complete.' : 'Translation already in progress.', 'info');
+                    updateButtonVisibility(freshStatus);
+                    return;
+                }
+                console.log('[pipeline] runPipeline subtitles calling skipAndTranslate');
+                await skipAndTranslate();
+                return;
+            }
+
+            log(`Unknown pipeline mode: ${mode}`, 'error');
+        }
+
+        async function continueWithConfigCheck(mode) {
+            console.log(`[pipeline] continueWithConfigCheck mode=${mode} currentVideoId=${currentVideoId}`);
+            const sourceLangSelect = document.getElementById('sourceLanguage');
+            const targetLangSelect = document.getElementById('targetLanguage');
+            const sourceLang = window.termsubSourceLanguageTom
+                ? window.termsubSourceLanguageTom.getValue()
+                : (sourceLangSelect ? sourceLangSelect.value : 'auto');
+            const targetLang = window.termsubTargetLanguageTom
+                ? window.termsubTargetLanguageTom.getValue()
+                : (targetLangSelect ? targetLangSelect.value : '');
+
+            const session = window.jobSession ? window.jobSession.loadSession() : null;
+            const saved = session?.config || {};
+
+            const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+            const skipGlossary = terminologyCheckbox ? !terminologyCheckbox.checked : undefined;
+
+            const sourceChanged = sourceLang && sourceLang !== (saved.sourceLang || 'auto');
+            const targetChanged = targetLang && targetLang !== saved.targetLang;
+            const glossaryChanged = skipGlossary !== undefined && skipGlossary !== (saved.skipGlossary ?? false);
+
+            if (sourceChanged || targetChanged || glossaryChanged) {
+                try {
+                    const patchBody = {};
+                    if (sourceChanged) patchBody.source_language = sourceLang;
+                    if (targetChanged) patchBody.target_language = targetLang;
+                    if (glossaryChanged) patchBody.skip_glossary = skipGlossary;
+
+                    log('Updating video configuration...');
+                    const response = await fetch(`/videos/${currentVideoId}/config`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(patchBody),
+                    });
+                    if (!response.ok) {
+                        const err = await response.json().catch(() => ({}));
+                        throw new Error(err.detail || 'Failed to update video config.');
+                    }
+                    const updated = await response.json();
+                    log(`Updated configuration: ${updated.source_language || 'auto'} → ${updated.target_language}`, 'success');
+
+                    if (window.jobSession) {
+                        window.jobSession.saveSession({
+                            jobId: currentVideoId,
+                            config: {
+                                ...saved,
+                                sourceLang: updated.source_language || 'auto',
+                                targetLang: updated.target_language,
+                                skipGlossary: updated.skip_glossary,
+                            },
+                        });
+                    }
+                } catch (err) {
+                    log('Config update failed: ' + err.message, 'error');
+                    showToast('Could not update language settings.', 'error');
+                    return;
+                }
+            }
+
+            await continuePipeline(mode);
+        }
+
+        async function continuePipeline(mode) {
+            const sourceLangSelect = document.getElementById('sourceLanguage');
+            const targetLangSelect = document.getElementById('targetLanguage');
+
+            // Read from Tom Select instances when available, falling back to the native selects.
+            const targetLang = window.termsubTargetLanguageTom && typeof window.termsubTargetLanguageTom.getValue === 'function'
+                ? window.termsubTargetLanguageTom.getValue()
+                : (targetLangSelect ? targetLangSelect.value : '');
+
+            console.log(`[pipeline] continuePipeline mode=${mode} targetLang=${targetLang}`);
+
+            if (!isAuthenticated()) {
+                showAuthView('standard', 'signup');
+                log('Please log in, sign up, or provide an API key to continue.', 'warning');
+                showToast('Please log in or provide an API key to continue', 'warning');
+                return;
+            }
+
+            if (mode !== 'transcribe' && !targetLang) {
+                const warningEl = document.getElementById('languageWarning');
+                if (warningEl) warningEl.classList.remove('hidden');
+                if (targetLangSelect) {
+                    targetLangSelect.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+                    targetLangSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                log('Continue blocked: target language is required.', 'warning');
+                showToast('Please select a target language.', 'warning');
+                return;
+            }
+
+            targetPipelineMode = mode;
+            userWizardStep = null; // user continued forward; release back-lock
+
+            // Existing text jobs have their own UI/API path.
+            if (currentFileType === 'text' && currentVideoId && window.textPipeline) {
+                if (mode === 'terminology') {
+                    window.textPipeline.startTermExtraction();
+                } else if (mode === 'subtitles') {
+                    window.textPipeline.startTranslation();
+                }
+                return;
+            }
+
+            log(`Continuing ${mode} pipeline with uploaded file...`);
+            setPipelineButtonsDisabled(true);
+            try {
+                await runPipeline(mode);
+            } finally {
+                setPipelineButtonsDisabled(false);
+            }
+        }
+
         // Pipeline entry point: validate inputs, set mode, upload, then auto-start processing.
         async function startPipeline(mode) {
             const fileInput = document.getElementById('fileInput');
             const targetLangSelect = document.getElementById('targetLanguage');
+
+            console.log(`[pipeline] startPipeline mode=${mode} file=${fileInput?.files?.[0]?.name || 'none'}`);
 
             if (!isAuthenticated()) {
                 showAuthView('standard', 'signup');
@@ -2449,8 +3109,19 @@
             }
 
             targetPipelineMode = mode;
+            autoWizardStep = 0;
+            userWizardStep = null;
+            displayedWizardStep = 0;
             log(`Starting ${mode} pipeline...`);
-            await uploadFile(mode);
+            setPipelineButtonsDisabled(true);
+            try {
+                const uploaded = await uploadFile(mode);
+                if (uploaded && currentFileType === 'text') {
+                    processFile();
+                }
+            } finally {
+                setPipelineButtonsDisabled(false);
+            }
         }
 
         // Upload handler
@@ -2496,7 +3167,15 @@
             formData.append('source_language', sourceLangSelect.value);
 
             log('Uploading file...');
-            
+
+            // Show an immediate "Uploading" status so users on slow connections
+            // see feedback before the multipart request completes.
+            const statusCardEl = document.getElementById('statusCard');
+            if (statusCardEl) statusCardEl.classList.remove('hidden');
+            const primaryActionEl = document.getElementById('primaryActionContainer');
+            if (primaryActionEl) primaryActionEl.classList.remove('hidden');
+            updateStatus({ status: 'uploaded', progress_percent: 0 });
+
             try {
                 const response = await fetch('/videos/upload', {
                     method: 'POST',
@@ -2550,22 +3229,53 @@
                 // Swap upload form for compact filename card
                 const uploadFormEl = document.getElementById('uploadForm');
                 if (uploadFormEl) uploadFormEl.classList.add('hidden');
+                const configSceneEl = document.getElementById('configScene');
+                if (configSceneEl) configSceneEl.classList.add('hidden');
                 const uploadCompleteCardEl = document.getElementById('uploadCompleteCard');
                 if (uploadCompleteCardEl) uploadCompleteCardEl.classList.remove('hidden');
                 const uploadedFilenameEl = document.getElementById('uploadedFilename');
                 if (uploadedFilenameEl) uploadedFilenameEl.textContent = data.filename || 'Untitled Project';
                 
+                // Persist session so a refresh resumes from this job.
+                const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+                if (window.jobSession) {
+                    window.jobSession.saveConfig(currentVideoId, {
+                        sourceLang: sourceLangSel ? sourceLangSel.value : 'auto',
+                        targetLang: targetLangSel ? targetLangSel.value : '',
+                        terminology: terminologyCheckbox ? terminologyCheckbox.checked : true,
+                        skipGlossary: terminologyCheckbox ? !terminologyCheckbox.checked : false,
+                        videoName: data.filename || 'Untitled Project',
+                        mode: targetPipelineMode || 'translate',
+                    });
+                }
+
                 log('Upload complete: ' + data.filename, 'success');
 
                 updateStatus({ status: 'uploaded', progress_percent: 0 });
 
+                if (window.textPipeline) {
+                    window.textPipeline.setVideoId(currentVideoId);
+                    window.textPipeline.setFileType(currentFileType);
+                }
+                updatePipelineButtonsForFileType();
+
                 // Auto-start transcription for every pipeline path
-                processFile();
+                if (currentFileType !== 'text') {
+                    processFile();
+                }
+                return true;
 
             } catch (err) {
                 const errorMsg = err.message || 'Upload failed';
                 log('Upload failed: ' + errorMsg, 'error');
             }
+        }
+
+        function setPipelineButtonsDisabled(disabled) {
+            const translateSubtitlesBtn = document.getElementById('translateSubtitlesBtn');
+            const originalSubtitlesBtn = document.getElementById('originalSubtitlesBtn');
+            if (translateSubtitlesBtn) translateSubtitlesBtn.disabled = disabled;
+            if (originalSubtitlesBtn) originalSubtitlesBtn.disabled = disabled;
         }
 
         // Process file handler (handles both video transcription and text parsing)
@@ -2586,14 +3296,14 @@
                 }
             }
 
-            // Collapse setup config panel once processing starts
-            const setupPanel = document.getElementById('setupConfigPanel');
-            if (setupPanel) setupPanel.classList.add('hidden');
+            // Collapse config scene once processing starts; show the compact upload card.
+            updateUploadAreaState(2);
 
-            // Reset state for new job
+            // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
+            // Keep the wizard step state; backend updates will advance autoWizardStep.
 
             const isTextFile = currentFileType === 'text';
 
@@ -2620,6 +3330,18 @@
                     currentJobId = data.job_id;
                 }
 
+                // Text files are parsed synchronously; hand off to the dedicated
+                // text pipeline UI controller instead of the video flow.
+                if (isTextFile && data.status) {
+                    if (window.textPipeline) {
+                        window.textPipeline.onTextParsed(data);
+                    }
+                    // Still connect WebSocket so text Celery jobs can report
+                    // completion (terms_ready, completed) back to the UI.
+                    await connectWebSocket(currentVideoId);
+                    return;
+                }
+
                 // Do not update the UI to "transcribed" here. The real completion
                 // (and the next pipeline step) is driven by WebSocket job_complete
                 // or the HTTP polling fallback.
@@ -2632,12 +3354,13 @@
 
         // Analyze handler (Multi-Agent Step 1)
         async function analyzeVideo() {
-            if (!currentVideoId) return;
+            if (!currentVideoId || isJobRunning) return;
             
-            // Reset state for new job
+            // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
+            userWizardStep = null; // releasing back-lock when starting a forward step
             
             log('Starting Multi-Agent Analysis (Director + Glossary)...');
             log('Director Agent: Analyzing context and style...');
@@ -2659,18 +3382,20 @@
 
                 // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
+                isJobRunning = false;
                 log('Analysis failed: ' + err.message, 'error');
             }
         }
 
         // Translate handler (Multi-Agent Step 2)
         async function translateVideo() {
-            if (!currentVideoId) return;
+            if (!currentVideoId || isJobRunning) return;
             
-            // Reset state for new job
+            // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
+            userWizardStep = null; // releasing back-lock when starting a forward step
             
             log('Starting OpenAI Translator Agent...');
             log('Using sliding window translation with glossary constraints');
@@ -2692,17 +3417,21 @@
 
                 // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
+                isJobRunning = false;
                 log('Translation failed: ' + err.message, 'error');
             }
         }
 
         async function skipAndTranslate() {
-            if (!currentVideoId) return;
+            if (!currentVideoId || isJobRunning) return;
             
-            // Reset state for new job
+            console.log(`[pipeline] skipAndTranslate called for ${currentVideoId}`);
+            
+            // Reset per-job tracking state.
             currentJobId = null;
             isJobRunning = true;
             hasStartedProcessing = false;
+            userWizardStep = null; // releasing back-lock when starting a forward step
             
             log('Skipping terminology review and starting translation...');
             
@@ -2710,6 +3439,8 @@
                 const response = await fetch(`/videos/${currentVideoId}/translate-direct`, {
                     method: 'POST'
                 });
+                
+                console.log(`[pipeline] skipAndTranslate response status=${response.status}`);
                 
                 if (!response.ok) {
                     const err = await response.json();
@@ -2723,6 +3454,8 @@
 
                 // The real completion and next UI state are driven by WebSocket.
             } catch (err) {
+                isJobRunning = false;
+                console.error('[pipeline] skipAndTranslate error:', err);
                 log('Translation failed: ' + err.message, 'error');
             }
         }
@@ -2788,6 +3521,7 @@
                 }, 1000);
 
                 log(`${formatNames[format]} exported`, 'success');
+                markDownloadedSession();
                 
             } catch (err) {
                 log('Export failed: ' + err.message, 'error');
@@ -2822,6 +3556,7 @@
                 }, 1000);
 
                 log('Transcription downloaded', 'success');
+                markDownloadedSession();
                 
             } catch (err) {
                 log('Download failed: ' + err.message, 'error');
@@ -2874,6 +3609,18 @@
                     if (!userMenuBtn.contains(e.target) && !userMenuDropdown.contains(e.target)) {
                         userMenuDropdown.classList.add('hidden');
                     }
+                });
+            }
+
+            // My Jobs modal
+            const myJobsBtn = document.getElementById('myJobsBtn');
+            const myJobsModal = document.getElementById('myJobsModal');
+            const myJobsModalClose = document.getElementById('myJobsModalClose');
+            if (myJobsBtn) myJobsBtn.addEventListener('click', openMyJobsModal);
+            if (myJobsModalClose) myJobsModalClose.addEventListener('click', closeMyJobsModal);
+            if (myJobsModal) {
+                myJobsModal.addEventListener('click', (e) => {
+                    if (e.target === myJobsModal) closeMyJobsModal();
                 });
             }
 
@@ -3035,7 +3782,12 @@
                 const loaded = await loadUser();
                 if (!loaded) {
                     updateUserDisplay();
+                    return;
                 }
+                // Resume any in-progress/completed job from a previous session
+                // (e.g. after a page refresh) so the user doesn't land back on
+                // a blank upload screen once their translation is ready.
+                await restoreJobSession();
             })();
 
             // Language dropdown population with Tom Select
@@ -3129,9 +3881,12 @@
                 ''
             );
 
-            // Expose the underlying selects for code that expects them.
+            // Expose the underlying selects and Tom Select instances for code that
+            // expects them (including session restore).
             window.termsubSourceLanguage = sourceLanguageSelect;
             window.termsubTargetLanguage = targetLanguageSelect;
+            window.termsubSourceLanguageTom = sourceTom;
+            window.termsubTargetLanguageTom = targetTom;
 
             // --- Help panel toggle ---
             const helpBtn = document.getElementById('helpBtn');
@@ -3200,6 +3955,7 @@
                     // Detect file type for downstream pipeline text
                     const isTextFile = file.name.toLowerCase().endsWith('.txt');
                     currentFileType = isTextFile ? 'text' : 'video';
+                    updatePipelineButtonsForFileType();
                 }
             });
             
@@ -3249,17 +4005,38 @@
             }
 
             // Pipeline buttons
-            document.getElementById('translateSubtitlesBtn').addEventListener('click', () => {
+            const translateSubtitlesBtn = document.getElementById('translateSubtitlesBtn');
+            const originalSubtitlesBtn = document.getElementById('originalSubtitlesBtn');
+
+            translateSubtitlesBtn.addEventListener('click', () => {
                 const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
                 const mode = reviewTerms ? 'terminology' : 'subtitles';
-                startPipeline(mode);
+                console.log(`[pipeline] translateSubtitlesBtn clicked mode=${mode} currentVideoId=${currentVideoId} step=${displayedWizardStep}`);
+                if (currentVideoId) {
+                    continueWithConfigCheck(mode);
+                } else {
+                    startPipeline(mode);
+                }
             });
-            document.getElementById('originalSubtitlesBtn').addEventListener('click', () => startPipeline('transcribe'));
+            originalSubtitlesBtn.addEventListener('click', () => {
+                console.log(`[pipeline] originalSubtitlesBtn clicked currentVideoId=${currentVideoId} step=${displayedWizardStep}`);
+                if (currentVideoId) {
+                    continueWithConfigCheck('transcribe');
+                } else {
+                    startPipeline('transcribe');
+                }
+            });
             document.getElementById('startNewProjectBtn').addEventListener('click', resetApp);
 
             // Undo button click
             const undoBtn = document.getElementById('undoTimelineBtn');
             if (undoBtn) undoBtn.addEventListener('click', undoTimeline);
+
+            // Wizard back/next buttons
+            const wizardBackBtn = document.getElementById('wizardBackBtn');
+            if (wizardBackBtn) wizardBackBtn.addEventListener('click', goBack);
+            const wizardNextBtn = document.getElementById('wizardNextBtn');
+            if (wizardNextBtn) wizardNextBtn.addEventListener('click', goForward);
 
             // Keyboard shortcut: Ctrl+Z / Cmd+Z for undo
             document.addEventListener('keydown', (e) => {
@@ -3351,43 +4128,18 @@
                 }
 
                 hideAdminView();
-                if (videoId) {
-                currentVideoId = videoId;
-                const videoIdShortEl = document.getElementById('videoIdShort');
-                if (videoIdShortEl) videoIdShortEl.textContent = videoId.substring(0, 8);
-                const statusCardEl2 = document.getElementById('statusCard');
-                if (statusCardEl2) statusCardEl2.classList.remove('hidden');
-                const primaryActionEl2 = document.getElementById('primaryActionContainer');
-                if (primaryActionEl2) primaryActionEl2.classList.remove('hidden');
-                
-                // Hide upload form, show compact card for loaded project
-                const uploadFormEl2 = document.getElementById('uploadForm');
-                if (uploadFormEl2) uploadFormEl2.classList.add('hidden');
-                const uploadCompleteCardEl2 = document.getElementById('uploadCompleteCard');
-                if (uploadCompleteCardEl2) uploadCompleteCardEl2.classList.remove('hidden');
-                const uploadedFilenameEl2 = document.getElementById('uploadedFilename');
-                if (uploadedFilenameEl2) uploadedFilenameEl2.textContent = 'Loaded project';
-                
-                // Connect WebSocket for real-time updates
-                await connectWebSocket(videoId);
-                
-                // Fetch current status
-                fetch(`/videos/${videoId}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        // Treat "awaiting_choice" as "transcribed" on direct page loads too
-                        if (data.status === 'awaiting_choice') {
-                            data.status = 'transcribed';
-                        }
-                        updateStatus(data);
-                        updateButtonVisibility(data.status);
-                        if ((data.status === 'transcribed' || data.status === 'completed') && data.segments) {
-                            renderSubtitleTimeline(data.segments);
-                        }
-                    });
+                if (videoId && !currentVideoId) {
+                    await restoreSpecificJob(videoId);
                 }
             }
 
             window.addEventListener('popstate', handleRoute);
             handleRoute();
         });
+
+        // Expose helpers needed by textPipeline.js
+        window.updateStatus = updateStatus;
+        window.log = log;
+        window.showToast = showToast;
+        window.escapeHtml = escapeHtml;
+        window.renderSubtitleTimeline = renderSubtitleTimeline;

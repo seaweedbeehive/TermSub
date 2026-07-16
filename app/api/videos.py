@@ -16,7 +16,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, selectinload
 
@@ -29,9 +29,9 @@ from app.core.quota import QuotaManager
 from app.core.task_tracker import get_latest_task_id, record_task
 from app.db.session import get_db
 from app.db.session_utils import get_db_session
-from app.models.video import ContentType, Segment, Video, VideoStatus
+from app.models.video import ContentType, Segment, Term, Video, VideoStatus
 from app.schemas.segment import SegmentUpdate
-from app.schemas.video import VideoOut
+from app.schemas.video import VideoConfigUpdate, VideoOut
 from app.services.gemini_service import translate_video_sliding_window
 from app.services.text_parser import parse_text_file
 from app.services.upload_service import generate_unique_filename, save_uploaded_file
@@ -69,6 +69,14 @@ async def _websocket_progress_callback(
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 
+
+def _reject_text_record(video: Video) -> None:
+    """Raise 400 if the record is a text file (text pipeline has its own API)."""
+    if video.content_type == ContentType.TEXT.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use /api/text endpoints for text files.",
+        )
 
 def require_video_owner(video: Video, identity: RequestIdentity) -> None:
     """Raise 403 if the current user does not own the video.
@@ -286,6 +294,112 @@ def get_video(
     return video
 
 
+@router.patch("/{video_id}/config", response_model=VideoOut)
+def update_video_config(
+    video_id: str,
+    body: VideoConfigUpdate,
+    db: Session = Depends(get_db),
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Any:
+    """Update configurable fields for a video job.
+
+    Allows the user to change source/target language or toggle terminology
+    extraction while the job is in a safe state. Changing the target language
+    invalidates any existing translations so they can be re-generated.
+    """
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
+
+    allowed_statuses = {
+        VideoStatus.UPLOADED.value,
+        VideoStatus.TRANSCRIBED.value,
+        VideoStatus.TERMS_READY.value,
+        VideoStatus.TRANSLATING.value,
+        VideoStatus.COMPLETED.value,
+        VideoStatus.ERROR.value,
+    }
+    if video.status not in allowed_statuses:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot update config while video status is {video.status}. "
+                f"Allowed statuses: {', '.join(sorted(allowed_statuses))}."
+            ),
+        )
+
+    original_target_language = video.target_language
+
+    # Source language changes are only meaningful before transcription. Once the
+    # job has progressed past uploaded, changing it would be a silent no-op
+    # because transcription is idempotent and won't re-run.
+    if body.source_language is not None:
+        if (
+            video.status != VideoStatus.UPLOADED.value
+            and body.source_language != video.source_language
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    'Cannot change source language after transcription has started. '
+                    'Please start a new project for a different source language.'
+                ),
+            )
+        video.source_language = body.source_language
+    if body.target_language is not None:
+        video.target_language = body.target_language
+    if body.skip_glossary is not None:
+        video.skip_glossary = body.skip_glossary
+
+    target_language_changed = body.target_language is not None and (
+        body.target_language != original_target_language
+    )
+
+    # Changing the target language or toggling glossary extraction after terms were
+    # ready (or translation completed) invalidates prior results so the pipeline
+    # can re-run cleanly from transcription.
+    if (
+        target_language_changed
+        or (
+            body.skip_glossary is False
+            and video.status in {
+                VideoStatus.TRANSCRIBED.value,
+                VideoStatus.COMPLETED.value,
+            }
+        )
+    ):
+        # Changing the target language invalidates both existing translations and
+        # extracted terms (terms include target-language translations). Reset the
+        # job to transcribed so terminology analysis and translation re-run.
+        db.query(Segment).filter(Segment.video_id == video_id).update(
+            {Segment.translated_text: None},
+            synchronize_session=False,
+        )
+        db.query(Term).filter(Term.video_id == video_id).delete(
+            synchronize_session=False
+        )
+        video.status = VideoStatus.TRANSCRIBED.value
+        # Reset stale progress metadata so the UI doesn't show a completed/errored state.
+        video.progress_percent = 0
+        video.processed_segments = 0
+        video.current_segment_index = 0
+        video.completed_at = None
+        video.error_message = None
+        if body.skip_glossary is not None:
+            video.skip_glossary = body.skip_glossary
+
+    if (
+        body.skip_glossary is True
+        and video.status == VideoStatus.TERMS_READY.value
+    ):
+        video.status = VideoStatus.TRANSCRIBED.value
+
+    db.commit()
+    db.refresh(video)
+    return video
+
+
 @router.post("/{video_id}/transcribe")
 def transcribe_video_endpoint(
     video_id: str,
@@ -320,6 +434,37 @@ def transcribe_video_endpoint(
 
         print(f"[API Transcribe] Video: {video.filename}, type: {video.content_type}")
 
+        # Idempotency: do not re-run transcription if it is already finished.
+        # Text parsing sets status to "translating", so include that state to
+        # keep text-file transcribe calls idempotent as well.
+        completed_statuses = {
+            VideoStatus.TRANSCRIBED.value,
+            VideoStatus.TERMS_READY.value,
+            VideoStatus.COMPLETED.value,
+        }
+        text_parsed_statuses = {
+            VideoStatus.TRANSLATING.value,
+            VideoStatus.TERMS_READY.value,
+            VideoStatus.COMPLETED.value,
+        }
+        is_already_done = video.status in completed_statuses or (
+            video.content_type == ContentType.TEXT.value
+            and video.status in text_parsed_statuses
+        )
+        if is_already_done:
+            print(
+                f"[API Transcribe] Already complete: {video_id} status={video.status}"
+            )
+            segment_count = (
+                db.query(Segment).filter(Segment.video_id == video_id).count()
+            )
+            return {
+                "status": "already_complete",
+                "video_id": video_id,
+                "message": "Transcription already complete",
+                "total_segments": segment_count,
+            }
+
         # Handle text files - parse immediately
         if video.content_type == ContentType.TEXT.value:
             try:
@@ -340,7 +485,7 @@ def transcribe_video_endpoint(
                     daemon=True,
                 ).start()
                 return {
-                    "status": "completed",
+                    "status": "transcribed",
                     "video_id": video_id,
                     "message": "Text file parsed",
                     "total_segments": result.get("segment_count", 0),
@@ -425,6 +570,7 @@ def analyze_video_endpoint(
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
         require_video_owner(video, identity)
+        _reject_text_record(video)
 
         result = analyze_video_task.delay(video_id, api_key=api_key)
         record_task(video_id, "analyze", result.id)
@@ -437,6 +583,8 @@ def analyze_video_endpoint(
             "job_type": "analyze",
             "message": "Analysis queued",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[API Analyze] Error: {e}")
         traceback.print_exc()
@@ -466,6 +614,7 @@ def translate_direct_endpoint(
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
         require_video_owner(video, identity)
+        _reject_text_record(video)
 
         # Set skip_glossary flag
         video.skip_glossary = True
@@ -527,6 +676,7 @@ def translate_video_endpoint(
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
         require_video_owner(video, identity)
+        _reject_text_record(video)
 
         # Check prerequisites - be lenient
         valid_statuses = [
@@ -536,6 +686,7 @@ def translate_video_endpoint(
             VideoStatus.TRANSCRIBING.value,
             VideoStatus.UPLOADED.value,
             VideoStatus.TRANSCRIBED.value,
+            VideoStatus.COMPLETED.value,
         ]
 
         if video.status not in valid_statuses:
@@ -546,6 +697,53 @@ def translate_video_endpoint(
                     f"Video status is {video.status}. Need terms_ready or transcribed."
                 ),
             )
+
+        # A translation is already running for this video; don't queue a second
+        # concurrent task that would race the first one over the same segments.
+        if video.status == VideoStatus.TRANSLATING.value:
+            return {
+                "video_id": video_id,
+                "status": video.status,
+                "message": "Translation already in progress",
+            }
+
+        # Re-translation from completed requires clearing previous results so
+        # the new/edited glossary is applied and the worker recomputes every
+        # segment instead of treating the job as already finished.
+        #
+        # Use an atomic UPDATE...WHERE instead of read-then-write so two
+        # concurrent requests can't both observe status == COMPLETED and both
+        # queue a task: only one UPDATE can win the row, the other sees
+        # rowcount == 0 and backs off instead of double-queueing.
+        if video.status == VideoStatus.COMPLETED.value:
+            claim_result = db.execute(
+                update(Video)
+                .where(
+                    Video.id == video_id,
+                    Video.status == VideoStatus.COMPLETED.value,
+                )
+                .values(
+                    status=VideoStatus.TERMS_READY.value,
+                    progress_percent=0,
+                    processed_segments=0,
+                    current_segment_index=0,
+                    completed_at=None,
+                    error_message=None,
+                )
+            )
+            db.commit()
+            if claim_result.rowcount == 0:
+                # Another request already claimed the re-translation.
+                return {
+                    "video_id": video_id,
+                    "status": VideoStatus.TRANSLATING.value,
+                    "message": "Translation already in progress",
+                }
+            db.query(Segment).filter(Segment.video_id == video_id).update(
+                {Segment.translated_text: None},
+                synchronize_session=False,
+            )
+            db.commit()
 
         result = translate_video_task.delay(video_id, api_key=api_key)
         record_task(video_id, "translate", result.id)
@@ -784,6 +982,7 @@ def batch_replace_segments(
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
     require_video_owner(video, identity)
+    _reject_text_record(video)
 
     # Execute SQLite batch REPLACE on translated_text
     result = db.execute(
