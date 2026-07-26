@@ -92,22 +92,46 @@ def send_templated_email(
         return None
 
 
-def send_verification_email(to_email: str, verify_url: str) -> dict[str, Any] | None:
-    """Send an email verification link with inline HTML."""
-    html = f"""
+_FONT_STACK = (
+    "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "
+    "'Segoe UI', Roboto, sans-serif"
+)
+
+
+def _email_shell(body_html: str) -> str:
+    """Wrap template-specific content in the shared branded container.
+
+    Every outbound email renders inside this same shell so they read as one
+    product rather than drifting into inconsistent one-off styling.
+    """
+    return f"""
     <html>
-      <body style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1f2937; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px;">
-        <h1 style="color: #111827; font-size: 24px; margin-bottom: 16px;">Verify your email for TermSub</h1>
-        <p>Hi there,</p>
-        <p>Thanks for signing up. Please click the button below to verify your email address and activate your account:</p>
-        <p style="margin: 32px 0;">
-          <a href="{verify_url}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Verify email</a>
-        </p>
-        <p style="font-size: 14px; color: #6b7280;">If the button doesn't work, paste this link into your browser:<br><a href="{verify_url}" style="color: #2563eb;">{verify_url}</a></p>
-        <p style="margin-top: 32px;">If you did not create a TermSub account, you can safely ignore this email.</p>
+      <body style="font-family: {_FONT_STACK}; color: #1f2937; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px;">
+        {body_html}
       </body>
     </html>
     """
+
+
+def _cta_button(url: str, label: str) -> str:
+    """Return the shared branded call-to-action button + plain-text fallback link."""
+    return f"""
+        <p style="margin: 32px 0;">
+          <a href="{url}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">{label}</a>
+        </p>
+        <p style="font-size: 14px; color: #6b7280;">If the button doesn't work, paste this link into your browser:<br><a href="{url}" style="color: #2563eb;">{url}</a></p>
+    """
+
+
+def send_verification_email(to_email: str, verify_url: str) -> dict[str, Any] | None:
+    """Send an email verification link with inline HTML."""
+    html = _email_shell(f"""
+        <h1 style="color: #111827; font-size: 24px; margin-bottom: 16px;">Verify your email for TermSub</h1>
+        <p>Hi there,</p>
+        <p>Thanks for signing up. Please click the button below to verify your email address and activate your account:</p>
+        {_cta_button(verify_url, "Verify email")}
+        <p style="margin-top: 32px;">If you did not create a TermSub account, you can safely ignore this email.</p>
+    """)
     return _send_email(
         to_email,
         "Verify your email for TermSub",
@@ -118,31 +142,24 @@ def send_verification_email(to_email: str, verify_url: str) -> dict[str, Any] | 
 
 def send_welcome_email(to_email: str, app_url: str) -> dict[str, Any] | None:
     """Send the post-verification welcome email with inline HTML."""
-    html = f"""
-    <html>
-      <body style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1f2937; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px;">
-        <p style="font-size: 16px;">Hi there,</p>
-        <p style="font-size: 16px;">Welcome to <strong>TermSub beta</strong>.</p>
+    html = _email_shell(f"""
+        <p>Hi there,</p>
+        <p>Welcome to <strong>TermSub beta</strong>.</p>
         <p style="font-size: 20px; color: #111827; margin: 24px 0 16px;"><strong>Subtitles that get the details right.</strong></p>
-        <p style="font-size: 16px;">TermSub extracts your key terminology — names, brands, technical terms — before translating, so they stay consistent across every scene and every language.</p>
-        <p style="margin: 32px 0;">
-          <a href="{app_url}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Open TermSub</a>
-        </p>
-        <p style="font-size: 14px; color: #6b7280;">If the button doesn't work, paste this link into your browser:<br><a href="{app_url}" style="color: #2563eb;">{app_url}</a></p>
-        <p style="font-size: 16px; margin-top: 24px;"><strong>What you can do:</strong></p>
-        <ul style="font-size: 16px; padding-left: 20px; margin: 8px 0;">
+        <p>TermSub extracts your key terminology — names, brands, technical terms — before translating, so they stay consistent across every scene and every language.</p>
+        {_cta_button(app_url, "Open TermSub")}
+        <p style="margin-top: 24px;"><strong>What you can do:</strong></p>
+        <ul style="padding-left: 20px; margin: 8px 0;">
           <li>Terminology-first translation — names, brands, and technical terms stay locked in across 59 languages.</li>
           <li>Whole-video context — tone and style stay coherent from start to finish.</li>
           <li>RTL support — proper subtitle handling for Persian, Arabic, and Hebrew.</li>
           <li>Editable subtitle cards — review, edit, split, merge, and export to SRT, VTT, TXT, or JSON.</li>
-          <li>OpenAI Whisper transcribes and GPT-4o translates; you review and edit every card.</li>
+          <li>OpenAI models transcribe and translate every batch; you review and edit every card.</li>
         </ul>
-        <p style="font-size: 16px; margin-top: 24px;">Built for research, education and technical content, as well as documentaries and feature films.</p>
-        <p style="font-size: 16px; margin-top: 24px;">TermSub is currently in beta. You have <strong>30 free minutes</strong> to test the app. If you hit any issues or have feedback, just reply to this email.</p>
+        <p style="margin-top: 24px;">Built for research, education and technical content, as well as documentaries and feature films.</p>
+        <p style="margin-top: 24px;">TermSub is currently in beta. You have <strong>30 free minutes</strong> to test the app. If you hit any issues or have feedback, just reply to this email.</p>
         <p style="margin-top: 32px;">— The TermSub Team</p>
-      </body>
-    </html>
-    """
+    """)
     return _send_email(
         to_email,
         "Welcome to TermSub beta",
@@ -157,16 +174,12 @@ def send_password_reset_email(
 ) -> dict[str, Any] | None:
     """Send a password reset link."""
     reset_url = f"{settings.FRONTEND_BASE_URL}/app?reset_token={reset_token}"
-    html = f"""
-    <html>
-      <body>
-        <h1>Reset your TermSub password</h1>
-        <p>Click the link below to choose a new password. This link expires in 24 hours.</p>
-        <p><a href="{reset_url}">{reset_url}</a></p>
-        <p>If you did not request a password reset, you can safely ignore this email.</p>
-      </body>
-    </html>
-    """
+    html = _email_shell(f"""
+        <h1 style="color: #111827; font-size: 24px; margin-bottom: 16px;">Reset your TermSub password</h1>
+        <p>Click the button below to choose a new password. This link expires in 24 hours.</p>
+        {_cta_button(reset_url, "Reset password")}
+        <p style="margin-top: 32px;">If you did not request a password reset, you can safely ignore this email.</p>
+    """)
     return _send_email(
         to_email,
         "Reset your TermSub password",
