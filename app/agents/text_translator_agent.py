@@ -81,11 +81,41 @@ def _build_system_instruction(glossary: dict[str, str], target_language: str) ->
     return "\n".join(lines)
 
 
+def _format_style_guide_text(style_guide: dict[str, Any]) -> str:
+    """Render a style-guide dict (from the unified extraction call) into
+    compact text for the translation prompt's STYLE GUIDE section."""
+    if not style_guide:
+        return ""
+
+    tone = style_guide.get("tone", "")
+    formality_level = style_guide.get("formality_level")
+    target_audience = style_guide.get("target_audience", "")
+    style_notes = style_guide.get("style_notes") or []
+    language_considerations = style_guide.get("language_considerations") or {}
+
+    lines = []
+    if tone:
+        lines.append(f"- Tone: {tone}")
+    if formality_level:
+        lines.append(f"- Formality Level: {formality_level}/5")
+    if target_audience:
+        lines.append(f"- Target Audience: {target_audience}")
+    if style_notes:
+        lines.append("Style Notes:")
+        lines.extend(f"- {note}" for note in style_notes)
+    if language_considerations:
+        lines.append("Language Considerations:")
+        lines.extend(f"- {k}: {v}" for k, v in language_considerations.items())
+
+    return "\n".join(lines)
+
+
 def _build_batch_prompt(
     batch: list[Segment],
     target_language: str,
     source_language: str | None,
     full_text: str,
+    style_guide: str = "",
 ) -> str:
     target_lang_name = LANGUAGE_NAMES.get(target_language, target_language)
     source_clause = (
@@ -96,11 +126,20 @@ def _build_batch_prompt(
     segments_text = "\n".join(
         f"[{seg.sequence_number}] {seg.original_text}" for seg in batch
     )
+    style_section = (
+        f"""
+STYLE GUIDE:
+{style_guide}
+"""
+        if style_guide
+        else ""
+    )
 
     return f"""You are executing a professional translation pass {source_clause}to {target_lang_name}.
 
 FULL DOCUMENT CONTEXT (read this first for narrative continuity):
 {full_text}
+{style_section}
 
 TRANSLATE THESE SEGMENTS:
 {segments_text}
@@ -134,8 +173,11 @@ async def _translate_batch(
     full_text: str,
     progress_tracker: Any,
     semaphore: asyncio.Semaphore,
+    style_guide: str = "",
 ) -> dict[int, str]:
-    prompt = _build_batch_prompt(batch, target_language, source_language, full_text)
+    prompt = _build_batch_prompt(
+        batch, target_language, source_language, full_text, style_guide
+    )
 
     async with semaphore:
         for attempt in range(MAX_RETRIES):
@@ -238,6 +280,10 @@ async def translate_text_document(
         )
         glossary = _build_text_glossary(terms)
 
+        style_guide_text = ""
+        if video.style_guide:
+            style_guide_text = _format_style_guide_text(json.loads(video.style_guide))
+
         video.status = VideoStatus.TRANSLATING.value
         db.commit()
 
@@ -281,6 +327,7 @@ async def translate_text_document(
             full_text=full_text,
             progress_tracker=progress_tracker,
             semaphore=semaphore,
+            style_guide=style_guide_text,
         )
         for batch in batches
     ]

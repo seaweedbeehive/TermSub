@@ -299,6 +299,7 @@ async def translate_video_sliding_window_async(
     overlap: int = DEFAULT_OVERLAP,
     glossary: dict[str, str] | None = None,
     plain_text: bool = False,
+    style_guide: str = "",
 ) -> dict[str, Any]:
     """Async sliding window translation with concurrent batch processing.
 
@@ -312,6 +313,9 @@ async def translate_video_sliding_window_async(
         window_size: Segments per batch (default: 20)
         overlap: Overlapping segments between batches (default: 10)
         glossary: Optional glossary dict for term enforcement
+        style_guide: Optional compact style-guide text (tone, formality,
+            audience) from the unified extraction call, injected into every
+            batch's translation prompt
 
     Returns:
         Dict with video_id, status, translated_count, total_segments, success flag
@@ -372,7 +376,12 @@ async def translate_video_sliding_window_async(
         )
 
         batches = create_sliding_windows(
-            all_segment_dicts, window_size, overlap, glossary, full_transcript_text
+            all_segment_dicts,
+            window_size,
+            overlap,
+            glossary,
+            full_transcript_text,
+            style_guide,
         )
 
         progress_tracker.info(

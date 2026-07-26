@@ -126,6 +126,7 @@ class TranslationBatch:
     context_after: str = ""
     glossary: dict[str, str] = field(default_factory=dict)
     full_transcript_text: str = ""
+    style_guide: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -192,6 +193,7 @@ def create_sliding_windows(
     overlap: int = DEFAULT_OVERLAP,
     glossary: dict[str, str] | None = None,
     full_transcript_text: str = "",
+    style_guide: str = "",
 ) -> list[TranslationBatch]:
     """Create overlapping sliding window batches from segments."""
     if not segments:
@@ -233,6 +235,7 @@ def create_sliding_windows(
             context_after=context_after,
             glossary=glossary or {},
             full_transcript_text=full_transcript_text,
+            style_guide=style_guide,
         )
         batches.append(batch)
 
@@ -405,7 +408,10 @@ async def translate_single_batch(
             "target language."
         )
 
-    prompt = build_translation_prompt(batch, source_language, target_language, plain_text=plain_text)
+    prompt = build_translation_prompt(
+        batch, source_language, target_language,
+        style_guide=batch.style_guide, plain_text=plain_text,
+    )
     system_instruction = build_system_instruction(batch, target_language)
 
     logger.debug("Final Glossary being sent to LLM: %s", batch.glossary)

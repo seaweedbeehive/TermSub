@@ -11,10 +11,7 @@ from typing import Any
 
 from sqlalchemy import func
 
-from app.agents.text_context_agent import (
-    analyze_text_context,
-    extract_text_glossary,
-)
+from app.agents.text_context_agent import analyze_text_context
 from app.agents.text_translator_agent import translate_text_document
 from app.core.auth import RequestIdentity
 from app.core.quota import QuotaManager
@@ -33,23 +30,20 @@ def _load_text_record(video_id: str) -> Video:
 
 
 def extract_terms_for_text(video_id: str) -> dict[str, Any]:
-    """Run Pass 1 + Pass 2 terminology extraction for a text document."""
+    """Run unified terminology + style-guide extraction for a text document."""
     video = _load_text_record(video_id)
     if video.status == VideoStatus.ERROR.value:
         raise RuntimeError(f"Text record {video_id} is in ERROR status")
 
-    # Pass 1
     context_data = analyze_text_context(video_id)
-    # Pass 2
-    glossary_data = extract_text_glossary(video_id)
 
     return {
         "video_id": video_id,
         "status": VideoStatus.TERMS_READY.value,
         "main_topic": context_data.get("main_topic", ""),
         "sub_topics": context_data.get("sub_topics", []),
-        "key_terms": glossary_data.get("key_terms", []),
-        "named_entities": glossary_data.get("named_entities", []),
+        "key_terms": context_data.get("key_terms", []),
+        "named_entities": context_data.get("named_entities", []),
     }
 
 

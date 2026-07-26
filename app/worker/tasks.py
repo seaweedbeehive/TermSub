@@ -372,50 +372,26 @@ def analyze_video_task(
             {
                 "status": "analyzing",
                 "progress": 0,
-                "message": "Director Agent: Analyzing content...",
+                "message": "Analyzing content, terminology, and style...",
             },
         )
 
-        from app.services.context_analysis_service import (
-            analyze_video_context,
-            extract_glossary,
-        )
+        from app.services.context_analysis_service import analyze_video_context
+
+        context_data = analyze_video_context(video_id)
+        term_count = len(context_data.get("key_terms", []))
+        style_guide = context_data.get("style_guide", {})
 
         _send_progress(
             video_id,
             {
-                "status": "analyzing",
-                "progress": 20,
-                "message": "Analyzing content style...",
-            },
-        )
-
-        style_guide = analyze_video_context(video_id)
-
-        _send_progress(
-            video_id,
-            {
-                "status": "context_ready",
-                "progress": 50,
-                "message": (
-                    f"Director complete: {style_guide.get('tone', 'neutral')} tone"
-                ),
+                "status": "terms_ready",
+                "progress": 90,
+                "message": f"Analysis complete: {style_guide.get('tone', 'neutral')} tone",
                 "tone": style_guide.get("tone", "neutral"),
                 "formality_level": style_guide.get("formality_level", "medium"),
             },
         )
-
-        _send_progress(
-            video_id,
-            {
-                "status": "glossary_extracting",
-                "progress": 60,
-                "message": "Extracting terms...",
-            },
-        )
-
-        context_data = extract_glossary(video_id, style_guide)
-        term_count = len(context_data.get("key_terms", []))
 
         _send_progress(
             video_id,

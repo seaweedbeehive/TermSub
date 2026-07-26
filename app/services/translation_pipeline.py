@@ -1,33 +1,23 @@
-"""Multi-Agent Translation Pipeline - Director/Glossary/Translator Architecture.
+"""Translation Pipeline — Translator Agent orchestration.
 
-This module implements a multi-agent translation system with three specialized agents:
-1. Director Agent: Analyzes content and generates style guide (tone, formality, style)
-2. Glossary Agent: Extracts key terms (names, places, technical terms) before translation
-3. Translator Agent: Performs actual translation using sliding windows with glossary constraints
-
-Supports WebSocket progress updates for real-time client notifications.
+Context analysis, terminology extraction, and style-guide generation now
+happen in a single unified call (app.services.context_analysis_service) —
+see that module's docstring. This module previously also hosted a "Director
+Agent" and "Glossary Agent" that duplicated that work in a disconnected,
+never-called code path; they've been removed rather than fixed, since the
+unified call replaces what they were trying to do. What remains here is the
+live Translator Agent: it reads the approved glossary and style guide from
+the database and runs the actual sliding-window translation.
 
 Usage:
-    pipeline = TranslationPipeline(websocket_manager, video_id)
-
-    # Step 1: Analyze context (Director Agent)
-    style_guide = await pipeline.analyze_context(video_id)
-
-    # Step 2: Extract glossary (Glossary Agent)
-    terms = await pipeline.extract_glossary(video_id, style_guide)
-    # ... user reviews and edits terms ...
-
-    # Step 3: Translate with glossary (Translator Agent)
-    video = await pipeline.translate_with_glossary(video_id, glossary)
-"""  # noqa: E501
+    pipeline = TranslationPipeline()
+    result = await pipeline.translate_with_glossary(video_id)
+"""
 
 import asyncio
 import json
 import re
-from dataclasses import dataclass, field
 from typing import Any
-
-from pydantic import BaseModel, Field, ValidationError
 
 from app.agents.translator import (
     DEFAULT_OVERLAP,
@@ -39,144 +29,34 @@ from app.models.video import ContentType, Segment, Term, TermSource, Video, Vide
 from app.services.gemini_service import translate_video_sliding_window_async
 from app.services.progress_service import get_progress_tracker
 
-# ============================================================================
-# Pydantic Schemas for LLM Response Validation
-# ============================================================================
 
+def _format_style_guide_text(style_guide: dict[str, Any]) -> str:
+    """Render a style-guide dict (from the unified extraction call) into
+    compact text for the translation prompt's STYLE GUIDE section."""
+    if not style_guide:
+        return ""
 
-class StyleGuideSchema(BaseModel):
-    """Pydantic schema for Director Agent style guide response."""
+    tone = style_guide.get("tone", "")
+    formality_level = style_guide.get("formality_level")
+    target_audience = style_guide.get("target_audience", "")
+    style_notes = style_guide.get("style_notes") or []
+    language_considerations = style_guide.get("language_considerations") or {}
 
-    tone: str = Field(default="neutral", min_length=1, max_length=100)
-    formality_level: int = Field(default=3, ge=1, le=5)
-    target_audience: str = Field(default="general", min_length=1)
-    style_notes: list[str] = Field(default_factory=list)
-    domain: str = Field(default="general", min_length=1)
-    language_considerations: dict[str, str] = Field(default_factory=dict)
+    lines = []
+    if tone:
+        lines.append(f"- Tone: {tone}")
+    if formality_level:
+        lines.append(f"- Formality Level: {formality_level}/5")
+    if target_audience:
+        lines.append(f"- Target Audience: {target_audience}")
+    if style_notes:
+        lines.append("Style Notes:")
+        lines.extend(f"- {note}" for note in style_notes)
+    if language_considerations:
+        lines.append("Language Considerations:")
+        lines.extend(f"- {k}: {v}" for k, v in language_considerations.items())
 
-
-class ExtractedTermSchema(BaseModel):
-    """Pydantic schema for a single extracted term."""
-
-    original_term: str = Field(..., min_length=1, description="Term in source language")
-    proposed_translation: str = Field(
-        ..., min_length=1, description="Suggested translation"
-    )
-    category: str = Field(default="Concept", description="Term category")
-    context: str = Field(default="", description="Usage context")
-
-
-class GlossaryResponseSchema(BaseModel):
-    """Pydantic schema for Glossary Agent response."""
-
-    terms: list[ExtractedTermSchema] = Field(default_factory=list)
-
-
-# ============================================================================
-# Response Parser with Validation
-# ============================================================================
-
-
-class LLMResponseParser:
-    """Parser for LLM responses with JSON extraction and validation."""
-
-    @staticmethod
-    def extract_json(text: str) -> str | None:
-        """Extract JSON from markdown code blocks or plain text."""
-        patterns = [
-            r"```(?:json)?\s*\n?(.*?)\n?```",
-            r"\{.*\}",
-            r"\[.*\]",
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, text, re.DOTALL)
-            if match:
-                return match.group(1) if match.groups() else match.group(0)
-
-        return None
-
-    @staticmethod
-    def parse_style_guide(text: str) -> StyleGuideSchema | None:
-        """Parse and validate style guide response."""
-        try:
-            json_str = LLMResponseParser.extract_json(text)
-            if json_str:
-                data = json.loads(json_str)
-                return StyleGuideSchema(**data)
-        except (json.JSONDecodeError, ValidationError) as e:
-            print(f"[LLMResponseParser] Style guide validation failed: {e}")
-
-        return None
-
-    @staticmethod
-    def parse_glossary(text: str) -> GlossaryResponseSchema | None:
-        """Parse and validate glossary response."""
-        try:
-            json_str = LLMResponseParser.extract_json(text)
-            if json_str:
-                data = json.loads(json_str)
-                return GlossaryResponseSchema(**data)
-        except (json.JSONDecodeError, ValidationError) as e:
-            print(f"[LLMResponseParser] Glossary validation failed: {e}")
-
-        return None
-
-
-# ============================================================================
-# Data Classes
-# ============================================================================
-
-
-@dataclass
-class StyleGuide:
-    """Style guide for translation (output from Director Agent)."""
-
-    tone: str = "neutral"
-    formality_level: int = 3
-    target_audience: str = "general"
-    style_notes: list[str] = field(default_factory=list)
-    domain: str = "general"
-    language_considerations: dict[str, str] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "tone": self.tone,
-            "formality_level": self.formality_level,
-            "target_audience": self.target_audience,
-            "style_notes": self.style_notes,
-            "domain": self.domain,
-            "language_considerations": self.language_considerations,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "StyleGuide":
-        return cls(
-            tone=data.get("tone", "neutral"),
-            formality_level=data.get("formality_level", 3),
-            target_audience=data.get("target_audience", "general"),
-            style_notes=data.get("style_notes", []),
-            domain=data.get("domain", "general"),
-            language_considerations=data.get("language_considerations", {}),
-        )
-
-    def to_prompt_text(self) -> str:
-        notes = "\n".join(f"- {note}" for note in self.style_notes)
-        considerations = "\n".join(
-            f"- {k}: {v}" for k, v in self.language_considerations.items()
-        )
-
-        return f"""Style Guide:
-- Tone: {self.tone}
-- Formality Level: {self.formality_level}/5
-- Target Audience: {self.target_audience}
-- Domain: {self.domain}
-
-Style Notes:
-{notes}
-
-Language Considerations:
-{considerations}"""
+    return "\n".join(lines)
 
 
 # ============================================================================
@@ -185,7 +65,9 @@ Language Considerations:
 
 
 class TranslationPipeline:
-    """Multi-agent translation pipeline with Director, Glossary, and Translator agents.
+    """Translator Agent: runs sliding-window translation with the approved
+    glossary and style guide (both produced upstream by the unified
+    extraction call in context_analysis_service.py).
 
     This class uses short-lived database sessions to avoid holding locks during
     long-running LLM API calls.
@@ -204,397 +86,6 @@ class TranslationPipeline:
     async def _send_progress(self, status: str, message: str, **kwargs: Any) -> None:
         """Send progress update via WebSocket."""
         print(f"[Pipeline] {status}: {message}")
-
-    async def analyze_context(self, video_id: str) -> StyleGuide:
-        """Director Agent: Analyze content and generate style guide.
-
-        Uses short-lived database sessions to avoid holding locks during LLM calls.
-
-        Args:
-            video_id: ID of the video to analyze
-
-        Returns:
-            StyleGuide object with analysis results
-
-        Raises:
-            ValueError: If video not found or no segments
-        """
-        with SessionLocal() as db:
-            video = db.query(Video).filter(Video.id == video_id).first()
-            if not video:
-                raise ValueError(f"Video not found: {video_id}")
-
-            if video.status == VideoStatus.ERROR.value:
-                raise RuntimeError(
-                    f"Video {video_id} is in ERROR status, aborting analysis"
-                )
-
-            target_language = video.target_language
-            if not target_language:
-                raise ValueError("Target language is not set for this video.")
-            segments = (
-                db.query(Segment)
-                .filter(Segment.video_id == video_id)
-                .order_by(Segment.sequence_number)
-                .all()
-            )
-
-            if not segments:
-                raise ValueError("No segments to analyze")
-
-            sample_segments = segments[: min(100, len(segments))]
-            transcript = "\n".join(
-                [
-                    f"[{seg.sequence_number}] {seg.original_text}"
-                    for seg in sample_segments
-                ]
-            )
-
-            video.status = VideoStatus.ANALYZING.value
-            db.commit()
-
-        progress_tracker = get_progress_tracker(video_id, None)
-
-        await self._send_progress(
-            "analyzing",
-            message="Director Agent analyzing content style and context",
-            total_segments=len(segments),
-        )
-
-        progress_tracker.start_step(
-            "ANALYZING",
-            f"Director Agent: Analyzing content style and context "
-            f"({len(segments)} segments)",
-        )
-
-        try:
-            print(
-                f"\n[DirectorAgent] Analyzing full transcript "
-                f"for video {video_id[:8]}..."
-            )
-            print(f"[DirectorAgent] Total segments: {len(segments)}")
-
-            from app.core.languages import LANGUAGE_NAMES
-
-            target_lang_name = LANGUAGE_NAMES.get(target_language, target_language)
-
-            prompt = f"""You are a Director Agent analyzing video content for translation.
-
-Analyze this transcript and create a style guide for translating to {target_lang_name}.
-
-TRANSCRIPT SAMPLE:
-{transcript}
-
-Provide a JSON style guide with this exact structure:
-{{
-    "tone": "<e.g., formal, casual, professional, conversational>",
-    "formality_level": <1-5, where 1 is very casual, 5 is very formal>,
-    "target_audience": "<description of intended audience>",
-    "style_notes": [
-        "<specific style instruction 1>",
-        "<specific style instruction 2>"
-    ],
-    "domain": "<e.g., technical, medical, educational, entertainment, general>",
-    "language_considerations": {{
-        "<key point>": "<explanation>"
-    }}
-}}
-
-Consider:
-- Is this educational, entertainment, technical, or promotional content?
-- What tone would resonate with {target_lang_name} speakers?
-- Are there cultural considerations for the translation?
-"""  # noqa: E501
-
-            progress_tracker.info(
-                "ANALYZING", "Sending to Director Agent for analysis..."
-            )
-
-            response = await self.client.chat.completions.create(
-                model="gpt-5.4-mini",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_completion_tokens=4096,
-            )
-
-            response_text = response.choices[0].message.content or ""
-
-            validated = LLMResponseParser.parse_style_guide(response_text)
-
-            if validated:
-                style_guide = StyleGuide(
-                    tone=validated.tone,
-                    formality_level=validated.formality_level,
-                    target_audience=validated.target_audience,
-                    style_notes=validated.style_notes,
-                    domain=validated.domain,
-                    language_considerations=validated.language_considerations,
-                )
-            else:
-                print("[DirectorAgent] Warning: Using fallback style guide parsing")
-                json_str = LLMResponseParser.extract_json(response_text)
-                if json_str:
-                    data = json.loads(json_str)
-                    style_guide = StyleGuide.from_dict(data)
-                else:
-                    style_guide = StyleGuide(
-                        tone="neutral",
-                        formality_level=3,
-                        target_audience="general",
-                        style_notes=["Use clear and natural language"],
-                        domain="general",
-                        language_considerations={},
-                    )
-
-            print(
-                f"[DirectorAgent] Analysis complete: {style_guide.tone} tone, "
-                f"formality {style_guide.formality_level}/5"
-            )
-            print(f"[DirectorAgent] Domain: {style_guide.domain}")
-
-            with SessionLocal() as db:
-                video = db.query(Video).filter(Video.id == video_id).first()
-                if video:
-                    video.style_guide = json.dumps(style_guide.to_dict())
-                    video.status = VideoStatus.CONTEXT_READY.value
-                    db.commit()
-
-            await self._send_progress(
-                "context_ready",
-                message=f"Director Agent complete: {style_guide.tone} tone",
-                tone=style_guide.tone,
-                formality_level=style_guide.formality_level,
-                domain=style_guide.domain,
-            )
-
-            progress_tracker.end_step(
-                f"Director Agent complete: {style_guide.tone} tone, "
-                f"formality {style_guide.formality_level}/5"
-            )
-
-            return style_guide
-
-        except Exception as e:
-            with SessionLocal() as db:
-                video_record = db.query(Video).filter(Video.id == video_id).first()
-                if video_record:
-                    video_record.status = VideoStatus.ERROR.value
-                    video_record.error_message = str(e)
-                    db.commit()
-
-            await self._send_progress(
-                "error", message=f"Director Agent failed: {str(e)}", error=str(e)
-            )
-
-            progress_tracker.error("ANALYZING", "Director Agent failed", str(e))
-            raise RuntimeError(f"Context analysis failed: {e}") from e
-
-    async def extract_glossary(
-        self, video_id: str, style_guide: StyleGuide | None = None
-    ) -> list[Term]:
-        """Glossary Agent: Extract key terms before translation.
-
-        Uses short-lived database sessions to avoid holding locks during LLM calls.
-
-        Args:
-            video_id: ID of the video
-            style_guide: Optional style guide from Director Agent
-
-        Returns:
-            List of Term objects created (saved to database)
-
-        Raises:
-            ValueError: If video not found or no segments
-        """
-        with SessionLocal() as db:
-            video = db.query(Video).filter(Video.id == video_id).first()
-            if not video:
-                raise ValueError(f"Video not found: {video_id}")
-
-            if video.status == VideoStatus.ERROR.value:
-                raise RuntimeError(
-                    f"Video {video_id} is in ERROR status, aborting glossary extraction"
-                )
-
-            segments = (
-                db.query(Segment)
-                .filter(Segment.video_id == video_id)
-                .order_by(Segment.sequence_number)
-                .all()
-            )
-
-            if not segments:
-                raise ValueError("No segments to process")
-
-            transcript = "\n".join(
-                [f"[{seg.sequence_number}] {seg.original_text}" for seg in segments]
-            )
-
-            raw_source_language = video.source_language or "en"
-            # "auto" is meaningless to the LLM; default to English or try to infer
-            source_language = (
-                raw_source_language if raw_source_language != "auto" else "en"
-            )
-            target_language = video.target_language
-            if not target_language:
-                raise ValueError("Target language is not set for this video.")
-
-            style_text = ""
-            if style_guide is None and video.style_guide:
-                sg = StyleGuide.from_dict(json.loads(video.style_guide))
-                style_text = f"\nContent Domain: {sg.domain}\nStyle: {sg.tone}"
-
-        progress_tracker = get_progress_tracker(video_id, None)
-
-        await self._send_progress(
-            "glossary_extracting",
-            message="Glossary Agent extracting key terms",
-            total_segments=len(segments),
-        )
-
-        progress_tracker.start_step(
-            "GLOSSARY",
-            f"Glossary Agent: Extracting key terms ({len(segments)} segments)",
-        )
-
-        try:
-            print("\n[GlossaryAgent] Extracting glossary terms...")
-            print(f"[GlossaryAgent] Analyzing {len(segments)} segments")
-
-            from app.core.languages import LANGUAGE_NAMES
-
-            target_lang_name = LANGUAGE_NAMES.get(target_language, target_language)
-            source_lang_name = LANGUAGE_NAMES.get(source_language, source_language)
-
-            prompt = f"""You are a Glossary Agent extracting key terms for translation.
-
-Extract ALL proper nouns, technical terms, names, places, and key concepts from this transcript that need consistent translation.
-
-SOURCE LANGUAGE: {source_lang_name}
-TARGET LANGUAGE: {target_lang_name}{style_text}
-
-TRANSCRIPT:
-{transcript[:5000]}
-
-Return JSON with this structure:
-{{
-    "terms": [
-        {{
-            "original_term": "<term in {source_lang_name} — DO NOT translate this field>",
-            "proposed_translation": "<suggested translation in {target_lang_name}>",
-            "category": "<Name|Place|Technical|Concept|Organization>",
-            "context": "<brief context or usage example>"
-        }}
-    ]
-}}
-
-CRITICAL: The original_term MUST be preserved exactly as it appears in the transcript's source language ({source_lang_name}). Do NOT translate the source terms.
-
-EXAMPLE — CORRECT (English source, Farsi target):
-  {{"original_term": "machine learning", "proposed_translation": "یادگیری ماشین", "category": "Technical"}}
-EXAMPLE — WRONG (English source, Farsi target):
-  {{"original_term": "یادگیری ماشین", "proposed_translation": "یادگیری ماشین", "category": "Technical"}}
-
-Focus on:
-1. People names (preserve or transliterate appropriately)
-2. Place names (use established {target_lang_name} conventions)
-3. Technical terms (domain-specific translations)
-4. Organizations and brands
-5. Key concepts that recur in the text
-
-Only include terms that actually appear in the text.
-"""  # noqa: E501
-
-            progress_tracker.info(
-                "GLOSSARY", "Sending to Glossary Agent for term extraction..."
-            )
-
-            response = await self.client.chat.completions.create(
-                model="gpt-5.4-mini",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_completion_tokens=4096,
-            )
-
-            response_text = response.choices[0].message.content or ""
-
-            validated = LLMResponseParser.parse_glossary(response_text)
-
-            if validated:
-                term_data_list = validated.terms
-            else:
-                print("[GlossaryAgent] Warning: Using fallback glossary parsing")
-                json_str = LLMResponseParser.extract_json(response_text)
-                if json_str:
-                    data = json.loads(json_str)
-                    term_data_list = data.get("terms", [])
-                else:
-                    term_data_list = []
-
-            with SessionLocal() as db:
-                terms = []
-                for term_data in term_data_list:
-                    original_term = term_data.original_term
-                    proposed_translation = term_data.proposed_translation
-                    category = term_data.category
-
-                    if original_term and proposed_translation:
-                        from app.models.video import TermSource
-
-                        term = Term(
-                            video_id=video_id,
-                            original_term=original_term,
-                            translated_term=proposed_translation,
-                            category=category,
-                            frequency=1,
-                            is_standardized=False,
-                            source=TermSource.AUTO.value,
-                        )
-                        db.add(term)
-                        terms.append(term)
-
-                video = db.query(Video).filter(Video.id == video_id).first()
-                if video:
-                    video.status = VideoStatus.TERMS_READY.value
-                    db.commit()
-
-            print(f"[GlossaryAgent] Extracted {len(terms)} terms")
-
-            await self._send_progress(
-                "terms_ready",
-                message=f"Found {len(terms)} terms to review",
-                terms_count=len(terms),
-                terms=[
-                    {
-                        "id": t.id,
-                        "original_term": t.original_term,
-                        "proposed_translation": t.translated_term,
-                        "category": t.category,
-                    }
-                    for t in terms[:10]
-                ],
-            )
-
-            progress_tracker.end_step(
-                f"Glossary Agent complete: extracted {len(terms)} terms for review"
-            )
-
-            return terms
-
-        except Exception as e:
-            with SessionLocal() as db:
-                video = db.query(Video).filter(Video.id == video_id).first()
-                if video:
-                    video.status = VideoStatus.ERROR.value
-                    video.error_message = str(e)
-                    db.commit()
-
-            await self._send_progress(
-                "error", message=f"Glossary Agent failed: {str(e)}", error=str(e)
-            )
-
-            progress_tracker.error("GLOSSARY", "Glossary Agent failed", str(e))
-            raise RuntimeError(f"Glossary extraction failed: {e}") from e
 
     async def translate_with_glossary(
         self, video_id: str, glossary: list[Term] | None = None
@@ -626,6 +117,10 @@ Only include terms that actually appear in the text.
 
             plain_text = video.content_type == ContentType.TEXT.value
 
+            style_guide_text = ""
+            if video.style_guide:
+                style_guide_text = _format_style_guide_text(json.loads(video.style_guide))
+
             auto_terms = (
                 db.query(Term)
                 .filter(Term.video_id == video_id, Term.source == TermSource.AUTO.value)
@@ -641,10 +136,10 @@ Only include terms that actually appear in the text.
             db_terms = auto_terms + manual_terms
 
             if glossary is not None:
-                # The passed glossary comes from extract_glossary() and was built at
-                # task-start time. User edits made just before clicking Translate may
-                # not be reflected there. Treat database terms as the source of truth,
-                # but keep any passed terms that are not yet persisted.
+                # The passed glossary was built at task-start time. User edits made
+                # just before clicking Translate may not be reflected there. Treat
+                # database terms as the source of truth, but keep any passed terms
+                # that are not yet persisted.
                 term_map = {t.original_term: t for t in glossary}
                 for t in db_terms:
                     existing = term_map.get(t.original_term)
@@ -719,6 +214,7 @@ Only include terms that actually appear in the text.
                 overlap=DEFAULT_OVERLAP,
                 glossary=glossary_dict,
                 plain_text=plain_text,
+                style_guide=style_guide_text,
             )
 
             video_status = "unknown"
@@ -765,39 +261,9 @@ Only include terms that actually appear in the text.
             progress_tracker.error("TRANSLATING", "Translator Agent failed", str(e))
             raise RuntimeError(f"Translation failed: {e}") from e
 
-    async def run_full_pipeline(self, video_id: str) -> dict[str, Any]:
-        """Run the complete multi-agent pipeline.
-
-        Convenience method to run all three agents in sequence:
-        1. Director (analyze context)
-        2. Glossary (extract terms)
-        3. Translator (translate with glossary)
-
-        Args:
-            video_id: ID of the video
-
-        Returns:
-            Dict with pipeline results and final status
-        """
-        style_guide = await self.analyze_context(video_id)
-        terms = await self.extract_glossary(video_id, style_guide)
-        result = await self.translate_with_glossary(video_id, terms)
-
-        return result
-
     # ============================================================================
     # Synchronous versions for background worker (thread-based)
     # ============================================================================
-
-    def analyze_context_sync(self, video_id: str) -> StyleGuide:
-        """Synchronous version of analyze_context for background worker."""
-        return asyncio.run(self.analyze_context(video_id))
-
-    def extract_glossary_sync(
-        self, video_id: str, style_guide: StyleGuide | None = None
-    ) -> list[Term]:
-        """Synchronous version of extract_glossary for background worker."""
-        return asyncio.run(self.extract_glossary(video_id, style_guide))
 
     def translate_with_glossary_sync(
         self, video_id: str, glossary: list[Term] | None = None
