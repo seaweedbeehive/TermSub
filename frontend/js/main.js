@@ -389,6 +389,10 @@
             const session = window.jobSession.loadSession();
             if (!session || !session.jobId) {
                 if (session) window.jobSession.clearSession();
+                // No existing job: still initialize the step rail to step 0 so a
+                // brand-new visitor sees "Upload & configure" highlighted rather
+                // than an unstyled rail.
+                applyWizardStep(0);
                 return;
             }
 
@@ -2497,7 +2501,54 @@
             refreshDisplayedStep();
         }
 
+        function updateStepRail(step) {
+            // Keep the left-hand step rail in sync with the real wizard step
+            // (0 = upload/config, 2 = processing/review, 3 = completed/export —
+            // there is no step 1, see statusToStep()).
+            const items = document.querySelectorAll('#stepRail .step-item');
+            items.forEach((item) => {
+                const itemStep = Number(item.dataset.step);
+                const marker = item.querySelector('.step-marker');
+                const title = item.querySelector('.step-title');
+                if (!marker || !title) return;
+                marker.classList.remove(
+                    'border-slate-700', 'bg-slate-900', 'text-slate-500',
+                    'border-blue-600', 'bg-blue-600', 'text-white',
+                    'border-emerald-400', 'bg-emerald-400', 'text-slate-900'
+                );
+                title.classList.remove('text-slate-500', 'text-slate-100');
+                if (itemStep === step) {
+                    marker.classList.add('border-blue-600', 'bg-blue-600', 'text-white');
+                    title.classList.add('text-slate-100');
+                } else if (itemStep < step) {
+                    marker.classList.add('border-emerald-400', 'bg-emerald-400', 'text-slate-900');
+                    title.classList.add('text-slate-100');
+                } else {
+                    marker.classList.add('border-slate-700', 'bg-slate-900', 'text-slate-500');
+                    title.classList.add('text-slate-500');
+                }
+            });
+
+            // Step 2's label adapts to the chosen pipeline mode, since "processing"
+            // means different things depending on which button the user picked.
+            const stepTwoLabel = document.getElementById('stepTwoLabel');
+            const stepTwoDesc = document.getElementById('stepTwoDesc');
+            if (stepTwoLabel && stepTwoDesc) {
+                if (targetPipelineMode === 'transcribe') {
+                    stepTwoLabel.textContent = 'Review subtitles';
+                    stepTwoDesc.textContent = 'Check your transcription';
+                } else if (targetPipelineMode === 'subtitles') {
+                    stepTwoLabel.textContent = 'Translating';
+                    stepTwoDesc.textContent = 'Applying your glossary automatically';
+                } else {
+                    stepTwoLabel.textContent = 'Review terminology';
+                    stepTwoDesc.textContent = 'Lock in names & technical terms';
+                }
+            }
+        }
+
         function applyWizardStep(step) {
+            updateStepRail(step);
             const primaryBtn = document.getElementById('primaryActionBtn');
             const helperText = document.getElementById('primaryHelperText');
             const ghostLink = document.getElementById('primaryGhostLink');
@@ -3782,6 +3833,10 @@
                 const loaded = await loadUser();
                 if (!loaded) {
                     updateUserDisplay();
+                    // No signed-in user and no session to restore: still
+                    // initialize the step rail so a fresh visitor sees
+                    // "Upload & configure" highlighted, not an unstyled rail.
+                    applyWizardStep(0);
                     return;
                 }
                 // Resume any in-progress/completed job from a previous session

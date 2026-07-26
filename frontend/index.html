@@ -341,8 +341,9 @@
                         <span class="sm:hidden">Log in</span>
                         <span class="hidden sm:inline">Log in / Sign up</span>
                     </button>
-                    <button id="helpBtn" type="button" class="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors" aria-label="How to use" title="How to use TermSub">
-                        <i class="fa-solid fa-question text-xs"></i>
+                    <button id="helpBtn" type="button" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-normal transition-colors" title="How to use TermSub">
+                        <i class="fa-solid fa-circle-question text-xs"></i>
+                        <span class="hidden sm:inline">Help</span>
                     </button>
                 </div>
             </div>
@@ -389,8 +390,74 @@
         </div>
 
         <div class="app-workspace grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left Panel - Upload & Controls -->
+            <!-- Left Panel - Step Rail & Status -->
             <div class="lg:col-span-1 flex flex-col gap-4">
+                <!-- Step Rail: shows which of the 3 real stages the project is in -->
+                <div id="stepRail" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shrink-0">
+                    <h2 class="text-[10px] font-normal text-slate-500 uppercase tracking-wider mb-4">Your project</h2>
+                    <ol class="space-y-0">
+                        <li class="step-item relative flex gap-3 pb-5" data-step="0">
+                            <div class="absolute left-[13px] top-7 bottom-0 w-0.5 bg-slate-800"></div>
+                            <div class="step-marker relative z-10 shrink-0 w-7 h-7 rounded-full border-2 border-slate-700 bg-slate-900 text-slate-500 flex items-center justify-center text-xs font-normal transition-colors">
+                                <span>1</span>
+                            </div>
+                            <div class="pt-0.5">
+                                <p class="step-title text-xs font-normal text-slate-500 transition-colors">Upload &amp; configure</p>
+                                <p class="text-[10px] text-slate-600 mt-0.5">Add your file, pick languages</p>
+                            </div>
+                        </li>
+                        <li class="step-item relative flex gap-3 pb-5" data-step="2">
+                            <div class="absolute left-[13px] top-7 bottom-0 w-0.5 bg-slate-800"></div>
+                            <div class="step-marker relative z-10 shrink-0 w-7 h-7 rounded-full border-2 border-slate-700 bg-slate-900 text-slate-500 flex items-center justify-center text-xs font-normal transition-colors">
+                                <span>2</span>
+                            </div>
+                            <div class="pt-0.5">
+                                <p class="step-title text-xs font-normal text-slate-500 transition-colors" id="stepTwoLabel">Review terminology</p>
+                                <p class="text-[10px] text-slate-600 mt-0.5" id="stepTwoDesc">Lock in names &amp; technical terms</p>
+                            </div>
+                        </li>
+                        <li class="step-item relative flex gap-3" data-step="3">
+                            <div class="step-marker relative z-10 shrink-0 w-7 h-7 rounded-full border-2 border-slate-700 bg-slate-900 text-slate-500 flex items-center justify-center text-xs font-normal transition-colors">
+                                <span>3</span>
+                            </div>
+                            <div class="pt-0.5">
+                                <p class="step-title text-xs font-normal text-slate-500 transition-colors">Translate &amp; export</p>
+                                <p class="text-[10px] text-slate-600 mt-0.5">Download finished subtitles</p>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+
+                <!-- Project Metadata & Status Card (Unified) -->
+                <div id="statusCard" class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hidden shrink-0">
+                    <!-- Project Header -->
+                    <div class="bg-slate-800 px-6 py-4 border-b border-slate-700">
+                        <h2 id="projectTitle" class="text-sm font-normal text-slate-100 truncate">Untitled Project</h2>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                            <span id="projectType"><i class="fa-solid fa-video mr-1"></i>Video</span>
+                            <span>•</span>
+                            <span id="projectLangs">EN → FA</span>
+                            <span>•</span>
+                            <span id="projectId" class="font-mono">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Status Section -->
+                    <div class="p-6">
+                        <!-- Status Badge with Color -->
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-xs font-normal text-slate-400 uppercase tracking-wider">Status</span>
+                            <span id="statusBadge" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 text-blue-300 text-xs font-normal rounded-full">
+                                <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                                Uploaded
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Workspace (where the work actually happens) -->
+            <div class="lg:col-span-2 flex flex-col gap-4 min-h-0 overflow-hidden">
                 <!-- Upload Card -->
                 <div id="uploadCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shrink-0">
                     <!-- Upload scene: file drop zone -->
@@ -425,15 +492,21 @@
                             </div>
                         </div>
 
-                        <div id="pipelineButtons" class="grid grid-cols-1 gap-3">
-                            <button id="translateSubtitlesBtn" data-mode="translate" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide">
-                                <i class="fa-solid fa-language mr-2"></i>Translate and Get Subtitles
-                            </button>
-                            <div class="flex items-start gap-2 px-1 -mt-1">
-                                <input type="checkbox" id="reviewTerminologyCheckbox" checked class="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-600">
-                                <label for="reviewTerminologyCheckbox" class="text-xs text-slate-600 dark:text-[#8A8F98] cursor-pointer select-none">
-                                    Review terminology
-                                </label>
+                        <div id="pipelineButtons" class="flex flex-col gap-3">
+                            <div class="border border-slate-800 rounded-2xl p-3 bg-blue-500/5">
+                                <button id="translateSubtitlesBtn" data-mode="translate" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide">
+                                    <i class="fa-solid fa-language mr-2"></i>Translate and Get Subtitles
+                                </button>
+                                <div class="flex items-start gap-2 pl-3 ml-1 mt-3 border-l-2 border-slate-700">
+                                    <input type="checkbox" id="reviewTerminologyCheckbox" checked class="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-600">
+                                    <label for="reviewTerminologyCheckbox" class="text-xs text-slate-400 cursor-pointer select-none">
+                                        Review terminology before translating
+                                        <span class="block text-[10px] text-slate-500 mt-0.5">Names, brands, and technical terms get extracted first so you can lock them in.</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 text-[10px] text-slate-600 uppercase tracking-wider">
+                                <span class="flex-1 h-px bg-slate-800"></span>or<span class="flex-1 h-px bg-slate-800"></span>
                             </div>
                             <button id="originalSubtitlesBtn" data-mode="transcribe" class="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-normal rounded-xl transition-colors tracking-wide">
                                 <i class="fa-solid fa-closed-captioning mr-2"></i>Get Subtitles in Original Language
@@ -459,33 +532,6 @@
                     </div>
                 </div>
 
-                <!-- Project Metadata & Status Card (Unified) -->
-                <div id="statusCard" class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hidden shrink-0">
-                    <!-- Project Header -->
-                    <div class="bg-slate-800 px-6 py-4 border-b border-slate-700">
-                        <h2 id="projectTitle" class="text-sm font-normal text-slate-100 truncate">Untitled Project</h2>
-                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-400">
-                            <span id="projectType"><i class="fa-solid fa-video mr-1"></i>Video</span>
-                            <span>•</span>
-                            <span id="projectLangs">EN → FA</span>
-                            <span>•</span>
-                            <span id="projectId" class="font-mono">-</span>
-                        </div>
-                    </div>
-                    
-                    <!-- Status Section -->
-                    <div class="p-6">
-                        <!-- Status Badge with Color -->
-                        <div class="flex items-center justify-between mb-4">
-                            <span class="text-xs font-normal text-slate-400 uppercase tracking-wider">Status</span>
-                            <span id="statusBadge" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 text-blue-300 text-xs font-normal rounded-full">
-                                <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                                Uploaded
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Primary Action Container -->
                 <div id="primaryActionContainer" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 hidden shrink-0">
                     <p id="primaryHelperText" class="text-xs text-amber-400 mb-2 hidden">💡 Review and edit your Extracted Terms before translating.</p>
@@ -502,11 +548,11 @@
                             Next<i class="fa-solid fa-arrow-right ml-1"></i>
                         </button>
                     </div>
-                    
+
                     <div id="primaryGhostLink" class="mt-2 text-center hidden">
                         <button type="button" id="downloadRawTranscriptionLink" class="text-xs text-slate-500 dark:text-[#8A8F98] hover:text-slate-700 dark:hover:text-[#E2E2E8] underline">or download raw transcription</button>
                     </div>
-                    
+
                     <div id="exportPanel" class="hidden mt-4 p-4 bg-emerald-900/20 border border-emerald-800/50 rounded-xl">
                         <p class="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider mb-3">Download Subtitles & Translations</p>
                         <div id="primaryExportGrid" class="grid grid-cols-2 gap-2">
@@ -530,10 +576,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Right Panel - Terms & Subtitles -->
-            <div class="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
                 <!-- Terms Table -->
                 <div id="termsPanel" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 flex-1 min-h-0 flex flex-col">
                     <div class="flex items-center justify-between mb-4 shrink-0">
