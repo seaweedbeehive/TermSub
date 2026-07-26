@@ -53,3 +53,5 @@ htmlcov/
 docs/
 # Screenshots
 .screenshots/
+# Claude Code local settings and skills
+.claude/
