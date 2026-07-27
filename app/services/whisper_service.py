@@ -28,10 +28,19 @@ from app.services.transcription import (
 class _SegmentWrapper:
     """Universal segment wrapper — used by all transcription pipelines."""
 
-    def __init__(self, start: float, end: float, text: str):
+    def __init__(
+        self,
+        start: float,
+        end: float,
+        text: str,
+        avg_logprob: float | None = None,
+        no_speech_prob: float | None = None,
+    ):
         self.start = start
         self.end = end
         self.text = text
+        self.avg_logprob = avg_logprob
+        self.no_speech_prob = no_speech_prob
 
 
 class _InfoWrapper:
@@ -174,6 +183,8 @@ def openai_transcribe(
                 start=float(item.get("start", 0)),
                 end=float(item.get("end", 0)),
                 text=str(item.get("text", "")).strip(),
+                avg_logprob=item.get("avg_logprob"),
+                no_speech_prob=item.get("no_speech_prob"),
             )
         )
 
@@ -382,6 +393,8 @@ def transcribe_video(
                     start_time=segment.start,
                     end_time=segment.end,
                     original_text=text,
+                    avg_logprob=segment.avg_logprob,
+                    no_speech_prob=segment.no_speech_prob,
                 )
                 session.add(db_segment)
                 session.commit()

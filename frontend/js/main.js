@@ -439,6 +439,10 @@
                     terminologyCheckbox.checked = config.terminology;
                 }
             }
+            const transcriptCheckbox = document.getElementById('reviewTranscriptCheckbox');
+            if (transcriptCheckbox) {
+                transcriptCheckbox.checked = config?.reviewTranscript ?? true;
+            }
 
             // Make sure the status and action containers are visible
             const statusCardEl = document.getElementById('statusCard');
@@ -1741,6 +1745,11 @@
             return hours * 3600 + minutes * 60 + seconds + millis / 1000;
         }
         
+        function isLowConfidence(seg) {
+            return (seg.avg_logprob != null && seg.avg_logprob < -0.8)
+                || (seg.no_speech_prob != null && seg.no_speech_prob > 0.5);
+        }
+
         function renderSubtitleTimeline(segments) {
             const grid = document.getElementById('timelineCardGrid');
             if (!grid) return;
@@ -1762,6 +1771,15 @@
                 const clone = template.content.cloneNode(true);
                 const card = clone.querySelector('.group');
                 clone.querySelector('.seq-num').textContent = `#${seg.sequence_number || idx + 1}`;
+
+                const lowConfidenceBadge = card.querySelector('.low-confidence-badge');
+                if (lowConfidenceBadge) {
+                    const flagged = isLowConfidence(seg);
+                    lowConfidenceBadge.classList.toggle('hidden', !flagged);
+                    if (flagged) {
+                        lowConfidenceBadge.title = `avg_logprob=${seg.avg_logprob}, no_speech_prob=${seg.no_speech_prob}`;
+                    }
+                }
 
                 const startInput = card.querySelector('input[data-time-role="start"]');
                 const endInput = card.querySelector('input[data-time-role="end"]');
@@ -1786,6 +1804,11 @@
                         textEl.classList.add('text-slate-400', 'dark:text-[#6B7280]', 'italic');
                     }
                     textEl.dataset.originalText = textEl.textContent;
+                    // Track which field is actually being shown/edited, so the
+                    // blur-save handler patches the right one — otherwise editing
+                    // an untranslated segment's original text silently saves it
+                    // as a translation instead of fixing the transcript.
+                    textEl.dataset.field = seg.translated_text != null ? 'translated_text' : 'original_text';
                 }
 
                 grid.appendChild(clone);
@@ -1837,6 +1860,7 @@
                         }
                     }
 
+                    let textField = null;
                     if (textEl) {
                         const newText = textEl.innerText.trim();
                         if (newText === '') {
@@ -1844,14 +1868,15 @@
                             textEl.textContent = textEl.dataset.originalText || '(empty)';
                             return;
                         }
-                        payload.translated_text = newText;
+                        textField = textEl.dataset.field || 'translated_text';
+                        payload[textField] = newText;
                     }
 
                     // Skip network call if nothing changed compared to the last rendered state.
                     const originalSeg = currentTimelineSegments.find(s => s.id === segmentId);
                     if (originalSeg) {
                         const changed = (
-                            (payload.translated_text !== undefined && payload.translated_text !== originalSeg.translated_text) ||
+                            (textField !== null && payload[textField] !== originalSeg[textField]) ||
                             (payload.start_time !== undefined && payload.start_time !== formatTimecode(originalSeg.start_time)) ||
                             (payload.end_time !== undefined && payload.end_time !== formatTimecode(originalSeg.end_time))
                         );
@@ -2248,15 +2273,10 @@
                     // Persist transcription milestone
                     persistTranscription(currentVideoId);
 
-                    // Auto-advance through the selected pipeline
-                    if (targetPipelineMode === 'terminology') {
-                        log('Auto-advancing to terminology analysis...');
-                        updateButtonVisibility('transcribed');
-                        setTimeout(() => analyzeVideo(), 0);
-                    } else if (targetPipelineMode === 'subtitles') {
-                        log('Auto-advancing to translation...');
-                        updateButtonVisibility('transcribed');
-                        setTimeout(() => skipAndTranslate(), 0);
+                    // Auto-advance through the selected pipeline (or pause for
+                    // transcript review first — see advanceAfterTranscription).
+                    if (targetPipelineMode === 'terminology' || targetPipelineMode === 'subtitles') {
+                        setTimeout(() => advanceAfterTranscription(targetPipelineMode), 0);
                     } else {
                         // Transcribe-only (or no mode): show export buttons
                         updateButtonVisibility('transcribed');
@@ -2501,6 +2521,16 @@
             refreshDisplayedStep();
         }
 
+        function isTranscriptReviewPending() {
+            // Text documents skip transcription entirely, so there's nothing to review here.
+            if (currentFileType === 'text') return false;
+            if (targetPipelineMode !== 'terminology' && targetPipelineMode !== 'subtitles') return false;
+            const currentStatus = currentVideoId ? lastKnownStatus : null;
+            if (currentStatus !== 'transcribed') return false;
+            const cfg = window.jobSession ? (window.jobSession.loadSession()?.config || {}) : {};
+            return cfg.reviewTranscript !== false && cfg.transcriptReviewConfirmed !== true;
+        }
+
         function updateStepRail(step) {
             // Keep the left-hand step rail in sync with the real wizard step
             // (0 = upload/config, 2 = processing/review, 3 = completed/export —
@@ -2534,7 +2564,10 @@
             const stepTwoLabel = document.getElementById('stepTwoLabel');
             const stepTwoDesc = document.getElementById('stepTwoDesc');
             if (stepTwoLabel && stepTwoDesc) {
-                if (targetPipelineMode === 'transcribe') {
+                if (isTranscriptReviewPending()) {
+                    stepTwoLabel.textContent = 'Review transcript';
+                    stepTwoDesc.textContent = 'Confirm Whisper got it right';
+                } else if (targetPipelineMode === 'transcribe') {
                     stepTwoLabel.textContent = 'Review subtitles';
                     stepTwoDesc.textContent = 'Check your transcription';
                 } else if (targetPipelineMode === 'subtitles') {
@@ -2624,6 +2657,32 @@
                                         .catch(err => console.error('Failed to load transcription:', err));
                                 }
                             }
+                        } else if (isTranscriptReviewPending()) {
+                            // Transcription just finished and the user opted to review it
+                            // before terminology extraction / translation proceeds. Reuse
+                            // the same subtitle-timeline panel the transcribe-only pipeline
+                            // uses, showing original_text (no translation exists yet).
+                            if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                            if (currentVideoId) {
+                                fetch(`/videos/${currentVideoId}`)
+                                    .then(r => r.json())
+                                    .then(data => {
+                                        if (data.segments) renderSubtitleTimeline(data.segments);
+                                    })
+                                    .catch(err => console.error('Failed to load transcript for review:', err));
+                            }
+                            helperText?.classList.add('hidden');
+                            primaryBtn.textContent = 'Continue to Translation';
+                            primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
+                            primaryBtn.onclick = () => {
+                                const session = window.jobSession ? window.jobSession.loadSession() : null;
+                                const cfg = session?.config || {};
+                                if (window.jobSession && currentVideoId) {
+                                    window.jobSession.saveConfig(currentVideoId, { ...cfg, transcriptReviewConfirmed: true });
+                                }
+                                advanceAfterTranscription(targetPipelineMode);
+                            };
+                            primaryBtn.disabled = false;
                         } else {
                             // Terminology / translation pipeline.
                             if (termsPanel) termsPanel.classList.remove('hidden');
@@ -2784,14 +2843,8 @@
                         isJobRunning = false;
                         hasStartedProcessing = false;
                         persistTranscription(currentVideoId);
-                        if (targetPipelineMode === 'terminology') {
-                            log('Auto-advancing to terminology analysis...');
-                            updateButtonVisibility('transcribed');
-                            setTimeout(() => analyzeVideo(), 0);
-                        } else if (targetPipelineMode === 'subtitles') {
-                            log('Auto-advancing to translation...');
-                            updateButtonVisibility('transcribed');
-                            setTimeout(() => skipAndTranslate(), 0);
+                        if (targetPipelineMode === 'terminology' || targetPipelineMode === 'subtitles') {
+                            setTimeout(() => advanceAfterTranscription(targetPipelineMode), 0);
                         } else {
                             updateButtonVisibility('transcribed');
                         }
@@ -2989,7 +3042,7 @@
                     return;
                 }
                 console.log('[pipeline] runPipeline terminology calling analyzeVideo');
-                await analyzeVideo();
+                await advanceAfterTranscription('terminology');
                 return;
             }
 
@@ -3007,7 +3060,7 @@
                     return;
                 }
                 console.log('[pipeline] runPipeline subtitles calling skipAndTranslate');
-                await skipAndTranslate();
+                await advanceAfterTranscription('subtitles');
                 return;
             }
 
@@ -3030,10 +3083,13 @@
 
             const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
             const skipGlossary = terminologyCheckbox ? !terminologyCheckbox.checked : undefined;
+            const transcriptCheckbox = document.getElementById('reviewTranscriptCheckbox');
+            const reviewTranscript = transcriptCheckbox ? transcriptCheckbox.checked : undefined;
 
             const sourceChanged = sourceLang && sourceLang !== (saved.sourceLang || 'auto');
             const targetChanged = targetLang && targetLang !== saved.targetLang;
             const glossaryChanged = skipGlossary !== undefined && skipGlossary !== (saved.skipGlossary ?? false);
+            const reviewTranscriptChanged = reviewTranscript !== undefined && reviewTranscript !== (saved.reviewTranscript ?? true);
 
             if (sourceChanged || targetChanged || glossaryChanged) {
                 try {
@@ -3063,6 +3119,7 @@
                                 sourceLang: updated.source_language || 'auto',
                                 targetLang: updated.target_language,
                                 skipGlossary: updated.skip_glossary,
+                                reviewTranscript: reviewTranscript ?? saved.reviewTranscript,
                             },
                         });
                     }
@@ -3071,6 +3128,14 @@
                     showToast('Could not update language settings.', 'error');
                     return;
                 }
+            } else if (reviewTranscriptChanged && window.jobSession) {
+                // No backend-relevant field changed, but the checkbox is purely
+                // client-side state — still persist it so a toggle right before
+                // clicking "Translate" isn't silently lost.
+                window.jobSession.saveSession({
+                    jobId: currentVideoId,
+                    config: { ...saved, reviewTranscript },
+                });
             }
 
             await continuePipeline(mode);
@@ -3289,12 +3354,15 @@
                 
                 // Persist session so a refresh resumes from this job.
                 const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+                const transcriptCheckboxAtUpload = document.getElementById('reviewTranscriptCheckbox');
                 if (window.jobSession) {
                     window.jobSession.saveConfig(currentVideoId, {
                         sourceLang: sourceLangSel ? sourceLangSel.value : 'auto',
                         targetLang: targetLangSel ? targetLangSel.value : '',
                         terminology: terminologyCheckbox ? terminologyCheckbox.checked : true,
                         skipGlossary: terminologyCheckbox ? !terminologyCheckbox.checked : false,
+                        reviewTranscript: transcriptCheckboxAtUpload ? transcriptCheckboxAtUpload.checked : true,
+                        transcriptReviewConfirmed: false,
                         videoName: data.filename || 'Untitled Project',
                         mode: targetPipelineMode || 'translate',
                     });
@@ -3400,6 +3468,30 @@
 
             } catch (err) {
                 log((isTextFile ? 'Parsing' : 'Transcription') + ' failed: ' + err.message, 'error');
+            }
+        }
+
+        // Single choke point for "transcription just finished, what next?" — called
+        // from all three places that detect that transition (WebSocket job_complete,
+        // the HTTP polling fallback, and runPipeline's resume-time wait) so the
+        // review-checkpoint gating rule only has to be written once.
+        async function advanceAfterTranscription(mode) {
+            const session = window.jobSession ? window.jobSession.loadSession() : null;
+            const cfg = session?.config || {};
+            const reviewWanted = cfg.reviewTranscript !== false; // default true
+            const alreadyConfirmed = cfg.transcriptReviewConfirmed === true;
+
+            if ((mode === 'terminology' || mode === 'subtitles') && reviewWanted && !alreadyConfirmed) {
+                log('Awaiting transcript review before continuing...', 'info');
+                updateButtonVisibility('transcribed');
+                userWizardStep = null;
+                refreshDisplayedStep();
+                return;
+            }
+            if (mode === 'terminology') {
+                await analyzeVideo();
+            } else if (mode === 'subtitles') {
+                await skipAndTranslate();
             }
         }
 

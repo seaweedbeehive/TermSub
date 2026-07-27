@@ -206,6 +206,8 @@ class Segment(Base):
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     original_text: Mapped[str] = mapped_column(Text, nullable=False)
     translated_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    avg_logprob: Mapped[float | None] = mapped_column(Float, nullable=True)
+    no_speech_prob: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     video: Mapped["Video"] = relationship("Video", back_populates="segments")

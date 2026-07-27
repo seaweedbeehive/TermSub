@@ -16,6 +16,7 @@ class SegmentCreate(SegmentBase):
 
 class SegmentUpdate(BaseModel):
     translated_text: str | None = None
+    original_text: str | None = None
     start_time: str | None = None
     end_time: str | None = None
 
@@ -26,4 +27,6 @@ class SegmentOut(SegmentBase):
     id: str
     video_id: str
     translated_text: str | None
+    avg_logprob: float | None = None
+    no_speech_prob: float | None = None
     created_at: datetime

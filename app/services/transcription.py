@@ -53,6 +53,28 @@ def get_openai_client(api_key: str | None = None) -> OpenAI:
     return OpenAI(api_key=effective_key)
 
 
+def _worse_logprob(a: float | None, b: float | None) -> float | None:
+    """Combine two avg_logprob values, keeping the worse (lower) one.
+
+    None means "no confidence data" (e.g. text pipeline), not "confident" —
+    so None only wins when the other side is also None.
+    """
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return min(a, b)
+
+
+def _worse_no_speech_prob(a: float | None, b: float | None) -> float | None:
+    """Combine two no_speech_prob values, keeping the worse (higher) one."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return max(a, b)
+
+
 def merge_subtitle_segments(
     segments: list[dict[str, Any]],
     min_duration: float = 1.0,
@@ -65,6 +87,12 @@ def merge_subtitle_segments(
     Uses a greedy algorithm that merges segments until they reach
     professional subtitle standards (min duration or min chars) or
     hit maximum limits (max duration or max chars).
+
+    When segments carry confidence data (avg_logprob/no_speech_prob), a
+    merged segment keeps the WORST value among its inputs rather than an
+    average — this function exists to merge segments that are individually
+    too short to be usable subtitles, which is exactly where a short bad
+    stretch would otherwise get diluted into an average-looking merged one.
     """
     if not segments:
         return []
@@ -78,6 +106,8 @@ def merge_subtitle_segments(
         "start": segments[0]["start"],
         "end": segments[0]["end"],
         "text": segments[0]["text"],
+        "avg_logprob": segments[0].get("avg_logprob"),
+        "no_speech_prob": segments[0].get("no_speech_prob"),
     }
 
     for next_seg in segments[1:]:
@@ -112,10 +142,22 @@ def merge_subtitle_segments(
 
         if is_good_enough or would_exceed_max:
             merged.append(current)
-            current = {"start": next_start, "end": next_end, "text": next_text}
+            current = {
+                "start": next_start,
+                "end": next_end,
+                "text": next_text,
+                "avg_logprob": next_seg.get("avg_logprob"),
+                "no_speech_prob": next_seg.get("no_speech_prob"),
+            }
         else:
             current["end"] = merged_end
             current["text"] = merged_text
+            current["avg_logprob"] = _worse_logprob(
+                current["avg_logprob"], next_seg.get("avg_logprob")
+            )
+            current["no_speech_prob"] = _worse_no_speech_prob(
+                current["no_speech_prob"], next_seg.get("no_speech_prob")
+            )
 
     merged.append(current)
     return merged
@@ -232,6 +274,12 @@ def transcribe_with_openai(
         text = getattr(seg, "text", None)
         if text is None:
             text = seg.get("text", "")
+        avg_logprob = getattr(seg, "avg_logprob", None)
+        if avg_logprob is None:
+            avg_logprob = seg.get("avg_logprob") if isinstance(seg, dict) else None
+        no_speech_prob = getattr(seg, "no_speech_prob", None)
+        if no_speech_prob is None:
+            no_speech_prob = seg.get("no_speech_prob") if isinstance(seg, dict) else None
 
         # Shift segment timestamps by the chunk offset before any correction.
         start = float(start) + time_offset
@@ -246,6 +294,12 @@ def transcribe_with_openai(
                 "start": start,
                 "end": end,
                 "text": str(text).strip(),
+                "avg_logprob": (
+                    float(avg_logprob) if avg_logprob is not None else None
+                ),
+                "no_speech_prob": (
+                    float(no_speech_prob) if no_speech_prob is not None else None
+                ),
             }
         )
 

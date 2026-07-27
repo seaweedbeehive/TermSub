@@ -59,6 +59,20 @@ def _safe_unlink(path: Path | None) -> None:
             path.unlink(missing_ok=True)
 
 
+def _segment_to_dict(s: Segment) -> dict[str, Any]:
+    """Serialize a Segment for the segment-list endpoints (add/split/delete/restore/replace)."""
+    return {
+        "id": s.id,
+        "sequence_number": s.sequence_number,
+        "start_time": s.start_time,
+        "end_time": s.end_time,
+        "original_text": s.original_text,
+        "translated_text": s.translated_text,
+        "avg_logprob": s.avg_logprob,
+        "no_speech_prob": s.no_speech_prob,
+    }
+
+
 async def _websocket_progress_callback(
     video_id: str, status: str, data: dict[str, Any]
 ) -> None:
@@ -951,6 +965,8 @@ def update_segment(
 
         if body.translated_text is not None:
             segment.translated_text = body.translated_text
+        if body.original_text is not None:
+            segment.original_text = body.original_text
         if new_start is not None:
             segment.start_time = new_start
         if new_end is not None:
@@ -1011,17 +1027,7 @@ def batch_replace_segments(
 
     return {
         "status": "success",
-        "segments": [
-            {
-                "id": s.id,
-                "sequence_number": s.sequence_number,
-                "start_time": s.start_time,
-                "end_time": s.end_time,
-                "original_text": s.original_text,
-                "translated_text": s.translated_text,
-            }
-            for s in updated_segments
-        ],
+        "segments": [_segment_to_dict(s) for s in updated_segments],
     }
 
 
@@ -1079,17 +1085,7 @@ def add_segment(
     return {
         "status": "success",
         "new_segment_id": new_segment.id,
-        "segments": [
-            {
-                "id": s.id,
-                "sequence_number": s.sequence_number,
-                "start_time": s.start_time,
-                "end_time": s.end_time,
-                "original_text": s.original_text,
-                "translated_text": s.translated_text,
-            }
-            for s in updated_segments
-        ],
+        "segments": [_segment_to_dict(s) for s in updated_segments],
     }
 
 
@@ -1142,17 +1138,7 @@ def delete_segment(
 
     return {
         "status": "success",
-        "segments": [
-            {
-                "id": s.id,
-                "sequence_number": s.sequence_number,
-                "start_time": s.start_time,
-                "end_time": s.end_time,
-                "original_text": s.original_text,
-                "translated_text": s.translated_text,
-            }
-            for s in updated_segments
-        ],
+        "segments": [_segment_to_dict(s) for s in updated_segments],
     }
 
 
@@ -1255,17 +1241,7 @@ def split_segment(
     return {
         "status": "success",
         "new_segment_id": new_segment.id,
-        "segments": [
-            {
-                "id": s.id,
-                "sequence_number": s.sequence_number,
-                "start_time": s.start_time,
-                "end_time": s.end_time,
-                "original_text": s.original_text,
-                "translated_text": s.translated_text,
-            }
-            for s in updated_segments
-        ],
+        "segments": [_segment_to_dict(s) for s in updated_segments],
     }
 
 
@@ -1322,15 +1298,5 @@ def restore_segments(
 
     return {
         "status": "success",
-        "segments": [
-            {
-                "id": s.id,
-                "sequence_number": s.sequence_number,
-                "start_time": s.start_time,
-                "end_time": s.end_time,
-                "original_text": s.original_text,
-                "translated_text": s.translated_text,
-            }
-            for s in updated_segments
-        ],
+        "segments": [_segment_to_dict(s) for s in updated_segments],
     }

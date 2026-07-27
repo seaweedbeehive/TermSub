@@ -504,6 +504,13 @@
                                         <span class="block text-[10px] text-slate-500 mt-0.5">Names, brands, and technical terms get extracted first so you can lock them in.</span>
                                     </label>
                                 </div>
+                                <div class="flex items-start gap-2 pl-3 ml-1 mt-2 border-l-2 border-slate-700">
+                                    <input type="checkbox" id="reviewTranscriptCheckbox" checked class="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-600">
+                                    <label for="reviewTranscriptCheckbox" class="text-xs text-slate-400 cursor-pointer select-none">
+                                        Review transcript before translating
+                                        <span class="block text-[10px] text-slate-500 mt-0.5">Check that Whisper got it right before it becomes the basis for translation.</span>
+                                    </label>
+                                </div>
                             </div>
                             <div class="flex items-center gap-2 text-[10px] text-slate-600 uppercase tracking-wider">
                                 <span class="flex-1 h-px bg-slate-800"></span>or<span class="flex-1 h-px bg-slate-800"></span>
@@ -630,6 +637,9 @@
                             <div class="flex items-center justify-between mb-1.5 text-slate-400">
                                 <div class="flex items-center gap-2">
                                     <span class="seq-num text-[10px] font-normal bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">#1</span>
+                                    <span class="low-confidence-badge hidden text-[10px] text-amber-400" title="">
+                                        <i class="fa-solid fa-triangle-exclamation"></i> Low confidence
+                                    </span>
                                     <div class="flex items-center gap-1.5">
                                         <label class="text-[10px] text-slate-500">Start</label>
                                         <input type="text" data-time-role="start" placeholder="00:00:00,000"
