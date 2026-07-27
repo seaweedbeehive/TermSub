@@ -17,8 +17,10 @@ The product's distinguishing feature is a **terminology-first translation pipeli
   2. **Glossary Agent** — extracts key terms and proposes translations.
   3. **Translator Agent** — performs sliding-window translation using the glossary and full-transcript context.
 - **Review** extracted terms, edit subtitles inline, split/add/remove segments, and run global find/replace.
+- **Transcript review checkpoint** (opt-in, default on): after transcription, users can review/edit the raw transcript before analysis/translation starts. Segments Whisper was unsure about are flagged using `avg_logprob`/`no_speech_prob` captured at transcription time (`Segment.avg_logprob`, `Segment.no_speech_prob`). This is gated client-side by a `reviewTranscript` config flag, not a new `VideoStatus` value — the pipeline still pauses at `TRANSCRIBED`.
 - **Export** subtitles as SRT, WebVTT, TXT, or JSON (plus original transcription SRT).
 - **Skip terminology mode** (`skip_glossary`) lets users bypass analysis and translate directly.
+- **Text-only pipeline**: a parallel pipeline for plain text/SRT/VTT documents (`ContentType.TEXT`) that skips audio/transcription entirely — extract terms and translate text directly. Served by `app/api/text_translation.py` (mounted at `/api/text`), not `app/api/videos.py`.
 
 ### Language Support
 
@@ -53,7 +55,9 @@ UPLOADED → QUEUED → EXTRACTING_AUDIO → TRANSCRIBING → TRANSCRIBED
 → TRANSLATING → COMPLETED
 ```
 
-Errors land in `ERROR`. When `skip_glossary=True`, the pipeline jumps from `TRANSCRIBED` directly to `TRANSLATING`.
+Errors land in `ERROR`. When `skip_glossary=True`, the pipeline jumps from `TRANSCRIBED` directly to `TRANSLATING`. When the transcript-review checkpoint is enabled (default), the frontend pauses at `TRANSCRIBED` until the user confirms the transcript, tracked client-side (`transcriptReviewConfirmed` in job-session config), not as a DB status.
+
+The text-only pipeline reuses the same status enum but drives it through `app/worker/text_tasks.py` instead of `app/worker/tasks.py`; its Celery job rows use the free-form `job_type` values `"text_analyze"` / `"text_translate"` (a raw SQL `CHECK` constraint in `job_queue`, not the `JobType` StrEnum, which still only covers `transcribe`/`analyze`/`translate` for the video pipeline).
 
 ## Repository Layout
 
@@ -61,38 +65,45 @@ Errors land in `ERROR`. When `skip_glossary=True`, the pipeline jumps from `TRAN
 app/
   main.py                  # FastAPI entry point, lifespan, WebSocket, static routes
   api/                     # FastAPI routers (thin: validate + dispatch)
-    auth.py                # Login, signup, password reset, verification, logout
-    videos.py              # Upload, transcribe, analyze, translate, segment CRUD
+    auth.py                # Login, signup, password reset, verification, logout, ws-token
+    videos.py              # Upload, transcribe, analyze, translate, segment CRUD (video pipeline)
+    text_translation.py    # Extract-terms/translate/export for the text-only pipeline (`/api/text`)
     terms.py               # Term CRUD and standardization
     export.py              # SRT/VTT/TXT/JSON export
     progress.py            # Progress/logs endpoints
+    jobs.py                # Job history list + single-job detail (`/jobs`)
     admin.py               # Admin user/quota endpoints
     profile.py             # Profile and account deletion
     quota.py               # Quota status endpoint
   services/                # Business logic and pipeline orchestration
     whisper_service.py     # FFmpeg extraction + OpenAI transcription orchestration
-    transcription.py       # OpenAI whisper-1 client, chunking, segment merge
-    context_analysis_service.py  # Director + Glossary agents
-    translation_pipeline.py      # Multi-agent pipeline class + Pydantic schemas
+    transcription.py       # OpenAI whisper-1 client, chunking, segment merge, confidence capture
+    context_analysis_service.py  # Director + Glossary agents (video pipeline)
+    translation_pipeline.py      # Multi-agent pipeline class + Pydantic schemas (video pipeline)
+    text_translation_service.py  # Term extraction + translation orchestration (text pipeline)
     gemini_service.py      # Historical wrapper; all LLM logic is now OpenAI
     upload_service.py      # File validation, sanitization, saving
-    text_parser.py         # Text/SRT ingestion
+    text_parser.py         # Text/SRT/VTT ingestion for the text pipeline
     progress_service.py    # Progress tracking DB writes
   agents/
-    translator.py          # Sliding-window OpenAI translator agent (DB-free core)
+    translator.py          # Sliding-window OpenAI translator agent, video pipeline (DB-free core)
+    text_translator_agent.py  # Sliding-window translator agent, text pipeline
+    text_context_agent.py     # Style-guide/glossary agent, text pipeline
   core/                    # Config, auth, quota, rate limiting, Celery, Redis pub/sub
     config.py              # Pydantic settings; rejects weak JWT secrets at import
     celery_app.py          # Celery + Redis configuration
+    redis_pool.py          # Shared sync/async Redis connection pools
     redis_pubsub.py        # Redis Pub/Sub bridge for worker → WebSocket progress
-    auth.py                # JWT, password hashing, current-user/BYOK dependency
+    auth.py                # JWT, password hashing, current-user/BYOK dependency, ws tokens
     quota.py               # Trial-minute and BYOK abuse-limit enforcement via Redis
     rate_limit.py          # Sliding-window Redis rate limiter
+    email.py               # Resend-backed transactional email helpers
     openai_key_context.py  # ContextVar for BYOK API keys
     languages.py           # 59-language code/name map
   models/                  # SQLAlchemy 2.0 models
-    video.py               # Video, Segment, Term, TermOccurrence, TranslationVariant, ProcessingLog
+    video.py               # Video, Segment (incl. avg_logprob/no_speech_prob), Term, TermOccurrence, TranslationVariant, ProcessingLog
     user.py                # User, UserSession
-    job_queue.py           # JobQueue, JobStatus, JobType
+    job_queue.py           # JobQueue, JobStatus, JobType (video pipeline only; text pipeline uses raw job_type strings)
     analytics.py           # PageView, UsageEvent
     newsletter.py          # Newsletter signup
   db/                      # Engine, SessionLocal, base, session helpers
@@ -101,10 +112,17 @@ app/
     session_utils.py       # get_db_session context manager + short-session helpers
   schemas/                 # Pydantic request/response models
   worker/
-    tasks.py               # Celery task implementations
+    tasks.py               # Celery task implementations, video pipeline
+    text_tasks.py          # Celery task implementations, text pipeline
 frontend/                  # Static HTML/JS/CSS served by FastAPI; no build step
-alembic/                   # Alembic migrations (intended single source of truth)
-migrations/                # Standalone migration scripts (legacy; see notes below)
+  index.html              # Main app (upload/review/translate wizard)
+  admin.html              # Admin dashboard
+  landing.html, contact.html  # Marketing pages
+  legal/                  # Privacy, beta terms, AI disclosure, imprint
+  js/main.js              # Primary app logic, WebSocket handling, wizard steps
+  js/jobSession.js        # Per-video job-session config persisted client-side
+  js/textPipeline.js      # Text-pipeline-specific UI wiring
+alembic/                   # Alembic migrations (sole source of truth; `start.sh` runs `alembic upgrade head` on boot)
 tests/                     # pytest suite; hits real Postgres + Redis
 scripts/                   # make_admin.py, seed_admin.py
 ```
@@ -120,7 +138,7 @@ scripts/                   # make_admin.py, seed_admin.py
 - **Auth**: passlib/bcrypt, PyJWT 2.10
 - **Email**: Resend
 - **Frontend**: Vanilla JS, Tailwind CSS via CDN, no build step
-- **Code Quality**: Ruff (lint + format), MyPy strict
+- **Code Quality**: Ruff (lint + format), MyPy strict (CI also installs `types-passlib` for passlib stubs)
 - **Testing**: pytest
 
 ## Build, Run, and Test Commands
@@ -158,7 +176,7 @@ You need PostgreSQL and Redis running. The easiest local path is Docker Compose.
 docker compose up --build
 ```
 
-This starts `web` (FastAPI), `worker` (Celery), `db` (Postgres 15), and `redis`. Note that the compose file currently does **not** run `alembic upgrade head` automatically; see the Database Migrations section below.
+This starts a `migrate` service (waits for Postgres, then runs `alembic upgrade head`), `web` (FastAPI, `uvicorn --reload`), `worker` (Celery), `db` (Postgres 15), and `redis`.
 
 #### Manual / Development
 
@@ -178,7 +196,7 @@ The web UI is at `http://localhost:8000`. API docs are at `/docs` and `/redoc`.
 
 #### Production Entrypoint
 
-`start.sh` runs `alembic upgrade heads`, starts the Celery worker in the background, and then starts Uvicorn. This is the single-container Render entrypoint.
+`start.sh` runs `alembic upgrade head`, starts the Celery worker in the background, and then starts Uvicorn. This is the single-container entrypoint used by both `Dockerfile`/Railway (the live target) and the still-present `render.yaml` — see Deployment below.
 
 ### Tests
 
@@ -199,37 +217,40 @@ Requirements for tests:
 
 ### Code Quality
 
-CI runs all three and blocks merge on failure:
+`.github/workflows/ci.yml` runs all three on every push/PR to `main` and blocks merge on failure:
 
 ```bash
+pip install ruff mypy types-passlib
+pip install -r requirements.txt
 ruff check .
 ruff format --check .     # use `ruff format .` to auto-fix
 mypy app/ --config-file pyproject.toml
 ```
 
-MyPy runs in **strict** mode over `app/` only. New code must be fully type-annotated. Untyped third-party libraries (celery, redis, openai, ffmpeg, etc.) are exempted in `pyproject.toml` under `[[tool.mypy.overrides]]` — extend that list rather than sprinkling `# type: ignore`.
+**Verify locally against a venv that matches `requirements.txt`, not your ambient environment.** An ambient/global Python environment can have newer package versions than the pins in `requirements.txt` (e.g. `redis`, `fastapi`, `starlette`) — those newer versions can ship different or more complete type stubs, so `mypy`/`ruff` can pass locally and still fail in CI (or vice versa) purely from a version mismatch, with no code difference. Before trusting a local "clean" result, build a disposable venv the same way CI does:
+
+```bash
+python3.11 -m venv /tmp/ci_venv   # match .github/workflows/ci.yml's Python version
+/tmp/ci_venv/bin/pip install -r requirements.txt
+/tmp/ci_venv/bin/pip install ruff mypy types-passlib
+/tmp/ci_venv/bin/mypy app/ --config-file pyproject.toml
+```
+
+MyPy runs in **strict** mode over `app/` only. New code must be fully type-annotated.
+
+- **Missing/incomplete stubs for a whole module** (e.g. celery, openai, ffmpeg): exempt in `pyproject.toml` under `[[tool.mypy.overrides]] / ignore_missing_imports = true` — extend that list rather than sprinkling `# type: ignore`.
+- **A specific untyped call on an otherwise-typed module** (e.g. `redis.ConnectionPool.from_url()`, `Pipeline.execute()` in the pinned `redis==5.2.0`): `ignore_missing_imports` does **not** silence this — the import resolves fine, only that one function lacks annotations, so mypy still raises `no-untyped-call` under strict mode. Use a targeted `# type: ignore[no-untyped-call]` on that line instead (see `app/core/redis_pool.py`, `app/core/quota.py`).
+- **A third-party function typed to return `Any`** (e.g. `jwt.decode()`, `resend.Emails.send()`): cast to the real runtime shape at the call site — `cast("dict[str, Any]", jwt.decode(...))` — rather than loosening the function's own return type. Several examples are in `app/core/auth.py`, `app/core/quota.py`, `app/core/email.py`.
+- `passlib` has real published stubs (`types-passlib`) as of this writing — install them rather than adding `passlib.*` to the ignore-imports list.
 
 ## Database Migrations
 
-There are **two migration artifacts** in the repo today:
+`alembic/` is the **sole** migration system — the legacy standalone `migrations/` scripts and the old `Base.metadata.create_all()` / `ensure_schema()` startup safety nets have been removed. `start.sh` (the production entrypoint) runs `alembic upgrade head` automatically on every boot, including on Railway deploys.
 
-1. `alembic/` — Alembic revisions (intended single source of truth).
-2. `migrations/` — Standalone scripts (legacy) such as `add_skip_glossary_column.py`, `apply_migration.py`, `add_celery_task_id_column.py`.
-
-At startup, `app/main.py` runs `Base.metadata.create_all()` and a schema-check function that verifies required `job_queue` columns (`last_heartbeat`, `timeout_at`, `locked_by`, `celery_task_id`) exist. `app/db/session.py` also has an `ensure_schema()` safety net that runs raw `ALTER TABLE` on import.
-
-For a fresh Postgres database, the recommended path is:
+For a fresh or existing Postgres database:
 
 ```bash
 alembic upgrade head
-```
-
-For an existing pre-v2 database, the standalone scripts may still be needed:
-
-```bash
-python migrations/add_skip_glossary_column.py
-python migrations/apply_migration.py
-python migrations/add_celery_task_id_column.py
 ```
 
 To create a new revision after editing models:
@@ -252,10 +273,12 @@ Routers in `app/api/` are intentionally thin: validate input, enforce quota/owne
 
 ### Background Jobs and Progress
 
-Long-running work is performed by Celery tasks in `app/worker/tasks.py`:
+Long-running work is performed by Celery tasks in `app/worker/tasks.py` (video pipeline):
 - `transcribe_video_task`
 - `analyze_video_task`
 - `translate_video_task`
+
+The text pipeline has its own equivalents in `app/worker/text_tasks.py`: `extract_text_terms_task`, `translate_text_task`.
 
 Tasks publish progress via `publish_progress()` in `app/core/redis_pubsub.py`. The FastAPI lifespan starts an async Redis Pub/Sub listener (`start_redis_listener`) that forwards those messages to connected WebSocket clients on `/ws/videos/{video_id}`.
 
@@ -287,7 +310,7 @@ Two identity types resolve through `get_current_user_or_byok` into a `RequestIde
 The chosen API key flows: endpoint → Celery task arg → `byok_api_key` ContextVar (`app/core/openai_key_context.py`) → picked up by OpenAI client factories (`get_effective_openai_key`).
 
 WebSocket authentication uses subprotocols to avoid putting credentials in the URL:
-- Standard: `["termsub-auth", <jwt>]`
+- Standard: `["termsub-ws-token", <short-lived-ws-token>]` — the client first calls `POST /api/auth/ws-token` (rate-limited, requires a valid JWT) to mint a 60-second-lived token via `create_ws_token`/`decode_ws_token`, then opens the socket with that token, not the long-lived access JWT itself.
 - BYOK: `["termsub-byok", <openai-api-key>]`
 
 ### Quota and Rate Limits
@@ -331,7 +354,7 @@ Project-specific style conventions observed in the code:
 
 ## Security Considerations
 
-The following are current security facts and known risks agents should be aware of. Refer to `docs/audit-2026-07-03.md` for the full audit report.
+The following are current security facts and known risks agents should be aware of. Refer to `docs/codebase-review.md` (2026-07-10, full backend/frontend/worker/deployment audit with file:line citations and severity ratings) for the fuller report — several of its findings have since been fixed (noted below); treat the doc itself as a point-in-time snapshot, not a live tracker.
 
 ### Current Defenses
 
@@ -341,29 +364,29 @@ The following are current security facts and known risks agents should be aware 
 - SQL queries use SQLAlchemy parameter binding; raw SQL in endpoints is parameterized.
 - CORS is restricted to a single configured origin with `allow_credentials=False`.
 - Token revocation blocklist stored in Redis by JWT ID (`jti`).
-- Global session invalidation via `user.sessions_invalidated_at`.
+- Global session invalidation via `user.sessions_invalidated_at`, including automatically on password change (`app/api/profile.py::update_password`, `app/api/auth.py` reset flow).
+- Email verification and password-reset tokens are hashed (`hash_token`, SHA-256) before storage in `users.email_verification_token` / `users.password_reset_token` — the raw token only ever exists in the emailed link.
+- `(video_id, sequence_number)` has a `unique=True` index (`idx_segments_video_seq` in `app/models/video.py`) — collisions are now rejected at the DB level.
+- Security headers middleware (`SecurityHeadersMiddleware` in `app/main.py`) sets CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and HSTS (on HTTPS requests).
+- Single migration system: `alembic/` only (see Database Migrations above) — no more parallel `Base.metadata.create_all()`/`ensure_schema()` startup patching.
 
 ### Known Risks (Do Not Reinvent Without Addressing)
 
-- **DOM XSS**: `frontend/js/main.js` and `frontend/admin.html` use `innerHTML`/`insertAdjacentHTML` with server-controlled strings in the activity log and toast system. Dynamic text should be escaped or created as DOM nodes.
-- **Plaintext tokens**: Email verification and password-reset tokens are stored in plaintext in `users.email_verification_token` and `users.password_reset_token`. They should be hashed with SHA-256 before storage.
-- **Dual migration systems**: `alembic/` and `migrations/` both exist; `Base.metadata.create_all()` and `ensure_schema()` run outside Alembic. Fresh deploys can become inconsistent.
-- **Missing unique constraint**: `(video_id, sequence_number)` has only a non-unique index; the translation pipeline assumes uniqueness.
+- **DOM XSS**: `frontend/js/main.js` and `frontend/admin.html` use `innerHTML`/`insertAdjacentHTML` with server-controlled strings in the activity log, toast system, admin tables, and job lists. Dynamic text should be escaped or created as DOM nodes. Still present as of this writing.
 - **Credentials in localStorage**: The frontend stores JWT and BYOK OpenAI key in `localStorage`, making them vulnerable to XSS/browser extensions.
-- **BYOK keys in Celery kwargs**: User OpenAI keys are serialized into Celery/Redis messages. They should be passed via short-lived one-time Redis tokens instead.
-- **Upload filename collisions**: `generate_unique_filename()` uses timestamp prefixes; two uploads in the same second with the same base name can collide.
-- **No security headers**: No CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, or HSTS middleware is configured.
-- **WebSocket ownership check**: `/ws/videos/{video_id}` authenticates the user but does not verify ownership of the specific video before accepting the connection.
-- **Rate-limit identifier**: Uses raw `request.client.host`, which is the proxy IP behind a reverse proxy, and fails open on Redis errors.
-- **Unbounded admin operations**: Bulk user delete and quota update endpoints lack bounds/confirmation.
-- **Password changes do not invalidate existing sessions**: Reset/change flows should set `sessions_invalidated_at`.
+- **BYOK keys in Celery kwargs**: User OpenAI keys are still passed as a plain `api_key` argument into Celery task calls (`app/worker/tasks.py`, `app/worker/text_tasks.py`), i.e. serialized into Redis broker messages. They should be passed via short-lived one-time Redis tokens instead.
+- **Upload filename collisions**: `generate_unique_filename()` (`app/services/upload_service.py`) uses timestamp prefixes; two uploads in the same second with the same base name can collide.
+- **WebSocket ownership check**: `/ws/videos/{video_id}` authenticates the caller's identity (see Authentication above) but does not verify that identity owns the specific `video_id` before accepting the connection.
+- **Rate-limit identifier**: `app/core/rate_limit.py` uses raw `request.client.host`, which is the proxy IP behind a reverse proxy, and fails open on Redis errors.
+- **Unbounded admin operations**: `POST /admin/users/bulk-delete` and the per-user quota-update endpoint are gated behind `require_admin_user` but still lack an explicit batch-size cap or confirmation step.
 
 When making changes, do not introduce new instances of these patterns, and prefer fixing them when the change touches related code.
 
 ## Deployment
 
-- **Docker**: `Dockerfile` is Python 3.11-slim with FFmpeg and libmagic. `docker-compose.yml` defines separate `web` and `worker` services plus Postgres and Redis.
-- **Render**: `render.yaml` defines a Docker web service (`termsub-web`) and a free Postgres database. `start.sh` is the production entrypoint. Note: `render.yaml` does not currently define a `healthCheckPath`; the `/health` endpoint exists and should be added for production deployments.
+- **Docker**: `Dockerfile` is Python 3.11-slim with FFmpeg and libmagic. `docker-compose.yml` defines separate `web` and `worker` services plus Postgres and Redis — this is the local dev stack (`termsub_root-web-1`, `termsub_root-worker-1`, `termsub_root-db-1`, `termsub_root-redis-1`).
+- **Railway is the live production target.** The GitHub repo is linked to a Railway project (`checkSuites: false`, so GitHub Actions CI and the Railway deploy are independent — a red CI run does not by itself block or cause a Railway deploy failure, and vice versa); pushing to `main` auto-triggers a build and deploy of the `web` service, which runs `start.sh` (→ `alembic upgrade head`, then Celery worker + Uvicorn) via the same `Dockerfile`. Deploys occasionally sit `QUEUED` for several minutes with `queuedReason: "Deployment queued due to upstream GitHub issues"` before clearing on their own — a known, transient, infrastructure-side delay, not a code or config problem.
+- **`render.yaml`** (a Docker web service `termsub-web` + a free Postgres database) is still present in the repo but is **not** the active deployment as of this writing — don't assume changes need to satisfy Render-specific constraints unless told otherwise. It also does not define a `healthCheckPath`; the `/health` endpoint exists if it's ever revived.
 
 ## Useful Endpoints
 
@@ -371,16 +394,24 @@ When making changes, do not introduce new instances of these patterns, and prefe
 |----------|---------|
 | `GET /health` | Health check |
 | `GET /api/version` | App version from `settings.VERSION` |
-| `POST /videos/upload` | Upload file; requires `target_language` |
+| `POST /videos/upload` | Upload video/audio file; requires `target_language` |
 | `POST /videos/{id}/transcribe` | Queue transcription |
 | `POST /videos/{id}/analyze` | Queue Director + Glossary analysis |
 | `POST /videos/{id}/translate` | Queue translation |
 | `POST /videos/{id}/translate-direct` | Set `skip_glossary=True` and queue translation |
+| `POST /api/text/{id}/extract-terms` | Queue term extraction for the text pipeline |
+| `POST /api/text/{id}/translate` | Queue translation for the text pipeline |
+| `GET /api/text/{id}/segments` | Fetch text-pipeline segments |
+| `GET /api/text/{id}/terms` | Fetch text-pipeline terms |
+| `POST /api/text/{id}/export` | Export text-pipeline translation |
+| `GET /jobs/` | List the current user's job history |
+| `GET /jobs/{id}` | Fetch a single job's detail |
+| `POST /api/auth/ws-token` | Mint a short-lived token for WebSocket auth (rate-limited) |
 | `GET /export/{id}/srt` | Download SRT |
 | `GET /export/{id}/vtt` | Download WebVTT |
 | `GET /export/{id}/txt` | Download translated text |
 | `GET /export/{id}/json` | Download full JSON |
-| `WS /ws/videos/{id}` | Real-time progress |
+| `WS /ws/videos/{id}` | Real-time progress; requires `["termsub-ws-token", <token>]` or `["termsub-byok", <key>]` subprotocol |
 
 ## Version Notes
 
