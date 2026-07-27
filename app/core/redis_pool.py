@@ -36,7 +36,7 @@ def get_redis_pool() -> redis.ConnectionPool:
     """Return the shared synchronous Redis connection pool."""
     global _sync_pool
     if _sync_pool is None:
-        _sync_pool = redis.ConnectionPool.from_url(
+        _sync_pool = redis.ConnectionPool.from_url(  # type: ignore[no-untyped-call]
             settings.REDIS_URL,
             max_connections=MAX_CONNECTIONS,
             decode_responses=True,

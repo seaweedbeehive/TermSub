@@ -29,7 +29,7 @@ def make_admin(email: str) -> None:
         sys.exit(1)
 
     engine = create_engine(database_url)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)  # noqa: N806
     db = SessionLocal()
 
     try:

@@ -60,7 +60,7 @@ def _safe_unlink(path: Path | None) -> None:
 
 
 def _segment_to_dict(s: Segment) -> dict[str, Any]:
-    """Serialize a Segment for the segment-list endpoints (add/split/delete/restore/replace)."""
+    """Serialize a Segment for the segment-list endpoints (add/split/delete/restore/replace)."""  # noqa: E501
     return {
         "id": s.id,
         "sequence_number": s.sequence_number,
@@ -91,6 +91,7 @@ def _reject_text_record(video: Video) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Use /api/text endpoints for text files.",
         )
+
 
 def require_video_owner(video: Video, identity: RequestIdentity) -> None:
     """Raise 403 if the current user does not own the video.
@@ -139,9 +140,12 @@ async def upload_video(
     quota = QuotaManager()
 
     try:
-        # Determine file size for abuse-limit checking
-        await file.seek(0, 2)
-        file_size_bytes = await file.tell()
+        # Determine file size for abuse-limit checking. UploadFile's async
+        # seek()/tell() don't accept a `whence` arg and tell() doesn't exist
+        # at all, so seek/tell the underlying file object directly - these
+        # are cheap metadata ops on a local buffer/temp file, not blocking I/O.
+        file.file.seek(0, 2)
+        file_size_bytes = file.file.tell()
         await file.seek(0)
         file_size_mb = file_size_bytes / (1024 * 1024)
     except Exception:
@@ -356,8 +360,8 @@ def update_video_config(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    'Cannot change source language after transcription has started. '
-                    'Please start a new project for a different source language.'
+                    "Cannot change source language after transcription has started. "
+                    "Please start a new project for a different source language."
                 ),
             )
         video.source_language = body.source_language
@@ -373,15 +377,13 @@ def update_video_config(
     # Changing the target language or toggling glossary extraction after terms were
     # ready (or translation completed) invalidates prior results so the pipeline
     # can re-run cleanly from transcription.
-    if (
-        target_language_changed
-        or (
-            body.skip_glossary is False
-            and video.status in {
-                VideoStatus.TRANSCRIBED.value,
-                VideoStatus.COMPLETED.value,
-            }
-        )
+    if target_language_changed or (
+        body.skip_glossary is False
+        and video.status
+        in {
+            VideoStatus.TRANSCRIBED.value,
+            VideoStatus.COMPLETED.value,
+        }
     ):
         # Changing the target language invalidates both existing translations and
         # extracted terms (terms include target-language translations). Reset the
@@ -394,7 +396,8 @@ def update_video_config(
             synchronize_session=False
         )
         video.status = VideoStatus.TRANSCRIBED.value
-        # Reset stale progress metadata so the UI doesn't show a completed/errored state.
+        # Reset stale progress metadata so the UI doesn't show a completed/errored
+        # state.
         video.progress_percent = 0
         video.processed_segments = 0
         video.current_segment_index = 0
@@ -403,10 +406,7 @@ def update_video_config(
         if body.skip_glossary is not None:
             video.skip_glossary = body.skip_glossary
 
-    if (
-        body.skip_glossary is True
-        and video.status == VideoStatus.TERMS_READY.value
-    ):
+    if body.skip_glossary is True and video.status == VideoStatus.TERMS_READY.value:
         video.status = VideoStatus.TRANSCRIBED.value
 
     db.commit()
@@ -746,7 +746,10 @@ def translate_video_endpoint(
                 )
             )
             db.commit()
-            if claim_result.rowcount == 0:
+            claim_rowcount = (
+                claim_result.rowcount if isinstance(claim_result, CursorResult) else 0
+            )
+            if claim_rowcount == 0:
                 # Another request already claimed the re-translation.
                 return {
                     "video_id": video_id,
@@ -895,8 +898,8 @@ def translate_video_legacy_endpoint(
 
     ctx_token = byok_api_key.set(api_key)
     try:
-        video = translate_video_sliding_window(video_id, db)
-        return video
+        result = translate_video_sliding_window(video_id, db)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:

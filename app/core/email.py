@@ -8,7 +8,7 @@ a user-facing operation.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import resend
 
@@ -57,7 +57,12 @@ def _send_email(
         # callers that may supply it.
         del idempotency_key
 
-        return resend.Emails.send(params)
+        # resend's SendParams/SendResponse are TypedDicts, which are plain
+        # dicts at runtime but not structurally assignable to dict[str, Any]
+        # under mypy - cast rather than change this function's public
+        # dict-based signature.
+        response = resend.Emails.send(cast("resend.Emails.SendParams", params))
+        return dict(response)
     except Exception as exc:
         logger.error("Failed to send email to %s: %s", to_email, exc, exc_info=True)
         return None
@@ -84,7 +89,8 @@ def send_templated_email(
             "template": template_alias,
             "data": data_dict,
         }
-        return resend.Emails.send(params)
+        response = resend.Emails.send(cast("resend.Emails.SendParams", params))
+        return dict(response)
     except Exception as exc:
         logger.error(
             "Failed to send templated email to %s: %s", to_email, exc, exc_info=True
@@ -208,11 +214,11 @@ def broadcast_product_update(
     if not recipient_emails:
         return []
 
-    BATCH_SIZE = 100
+    batch_size = 100
     results: list[dict[str, Any]] = []
 
-    for batch_index in range(0, len(recipient_emails), BATCH_SIZE):
-        chunk = recipient_emails[batch_index : batch_index + BATCH_SIZE]
+    for batch_index in range(0, len(recipient_emails), batch_size):
+        chunk = recipient_emails[batch_index : batch_index + batch_size]
         emails = [
             {
                 "from": _from_email(),
@@ -224,9 +230,11 @@ def broadcast_product_update(
         ]
 
         try:
-            batch_result = resend.Batch.send(emails)
+            batch_result = resend.Batch.send(
+                cast("list[resend.Emails.SendParams]", emails)
+            )
             if batch_result:
-                results.append(batch_result)
+                results.append(dict(batch_result))
         except Exception as exc:
             logger.error(
                 "Failed to send broadcast batch %d-%d: %s",

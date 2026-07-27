@@ -21,12 +21,10 @@ import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from openai import AsyncOpenAI, RateLimitError
 from pydantic import BaseModel, Field, ValidationError
-
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -333,13 +331,17 @@ STYLE GUIDE:
         else ""
     )
 
-    source_lang_clause = f"from {source_language} " if source_language and source_language != "auto" else ""
+    source_lang_clause = (
+        f"from {source_language} "
+        if source_language and source_language != "auto"
+        else ""
+    )
     formatting_instructions = (
-        f"2. STRICT BROADCAST STANDARDS: Maximum 42 characters per line. Maximum "
-        f"2 lines per subtitle card. If a speaker talks continuously, break their "
-        f"speech logically at natural breath pauses, conjunctions, or punctuation "
-        f"to match the rhythm of an edit. Never output a single massive block of "
-        f"text.\n"
+        "2. STRICT BROADCAST STANDARDS: Maximum 42 characters per line. Maximum "
+        "2 lines per subtitle card. If a speaker talks continuously, break their "
+        "speech logically at natural breath pauses, conjunctions, or punctuation "
+        "to match the rhythm of an edit. Never output a single massive block of "
+        "text.\n"
         if not plain_text
         else ""
     )
@@ -409,8 +411,11 @@ async def translate_single_batch(
         )
 
     prompt = build_translation_prompt(
-        batch, source_language, target_language,
-        style_guide=batch.style_guide, plain_text=plain_text,
+        batch,
+        source_language,
+        target_language,
+        style_guide=batch.style_guide,
+        plain_text=plain_text,
     )
     system_instruction = build_system_instruction(batch, target_language)
 
@@ -624,7 +629,12 @@ async def translate_batches_concurrently(
 
     processed_results: list[BatchResult] = []
     for i, result in enumerate(results):
-        if isinstance(result, Exception):
+        # asyncio.gather(..., return_exceptions=True) can surface BaseException
+        # (e.g. asyncio.CancelledError), which is not a subclass of Exception -
+        # checking only Exception would let a cancelled batch's raw exception
+        # get cast() (a no-op at runtime) into BatchResult below, silently
+        # masquerading as a real result until something downstream crashes on it.
+        if isinstance(result, BaseException):
             processed_results.append(
                 BatchResult(
                     batch_index=i,
@@ -633,7 +643,7 @@ async def translate_batches_concurrently(
                 )
             )
         else:
-            processed_results.append(cast(BatchResult, result))
+            processed_results.append(result)
 
     return processed_results
 

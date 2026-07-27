@@ -18,7 +18,6 @@ from typing import Any
 from openai import OpenAI
 
 from app.core.audio import chunk_audio_if_needed, get_chunk_offsets
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +226,9 @@ def transcribe_with_openai(
     # doesn't exist on the pydantic response object and raises AttributeError.
     segments_raw = getattr(response, "segments", None)
     if segments_raw is None:
-        segments_raw = response.get("segments", []) if isinstance(response, dict) else []
+        segments_raw = (
+            response.get("segments", []) if isinstance(response, dict) else []
+        )
 
     words_raw = getattr(response, "words", None)
     if words_raw is None:
@@ -279,7 +280,9 @@ def transcribe_with_openai(
             avg_logprob = seg.get("avg_logprob") if isinstance(seg, dict) else None
         no_speech_prob = getattr(seg, "no_speech_prob", None)
         if no_speech_prob is None:
-            no_speech_prob = seg.get("no_speech_prob") if isinstance(seg, dict) else None
+            no_speech_prob = (
+                seg.get("no_speech_prob") if isinstance(seg, dict) else None
+            )
 
         # Shift segment timestamps by the chunk offset before any correction.
         start = float(start) + time_offset

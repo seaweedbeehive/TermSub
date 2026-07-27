@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from app.core.auth import RequestIdentity, get_current_user_or_byok
@@ -18,8 +19,6 @@ from app.db.session import get_db
 from app.models.video import ContentType, Segment, Term, Video, VideoStatus
 from app.services.text_translation_service import (
     export_text_translation,
-    extract_terms_for_text,
-    translate_text,
 )
 from app.worker.text_tasks import extract_text_terms_task, translate_text_task
 
@@ -124,7 +123,9 @@ async def translate_text_endpoint(
     }:
         raise HTTPException(
             status_code=409,
-            detail=f"Cannot translate from status '{video.status}'. Extract terms first.",
+            detail=(
+                f"Cannot translate from status '{video.status}'. Extract terms first."
+            ),
         )
 
     if video.status == VideoStatus.COMPLETED.value:
@@ -151,7 +152,10 @@ async def translate_text_endpoint(
             )
         )
         db.commit()
-        if claim_result.rowcount == 0:
+        claim_rowcount = (
+            claim_result.rowcount if isinstance(claim_result, CursorResult) else 0
+        )
+        if claim_rowcount == 0:
             # Another request already claimed the re-translation.
             return {
                 "video_id": video_id,

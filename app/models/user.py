@@ -51,9 +51,7 @@ class User(Base):
     api_key_mode: Mapped[str] = mapped_column(
         String(50), nullable=False, default="standard"
     )
-    total_minutes_used: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    total_minutes_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sessions_invalidated_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, default=None
     )

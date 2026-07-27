@@ -4,6 +4,7 @@ from collections.abc import Generator
 from typing import Any
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
@@ -69,7 +70,7 @@ def bulk_upsert_segments(video_id: str, segment_data_list: list[dict[str, Any]])
 
             result = db.execute(stmt)
             db.commit()
-            return result.rowcount
+            return result.rowcount if isinstance(result, CursorResult) else 0
         except Exception as e:
             db.rollback()
             raise e

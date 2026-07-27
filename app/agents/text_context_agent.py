@@ -34,7 +34,10 @@ def _build_text_context_prompt(
     source_clause = (
         f"The document is written in {source_language}."
         if source_language and source_language != "auto"
-        else "Detect the source language of the document and report it in 'detected_source_language'."
+        else (
+            "Detect the source language of the document and report it "
+            "in 'detected_source_language'."
+        )
     )
 
     return f"""You are analyzing a written document to prepare it for professional translation into {target_lang_name}.
@@ -155,9 +158,7 @@ def _save_text_terms_bulk(
 
     with SessionLocal() as session:
         existing_terms = (
-            session.query(Term.original_term)
-            .filter(Term.video_id == video_id)
-            .all()
+            session.query(Term.original_term).filter(Term.video_id == video_id).all()
         )
         existing_originals = {t.original_term for t in existing_terms}
 

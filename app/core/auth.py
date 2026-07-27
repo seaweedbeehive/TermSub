@@ -5,7 +5,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import jwt
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -82,7 +82,12 @@ def _decode_token(
     treat invalid/missing tokens uniformly.
     """
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        # PyJWT types decode()'s return as Any since the payload shape isn't
+        # fixed; cast to the shape every caller in this module actually relies on.
+        payload = cast(
+            "dict[str, Any]",
+            jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM]),
+        )
     except jwt.InvalidTokenError:
         return None
 
@@ -142,7 +147,11 @@ def _is_token_revoked(jti: str) -> bool:
     """Return True if the token ID has been added to the Redis blocklist."""
     try:
         redis = get_sync_redis_client()
-        return redis.exists(f"revoked_token:{jti}") > 0
+        # redis-py's stubs type .exists() as Awaitable[int] | int since the
+        # method is shared with the async client via a common mixin; this
+        # client is the synchronous one (get_sync_redis_client), so it always
+        # returns a plain int here.
+        return cast("int", redis.exists(f"revoked_token:{jti}")) > 0
     except Exception:
         # Redis unavailable: fail open rather than locking users out.
         return False
@@ -161,7 +170,10 @@ def decode_access_token(token: str) -> dict[str, Any]:
         HTTPException: If the token is invalid, expired, or revoked.
     """
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        payload = cast(
+            "dict[str, Any]",
+            jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM]),
+        )
     except jwt.ExpiredSignatureError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -314,7 +326,9 @@ def get_current_user_or_byok(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Provide a Bearer token or X-API-Key header.",
+            detail=(
+                "Authentication required. Provide a Bearer token or X-API-Key header."
+            ),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -358,9 +372,9 @@ def get_current_user_or_byok(
 
     token_issued_at = None
     if payload.get("iat") is not None:
-        token_issued_at = datetime.fromtimestamp(
-            payload["iat"], tz=UTC
-        ).replace(tzinfo=None)
+        token_issued_at = datetime.fromtimestamp(payload["iat"], tz=UTC).replace(
+            tzinfo=None
+        )
 
     return RequestIdentity(
         user_id=user.id,

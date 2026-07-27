@@ -24,7 +24,9 @@ def _set_known_verification_token(email: str, raw_token: str) -> None:
         user = db.query(User).filter(User.email == email).first()
         assert user is not None
         user.email_verification_token = hash_token(raw_token)
-        user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
+        user.email_verification_token_expires_at = datetime.utcnow() + timedelta(
+            hours=24
+        )
         db.commit()
     finally:
         db.close()
@@ -115,9 +117,7 @@ def test_expired_verification_token_is_rejected() -> None:
         )
         db.commit()
 
-        verify_response = client.get(
-            f"/api/auth/verify?token={expired_token}"
-        )
+        verify_response = client.get(f"/api/auth/verify?token={expired_token}")
         assert verify_response.status_code == 400
         assert verify_response.json()["detail"] == "Verification link expired"
 

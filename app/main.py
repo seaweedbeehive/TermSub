@@ -17,9 +17,20 @@ from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
-from app.api import admin, auth, export, jobs, profile, progress, quota, terms, text_translation, videos
+from app.api import (
+    admin,
+    auth,
+    export,
+    jobs,
+    profile,
+    progress,
+    quota,
+    terms,
+    text_translation,
+    videos,
+)
 from app.core.analytics import log_page_view
 from app.core.auth import (
     ACCESS_TOKEN_COOKIE,
@@ -146,7 +157,9 @@ class ProxySchemeMiddleware(BaseHTTPMiddleware):
     browsers block as mixed content when the page was loaded over HTTPS.
     """
 
-    async def dispatch(self, request: Request, call_next: Any) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         forwarded_proto = request.headers.get("x-forwarded-proto")
         if forwarded_proto:
             request.scope["scheme"] = forwarded_proto
@@ -156,7 +169,9 @@ class ProxySchemeMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to every HTTP response."""
 
-    async def dispatch(self, request: Request, call_next: Any) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -168,18 +183,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # let the browser skip the download via 304 when content is unchanged.
         if request.url.path.startswith("/static"):
             response.headers["Cache-Control"] = "no-cache"
-        # Only send HSTS over HTTPS (or when the request claims HTTPS via a trusted proxy)
+        # Only send HSTS over HTTPS (or when the request claims HTTPS via a
+        # trusted proxy)
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = (
                 "max-age=63072000; includeSubDomains; preload"
             )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.googletagmanager.com https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com "
+            "https://cdnjs.cloudflare.com https://www.googletagmanager.com "
+            "https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com "
+            "https://cdnjs.cloudflare.com https://fonts.googleapis.com "
+            "https://cdn.jsdelivr.net; "
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
             "img-src 'self' data: https://img.shields.io; "
-            "connect-src 'self' wss: https://www.google-analytics.com https://*.google-analytics.com https://cdn.jsdelivr.net; "
+            "connect-src 'self' wss: https://www.google-analytics.com "
+            "https://*.google-analytics.com https://cdn.jsdelivr.net; "
             "frame-ancestors 'none'; "
             "base-uri 'self'"
         )
@@ -212,7 +233,9 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
             return None
         return hashlib.sha256(ip.encode("utf-8")).hexdigest()[:16]
 
-    async def dispatch(self, request: Request, call_next: Any) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         path = request.url.path
         if path.startswith(self.SKIP_PREFIXES):
             return await call_next(request)
@@ -366,13 +389,15 @@ async def sitemap() -> Response:
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
     for path, changefreq, priority in pages:
-        lines.extend([
-            "  <url>",
-            f"    <loc>{base}{path}</loc>",
-            f"    <changefreq>{changefreq}</changefreq>",
-            f"    <priority>{priority}</priority>",
-            "  </url>",
-        ])
+        lines.extend(
+            [
+                "  <url>",
+                f"    <loc>{base}{path}</loc>",
+                f"    <changefreq>{changefreq}</changefreq>",
+                f"    <priority>{priority}</priority>",
+                "  </url>",
+            ]
+        )
     lines.append("</urlset>")
 
     return Response(content="\n".join(lines), media_type="application/xml")
@@ -382,12 +407,7 @@ async def sitemap() -> Response:
 async def robots_txt() -> Response:
     """Serve robots.txt with a link to the sitemap."""
     base = settings.FRONTEND_BASE_URL.rstrip("/")
-    content = (
-        "User-agent: *\n"
-        "Allow: /\n"
-        "\n"
-        f"Sitemap: {base}/sitemap.xml\n"
-    )
+    content = f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\n"
     return Response(content=content, media_type="text/plain")
 
 
@@ -482,13 +502,13 @@ def _extract_ws_identity(
                 if (
                     user.sessions_invalidated_at is not None
                     and payload.get("iat") is not None
-                    and datetime.fromtimestamp(payload["iat"], tz=UTC).replace(tzinfo=None)
+                    and datetime.fromtimestamp(payload["iat"], tz=UTC).replace(
+                        tzinfo=None
+                    )
                     < user.sessions_invalidated_at
                 ):
                     return None, None
-                return None, RequestIdentity(
-                    user_id=user_id, is_byok=False, user=user
-                )
+                return None, RequestIdentity(user_id=user_id, is_byok=False, user=user)
             finally:
                 db.close()
         except Exception:
@@ -565,9 +585,7 @@ async def websocket_endpoint(
             except TimeoutError:
                 # Send keepalive ping
                 try:
-                    await manager.send_to_client(
-                        websocket, {"type": "keepalive"}
-                    )
+                    await manager.send_to_client(websocket, {"type": "keepalive"})
                 except Exception:
                     break
             except json.JSONDecodeError:

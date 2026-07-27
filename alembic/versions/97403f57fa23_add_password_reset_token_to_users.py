@@ -28,9 +28,7 @@ def upgrade() -> None:
     op.create_unique_constraint(None, "users", ["password_reset_token"])
     op.add_column(
         "users",
-        sa.Column(
-            "password_reset_token_expires_at", sa.DateTime(), nullable=True
-        ),
+        sa.Column("password_reset_token_expires_at", sa.DateTime(), nullable=True),
     )
     # ### end Alembic commands ###
 

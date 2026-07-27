@@ -124,9 +124,7 @@ def get_profile(
         wants_updates=user.wants_updates,
         api_key_mode=user.api_key_mode,
         total_jobs_processed=total_jobs,
-        total_minutes_used=max(
-            0, int(round(quota_status.get("minutes_used", 0)))
-        ),
+        total_minutes_used=max(0, int(round(quota_status.get("minutes_used", 0)))),
         created_at=user.created_at,
     )
 
@@ -206,7 +204,9 @@ def update_email(
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
+    verify_url = (
+        f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
+    )
     threading.Thread(
         target=send_verification_email,
         args=(user.email, verify_url),
@@ -277,9 +277,7 @@ def update_api_key_mode(
     user.api_key_mode = payload.mode
     db.commit()
 
-    return MessageResponse(
-        message=f"API key mode updated to {payload.mode}."
-    )
+    return MessageResponse(message=f"API key mode updated to {payload.mode}.")
 
 
 @router.delete("/sessions", response_model=MessageResponse)
@@ -338,8 +336,10 @@ def delete_account(
         redis = get_sync_redis_client()
         for key in redis.scan_iter(match="quota:video_owner:*", count=100):
             owner = redis.get(key)
-            if owner and owner.decode() == user_id:
-                video_id = key.decode().split(":", 2)[2]
+            # The pool is created with decode_responses=True, so these are
+            # already plain str, not bytes - .decode() would raise here.
+            if owner and owner == user_id:
+                video_id = key.split(":", 2)[2]
                 redis.delete(f"quota:video_estimated_minutes:{video_id}")
                 redis.delete(f"quota:video_byok:{video_id}")
                 redis.delete(key)

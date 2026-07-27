@@ -119,7 +119,9 @@ class TranslationPipeline:
 
             style_guide_text = ""
             if video.style_guide:
-                style_guide_text = _format_style_guide_text(json.loads(video.style_guide))
+                style_guide_text = _format_style_guide_text(
+                    json.loads(video.style_guide)
+                )
 
             auto_terms = (
                 db.query(Term)

@@ -35,17 +35,12 @@ def admin_stats(
     total_users = db.query(func.count(User.id)).scalar() or 0
 
     new_users_today = (
-        db.query(func.count(User.id))
-        .filter(User.created_at >= today_start)
-        .scalar()
+        db.query(func.count(User.id)).filter(User.created_at >= today_start).scalar()
         or 0
     )
 
     newsletter_subscribers = (
-        db.query(func.count(User.id))
-        .filter(User.wants_updates.is_(True))
-        .scalar()
-        or 0
+        db.query(func.count(User.id)).filter(User.wants_updates.is_(True)).scalar() or 0
     )
 
     page_views_today = (

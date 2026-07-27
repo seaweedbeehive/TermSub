@@ -2,8 +2,7 @@
 
 import hashlib
 import logging
-from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException, status
 
@@ -76,7 +75,11 @@ class QuotaManager:
 
     def _get_float(self, key: str) -> float:
         try:
-            value = self._redis.get(key)
+            # self._redis is the synchronous client (see redis_pool.py), but
+            # redis-py's stubs type command methods as Awaitable[X] | X since
+            # they're shared with the async client via a common mixin — cast
+            # to the real runtime type rather than suppress the whole line.
+            value = cast("str | None", self._redis.get(key))
             return float(value) if value is not None else 0.0
         except Exception as exc:
             logger.error("Redis read failed for %s: %s", key, exc)
@@ -87,9 +90,12 @@ class QuotaManager:
 
     def _count_byok_jobs(self, user_id: str) -> int:
         try:
-            return sum(1 for _ in self._redis.scan_iter(
-                match=self._byok_job_pattern(user_id), count=100
-            ))
+            return sum(
+                1
+                for _ in self._redis.scan_iter(
+                    match=self._byok_job_pattern(user_id), count=100
+                )
+            )
         except Exception as exc:
             logger.error("Redis scan failed for BYOK jobs %s: %s", user_id, exc)
             raise HTTPException(
@@ -120,7 +126,9 @@ class QuotaManager:
             if file_size_mb > BYOK_MAX_UPLOAD_MB:
                 return {
                     "allowed": False,
-                    "reason": f"BYOK uploads are limited to {BYOK_MAX_UPLOAD_MB} MB per file.",
+                    "reason": (
+                        f"BYOK uploads are limited to {BYOK_MAX_UPLOAD_MB} MB per file."
+                    ),
                     "is_unlimited": True,
                 }
 
@@ -148,7 +156,8 @@ class QuotaManager:
                 "reason": (
                     f"Upload would exceed the trial audio limit "
                     f"({self.trial_minutes} minutes). "
-                    f"Remaining: {max(0, self.trial_minutes - current_minutes):.1f} minutes. "
+                    f"Remaining: "
+                    f"{max(0, self.trial_minutes - current_minutes):.1f} minutes. "
                     f"Write us an email if you need more quota!"
                 ),
                 "is_unlimited": False,
@@ -188,8 +197,11 @@ class QuotaManager:
         return 1
         """
         try:
-            result = self._redis.eval(
-                lua, 1, key, str(estimated_minutes), str(self.trial_minutes)
+            result = cast(
+                "str",
+                self._redis.eval(
+                    lua, 1, key, str(estimated_minutes), str(self.trial_minutes)
+                ),
             )
             return bool(int(result))
         except Exception as exc:
@@ -204,7 +216,7 @@ class QuotaManager:
         user_id: str,
         estimated_minutes: float,
     ) -> None:
-        """Release previously reserved minutes when an upload fails after reservation."""
+        """Release reserved minutes after an upload fails post-reservation."""
         if estimated_minutes <= 0:
             return
 
@@ -283,7 +295,7 @@ class QuotaManager:
                 OWNER_TTL_SECONDS,
                 str(estimated_minutes),
             )
-            pipe.execute()
+            pipe.execute()  # type: ignore[no-untyped-call]
         except Exception as exc:
             logger.error("Redis write failed while setting video owner: %s", exc)
             raise HTTPException(
@@ -294,9 +306,14 @@ class QuotaManager:
     def get_video_owner(self, video_id: str) -> tuple[str | None, bool, float]:
         """Return the owner user_id, BYOK flag, and estimated minutes for a video."""
         try:
-            owner = self._redis.get(self._video_owner_key(video_id))
-            byok_flag = self._redis.get(self._video_byok_key(video_id))
-            estimated_raw = self._redis.get(self._video_estimated_minutes_key(video_id))
+            owner = cast("str | None", self._redis.get(self._video_owner_key(video_id)))
+            byok_flag = cast(
+                "str | None", self._redis.get(self._video_byok_key(video_id))
+            )
+            estimated_raw = cast(
+                "str | None",
+                self._redis.get(self._video_estimated_minutes_key(video_id)),
+            )
             estimated_minutes = float(estimated_raw) if estimated_raw else 0.0
             return (
                 owner if owner else None,
@@ -383,7 +400,8 @@ class QuotaManager:
             return {
                 "allowed": False,
                 "reason": (
-                    f"Text translation quota exceeded. You have approximately {remaining_pages} page(s) remaining."
+                    f"Text translation quota exceeded. You have approximately "
+                    f"{remaining_pages} page(s) remaining."
                 ),
                 "is_unlimited": False,
             }

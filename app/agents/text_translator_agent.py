@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.agents.translator import DEFAULT_TRANSLATION_MODEL, get_async_openai_client
 from app.core.languages import LANGUAGE_NAMES
 from app.db.session import SessionLocal
-from app.models.video import Segment, Term, TermSource, Video, VideoStatus
+from app.models.video import Segment, Term, Video, VideoStatus
 from app.services.progress_service import get_progress_tracker
 
 
@@ -135,7 +135,8 @@ STYLE GUIDE:
         else ""
     )
 
-    return f"""You are executing a professional translation pass {source_clause}to {target_lang_name}.
+    return f"""You are executing a professional translation pass {source_clause}\
+to {target_lang_name}.
 
 FULL DOCUMENT CONTEXT (read this first for narrative continuity):
 {full_text}
@@ -194,10 +195,11 @@ async def _translate_batch(
                 break
             except RateLimitError as e:
                 if attempt < MAX_RETRIES - 1:
-                    delay = RATE_LIMIT_DELAY * (2 ** attempt)
+                    delay = RATE_LIMIT_DELAY * (2**attempt)
                     progress_tracker.warning(
                         "TEXT_TRANSLATING",
-                        f"Batch rate limited (attempt {attempt + 1}); retrying in {delay}s",
+                        f"Batch rate limited (attempt {attempt + 1}); "
+                        f"retrying in {delay}s",
                         str(e),
                     )
                     await asyncio.sleep(delay)
@@ -205,7 +207,7 @@ async def _translate_batch(
                     raise
             except Exception as e:
                 if attempt < MAX_RETRIES - 1:
-                    delay = BASE_RETRY_DELAY * (2 ** attempt)
+                    delay = BASE_RETRY_DELAY * (2**attempt)
                     progress_tracker.warning(
                         "TEXT_TRANSLATING",
                         f"Batch failed (attempt {attempt + 1}); retrying in {delay}s",
@@ -216,9 +218,7 @@ async def _translate_batch(
                     raise
 
     response_text = response.choices[0].message.content or ""
-    json_match = re.search(
-        r"```(?:json)?\s*\n?(.*?)\n?```", response_text, re.DOTALL
-    )
+    json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response_text, re.DOTALL)
     if json_match:
         response_text = json_match.group(1)
     response_text = response_text.strip()
@@ -231,10 +231,7 @@ async def _translate_batch(
     except ValidationError as e:
         raise ValueError(f"JSON validation failed: {e}") from e
 
-    return {
-        t.sequence_number: t.translated_text
-        for t in validated.translations
-    }
+    return {t.sequence_number: t.translated_text for t in validated.translations}
 
 
 async def translate_text_document(
@@ -273,11 +270,7 @@ async def translate_text_document(
         if not segments:
             raise ValueError("No segments found for text translation")
 
-        terms = (
-            db.query(Term)
-            .filter(Term.video_id == video_id)
-            .all()
-        )
+        terms = db.query(Term).filter(Term.video_id == video_id).all()
         glossary = _build_text_glossary(terms)
 
         style_guide_text = ""
@@ -299,7 +292,8 @@ async def translate_text_document(
 
     progress_tracker.start_step(
         "TEXT_TRANSLATING",
-        f"Translating {total_segments} text segments with {len(glossary)} glossary terms",
+        f"Translating {total_segments} text segments with "
+        f"{len(glossary)} glossary terms",
     )
     progress_tracker.update_progress(
         status=VideoStatus.TRANSLATING.value,
@@ -340,7 +334,11 @@ async def translate_text_document(
 
     translations: dict[int, str] = {}
     for i, result in enumerate(results):
-        if isinstance(result, Exception):
+        # asyncio.gather(..., return_exceptions=True) can surface BaseException
+        # (e.g. asyncio.CancelledError), which is not a subclass of Exception -
+        # checking only Exception would let a cancelled batch's result reach
+        # translations.update() below instead of raising a clear error.
+        if isinstance(result, BaseException):
             progress_tracker.error(
                 "TEXT_TRANSLATING",
                 f"Batch {i + 1} failed",
@@ -364,7 +362,9 @@ async def translate_text_document(
         video.status = VideoStatus.COMPLETED.value
         video.progress_percent = 100
         video.processed_segments = saved_count
-        video.current_step = f"Translation complete: {saved_count}/{total_segments} segments"
+        video.current_step = (
+            f"Translation complete: {saved_count}/{total_segments} segments"
+        )
         db.commit()
 
     db.close()

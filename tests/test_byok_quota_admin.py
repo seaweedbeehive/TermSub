@@ -1,4 +1,4 @@
-"""Tests for BYOK auth, minutes quota, admin endpoints, analytics, and WebSocket auth."""
+"""Tests for BYOK auth, minutes quota, admin endpoints, analytics, WebSocket auth."""
 
 import uuid
 from io import BytesIO
@@ -22,7 +22,9 @@ def _unique_email(prefix: str = "test") -> str:
     return f"{prefix}_{uuid.uuid4().hex[:8]}@example.com"
 
 
-def _create_user(wants_updates: bool = False, is_admin: bool = False) -> tuple[str, dict[str, str]]:
+def _create_user(
+    wants_updates: bool = False, is_admin: bool = False
+) -> tuple[str, dict[str, str]]:
     """Create a standard user and return their id + auth headers."""
     email = _unique_email()
     db = SessionLocal()
@@ -50,7 +52,7 @@ def _create_admin_user() -> tuple[str, dict[str, str]]:
 
 
 def test_byok_upload_and_transcribe_text_file() -> None:
-    """BYOK users can upload and transcribe a text file with only an X-API-Key header."""
+    """BYOK users can upload and transcribe a text file with only an X-API-Key."""
     byok_key = f"byok-{uuid.uuid4().hex}"
     headers = {"X-API-Key": byok_key}
 
@@ -58,7 +60,9 @@ def test_byok_upload_and_transcribe_text_file() -> None:
     response = client.post(
         "/videos/upload",
         data={"target_language": "fa", "source_language": "en"},
-        files={"file": ("sample.txt", BytesIO(text_content.encode("utf-8")), "text/plain")},
+        files={
+            "file": ("sample.txt", BytesIO(text_content.encode("utf-8")), "text/plain")
+        },
         headers=headers,
     )
     assert response.status_code == 200, response.text
@@ -298,7 +302,7 @@ def test_analytics_logging() -> None:
 
 
 def test_websocket_accepts_valid_subprotocol_token() -> None:
-    """WebSocket connects when a short-lived WS token is supplied via Sec-WebSocket-Protocol."""
+    """WebSocket connects when a short-lived WS token is supplied via subprotocol."""
     db = SessionLocal()
     try:
         user = User(
@@ -341,9 +345,11 @@ def test_websocket_accepts_byok_subprotocol_key() -> None:
 
 def test_websocket_rejects_missing_token() -> None:
     """WebSocket refuses connection when no credentials are provided."""
-    with pytest.raises(Exception):  # noqa: B017
-        with client.websocket_connect("/ws/videos/test-video") as ws:
-            ws.receive_json()
+    with (
+        pytest.raises(Exception),  # noqa: B017
+        client.websocket_connect("/ws/videos/test-video") as ws,
+    ):
+        ws.receive_json()
 
 
 def test_byok_start_skips_newsletter_when_email_belongs_to_user() -> None:

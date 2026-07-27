@@ -17,7 +17,6 @@ from celery.exceptions import (
     MaxRetriesExceededError,
     SoftTimeLimitExceeded,
 )
-
 from sqlalchemy import func
 
 from app.core.celery_app import celery_app
@@ -106,6 +105,11 @@ def transcribe_video_task(
 
     def _heartbeat_loop() -> None:
         while not stop_heartbeat.wait(60):
+            if not user_id:
+                # Only reachable if this thread is started without user_id,
+                # which the (is_byok and user_id) guard below prevents -
+                # kept as a real guard so this closure is safe standalone.
+                return
             try:
                 quota.refresh_byok_job(user_id, self.request.id)
             except Exception as exc:
@@ -290,7 +294,9 @@ def transcribe_video_task(
             try:
                 byok_api_key.reset(ctx_token)
             except Exception as exc:
-                logger.warning(f"[Task] Failed to reset BYOK context for {video_id}: {exc}")
+                logger.warning(
+                    f"[Task] Failed to reset BYOK context for {video_id}: {exc}"
+                )
         # Always clean up media files after transcription attempt
         _cleanup_media_files(video_id)
 
@@ -387,7 +393,9 @@ def analyze_video_task(
             {
                 "status": "terms_ready",
                 "progress": 90,
-                "message": f"Analysis complete: {style_guide.get('tone', 'neutral')} tone",
+                "message": (
+                    f"Analysis complete: {style_guide.get('tone', 'neutral')} tone"
+                ),
                 "tone": style_guide.get("tone", "neutral"),
                 "formality_level": style_guide.get("formality_level", "medium"),
             },
@@ -458,7 +466,9 @@ def analyze_video_task(
             try:
                 byok_api_key.reset(ctx_token)
             except Exception as exc:
-                logger.warning(f"[Task] Failed to reset BYOK context for {video_id}: {exc}")
+                logger.warning(
+                    f"[Task] Failed to reset BYOK context for {video_id}: {exc}"
+                )
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
@@ -641,7 +651,9 @@ def translate_video_task(
             try:
                 byok_api_key.reset(ctx_token)
             except Exception as exc:
-                logger.warning(f"[Task] Failed to reset BYOK context for {video_id}: {exc}")
+                logger.warning(
+                    f"[Task] Failed to reset BYOK context for {video_id}: {exc}"
+                )
 
 
 def _mark_video_error(video_id: str, error_message: str) -> None:

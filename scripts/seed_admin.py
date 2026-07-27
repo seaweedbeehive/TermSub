@@ -38,9 +38,7 @@ def _read_credentials() -> tuple[str, str]:
 
     print("Create the first TermSub admin account.")
 
-    email = (
-        sys.argv[1].strip() if len(sys.argv) == 2 else input("Email: ").strip()
-    )
+    email = sys.argv[1].strip() if len(sys.argv) == 2 else input("Email: ").strip()
     while not email:
         print("Email is required.")
         email = input("Email: ").strip()

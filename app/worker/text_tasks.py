@@ -10,6 +10,7 @@ from typing import Any
 
 from celery.exceptions import MaxRetriesExceededError, SoftTimeLimitExceeded
 
+from app.core.auth import RequestIdentity
 from app.core.celery_app import celery_app
 from app.core.openai_key_context import byok_api_key
 from app.core.quota import QuotaManager
@@ -22,7 +23,6 @@ from app.services.text_translation_service import (
     extract_terms_for_text,
     translate_text,
 )
-from app.core.auth import RequestIdentity
 
 logger = logging.getLogger(__name__)
 MAX_ERROR_LENGTH = 2000
@@ -77,6 +77,11 @@ def extract_text_terms_task(
 
     def _heartbeat_loop() -> None:
         while not stop_heartbeat.wait(60):
+            if not user_id:
+                # Only reachable if this thread is started without user_id,
+                # which the (is_byok and user_id) guard below prevents - kept
+                # as a real guard so this closure is safe standalone.
+                return
             try:
                 quota.refresh_byok_job(user_id, self.request.id)
             except Exception as exc:
@@ -123,7 +128,9 @@ def extract_text_terms_task(
         }
 
     except SoftTimeLimitExceeded:
-        logger.error(f"[TextTask] Term extraction soft time limit exceeded for {video_id}")
+        logger.error(
+            f"[TextTask] Term extraction soft time limit exceeded for {video_id}"
+        )
         _mark_text_error(video_id, "Term extraction timed out")
         update_task_status(
             self.request.id, JobStatus.ERROR.value, "Soft time limit exceeded"
@@ -197,6 +204,11 @@ def translate_text_task(
 
     def _heartbeat_loop() -> None:
         while not stop_heartbeat.wait(60):
+            if not user_id:
+                # Only reachable if this thread is started without user_id,
+                # which the (is_byok and user_id) guard below prevents - kept
+                # as a real guard so this closure is safe standalone.
+                return
             try:
                 quota.refresh_byok_job(user_id, self.request.id)
             except Exception as exc:

@@ -14,13 +14,13 @@ from app.core.admin_auth import require_admin_user
 from app.core.auth import (
     ACCESS_TOKEN_COOKIE,
     WS_TOKEN_SUBPROTOCOL,
+    RequestIdentity,
     _get_access_token_from_request,
     create_access_token,
     create_ws_token,
     generate_verification_token,
     get_current_user,
     get_current_user_or_byok,
-    RequestIdentity,
     hash_password,
     hash_token,
     verify_password,
@@ -36,8 +36,6 @@ from app.core.redis_pool import get_redis_client as get_sync_redis_client
 from app.db.session import SessionLocal, get_db
 from app.models.newsletter import NewsletterSignup
 from app.models.user import User
-
-logger = logging.getLogger(__name__)
 from app.schemas.auth import (
     AuthSuccessResponse,
     BYOKStartRequest,
@@ -51,6 +49,8 @@ from app.schemas.auth import (
     UserSignupRequest,
     WsTokenResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -101,7 +101,9 @@ def _clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=ACCESS_TOKEN_COOKIE, path="/")
 
 
-@router.post("/signup", response_model=AuthSuccessResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/signup", response_model=AuthSuccessResponse, status_code=status.HTTP_201_CREATED
+)
 @rate_limit("signup", limit=3, window=3600, identifier="ip")
 def signup(
     payload: UserSignupRequest,
@@ -133,7 +135,9 @@ def signup(
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
+    verify_url = (
+        f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
+    )
 
     # Fire verification email and optional newsletter signup in the background.
     threading.Thread(
@@ -219,7 +223,9 @@ def verify_email(
     # Log the user in automatically after verification.
     access_token = create_access_token(user.id)
     _set_auth_cookie(response, access_token)
-    return AuthSuccessResponse(message="Email verified successfully. You can now use TermSub.")
+    return AuthSuccessResponse(
+        message="Email verified successfully. You can now use TermSub."
+    )
 
 
 @router.post("/resend-verification")
@@ -251,14 +257,20 @@ def resend_verification(
     user = db.query(User).filter(User.email == email).first()
     if not user or user.is_email_verified:
         # Do not reveal whether the email exists or is already verified.
-        return {"message": "If an unverified account exists, a verification email has been sent."}
+        return {
+            "message": (
+                "If an unverified account exists, a verification email has been sent."
+            )
+        }
 
     raw_verification_token = generate_verification_token()
     user.email_verification_token = hash_token(raw_verification_token)
     user.email_verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
     db.commit()
 
-    verify_url = f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
+    verify_url = (
+        f"{settings.FRONTEND_BASE_URL}/app?verify_token={raw_verification_token}"
+    )
     threading.Thread(
         target=send_verification_email,
         args=(user.email, verify_url),
@@ -271,7 +283,11 @@ def resend_verification(
     except Exception as exc:
         logger.warning("Failed to set resend cooldown for %s: %s", email, exc)
 
-    return {"message": "If an unverified account exists, a verification email has been sent."}
+    return {
+        "message": (
+            "If an unverified account exists, a verification email has been sent."
+        )
+    }
 
 
 @router.post("/forgot-password")
@@ -311,9 +327,7 @@ def reset_password(
 ) -> AuthSuccessResponse:
     """Reset the user's password using a valid reset token."""
     token_hash = hash_token(payload.reset_token)
-    user = (
-        db.query(User).filter(User.password_reset_token == token_hash).first()
-    )
+    user = db.query(User).filter(User.password_reset_token == token_hash).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -335,7 +349,9 @@ def reset_password(
     user.sessions_invalidated_at = datetime.utcnow()
     db.commit()
 
-    return AuthSuccessResponse(message="Password reset successfully. You can now log in.")
+    return AuthSuccessResponse(
+        message="Password reset successfully. You can now log in."
+    )
 
 
 @router.get("/me", response_model=UserResponse)
@@ -417,7 +433,9 @@ def logout(
                         redis = get_sync_redis_client()
                         redis.setex(f"revoked_token:{jti}", ttl, "1")
                     except Exception as exc:
-                        logger.warning("Failed to store revoked token in Redis: %s", exc)
+                        logger.warning(
+                            "Failed to store revoked token in Redis: %s", exc
+                        )
         except jwt.InvalidTokenError:
             # If the token is malformed, there is nothing to revoke.
             pass
@@ -464,9 +482,7 @@ def byok_start(
             .filter(NewsletterSignup.email == payload.email)
             .first()
         )
-        existing_user = (
-            db.query(User).filter(User.email == payload.email).first()
-        )
+        existing_user = db.query(User).filter(User.email == payload.email).first()
         if not existing_signup and not existing_user:
             signup = NewsletterSignup(email=payload.email, source="byok")
             db.add(signup)
@@ -481,28 +497,19 @@ def list_newsletter_signups(
     _admin: User = Depends(require_admin_user),
 ) -> list[NewsletterSubscriberOut]:
     """Return all newsletter subscribers from standard signups and BYOK signups."""
-    standard_subscribers = (
-        db.query(
-            User.email.label("email"),
-            literal("signup").label("source"),
-            User.created_at.label("created_at"),
-        )
-        .filter(User.wants_updates.is_(True))
+    standard_subscribers = db.query(
+        User.email.label("email"),
+        literal("signup").label("source"),
+        User.created_at.label("created_at"),
+    ).filter(User.wants_updates.is_(True))
+
+    byok_subscribers = db.query(
+        NewsletterSignup.email.label("email"),
+        NewsletterSignup.source.label("source"),
+        NewsletterSignup.created_at.label("created_at"),
     )
 
-    byok_subscribers = (
-        db.query(
-            NewsletterSignup.email.label("email"),
-            NewsletterSignup.source.label("source"),
-            NewsletterSignup.created_at.label("created_at"),
-        )
-    )
-
-    results = (
-        standard_subscribers.union(byok_subscribers)
-        .order_by("created_at")
-        .all()
-    )
+    results = standard_subscribers.union(byok_subscribers).order_by("created_at").all()
 
     return [
         NewsletterSubscriberOut(

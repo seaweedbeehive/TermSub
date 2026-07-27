@@ -32,7 +32,7 @@ jobs:
       - name: Install Ruff, MyPy, and project dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          pip install ruff mypy types-passlib
           pip install -r requirements.txt
 
       - name: Run Ruff linter

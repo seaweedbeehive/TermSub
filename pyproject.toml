@@ -50,6 +50,11 @@ ignore = [
     "B008",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Long lines here are inline-styled HTML email content, not code — wrapping
+# them would risk introducing stray whitespace into the rendered emails.
+"app/core/email.py" = ["E501"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 

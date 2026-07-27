@@ -45,7 +45,8 @@ class JobQueue(Base):
             name="ck_job_queue_status",
         ),
         CheckConstraint(
-            "job_type IN ('transcribe', 'analyze', 'translate', 'text_analyze', 'text_translate')",
+            "job_type IN ('transcribe', 'analyze', 'translate', "
+            "'text_analyze', 'text_translate')",
             name="ck_job_queue_job_type",
         ),
     )

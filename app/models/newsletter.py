@@ -24,9 +24,7 @@ class NewsletterSignup(Base):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
-    source: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="byok"
-    )
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="byok")
     created_at: Mapped[datetime] = mapped_column(
         default=datetime.utcnow, nullable=False
     )

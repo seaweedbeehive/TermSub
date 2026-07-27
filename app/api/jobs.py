@@ -61,12 +61,7 @@ def list_jobs(
 
     query = db.query(Video).filter(Video.user_id == user_id)
     total = query.count()
-    videos = (
-        query.order_by(Video.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    videos = query.order_by(Video.created_at.desc()).offset(skip).limit(limit).all()
 
     items = [
         JobListItem(

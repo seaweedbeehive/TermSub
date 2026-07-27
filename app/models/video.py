@@ -195,7 +195,9 @@ class Segment(Base):
     __tablename__ = "segments"
 
     # Composite index for faster bulk operations by video_id + sequence_number
-    __table_args__ = (Index("idx_segments_video_seq", "video_id", "sequence_number", unique=True),)
+    __table_args__ = (
+        Index("idx_segments_video_seq", "video_id", "sequence_number", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     video_id: Mapped[str] = mapped_column(

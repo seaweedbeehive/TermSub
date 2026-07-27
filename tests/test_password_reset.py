@@ -5,7 +5,11 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.auth import create_access_token, hash_password, hash_token, verify_password
+from app.core.auth import (
+    hash_password,
+    hash_token,
+    verify_password,
+)
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.user import User
@@ -94,7 +98,9 @@ class TestResetPassword:
             user = db.query(User).filter(User.id == reset_user.id).first()
             assert user is not None
             user.password_reset_token = hash_token("expired-token")
-            user.password_reset_token_expires_at = datetime.utcnow() - timedelta(hours=1)
+            user.password_reset_token_expires_at = datetime.utcnow() - timedelta(
+                hours=1
+            )
             db.commit()
         finally:
             db.close()
@@ -117,7 +123,9 @@ class TestResetPassword:
             user = db.query(User).filter(User.id == reset_user.id).first()
             assert user is not None
             user.password_reset_token = hash_token("valid-token")
-            user.password_reset_token_expires_at = datetime.utcnow() + timedelta(hours=24)
+            user.password_reset_token_expires_at = datetime.utcnow() + timedelta(
+                hours=24
+            )
             db.commit()
         finally:
             db.close()
@@ -150,7 +158,9 @@ class TestResetPassword:
             user = db.query(User).filter(User.id == reset_user.id).first()
             assert user is not None
             user.password_reset_token = hash_token("valid-token")
-            user.password_reset_token_expires_at = datetime.utcnow() + timedelta(hours=24)
+            user.password_reset_token_expires_at = datetime.utcnow() + timedelta(
+                hours=24
+            )
             db.commit()
         finally:
             db.close()

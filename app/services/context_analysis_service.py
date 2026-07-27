@@ -25,7 +25,6 @@ from openai import OpenAI
 from sqlalchemy.orm import Session, make_transient
 
 from app.agents.translator import DEFAULT_TRANSLATION_MODEL
-from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.video import Segment, Term, Video, VideoStatus
 from app.services.progress_service import get_progress_tracker

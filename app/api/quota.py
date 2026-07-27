@@ -11,7 +11,9 @@ router = APIRouter(prefix="/quota", tags=["quota"])
 
 
 @router.get("/")
-def get_quota(identity: RequestIdentity = Depends(get_current_user_or_byok)) -> dict[str, Any]:
+def get_quota(
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> dict[str, Any]:
     """Return the authenticated user's remaining trial quota.
 
     Standard users see their remaining audio-minute allowance. BYOK users see
