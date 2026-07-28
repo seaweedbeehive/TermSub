@@ -2608,6 +2608,7 @@
             const container = document.getElementById('primaryActionContainer');
             const termsPanel = document.getElementById('termsPanel');
             const subtitleReviewPanel = document.getElementById('subtitleReviewPanel');
+            const subtitleReviewTitle = document.getElementById('subtitleReviewTitle');
             const backBtn = document.getElementById('wizardBackBtn');
 
             if (!container) return;
@@ -2654,6 +2655,7 @@
 
                         if (targetPipelineMode === 'transcribe') {
                             if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                            if (subtitleReviewTitle) subtitleReviewTitle.textContent = 'Subtitle Timeline';
                             if (isProcessing) {
                                 if (primaryBtn) primaryBtn.classList.add('hidden');
                             } else {
@@ -2677,6 +2679,7 @@
                             // the same subtitle-timeline panel the transcribe-only pipeline
                             // uses, showing original_text (no translation exists yet).
                             if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                            if (subtitleReviewTitle) subtitleReviewTitle.textContent = 'Transcript Review';
                             if (currentVideoId) {
                                 fetch(`/videos/${currentVideoId}`)
                                     .then(r => r.json())
@@ -2735,6 +2738,7 @@
                 case 3:
                     // Completed / export.
                     if (subtitleReviewPanel) subtitleReviewPanel.classList.remove('hidden');
+                    if (subtitleReviewTitle) subtitleReviewTitle.textContent = 'Translated Subtitle Timeline';
                     if (primaryBtn) primaryBtn.classList.add('hidden');
                     exportGrid?.classList.remove('hidden');
                     exportPanel?.classList.remove('hidden');
