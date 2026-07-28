@@ -262,7 +262,7 @@
                 }
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Action failed');
+                    throw new Error(extractErrorMessage(data, 'Action failed'));
                 }
                 showToast(action === 'reset-quota' ? 'Quota reset' : 'Mode toggled', 'success');
                 await loadAdminDashboard();
@@ -484,6 +484,20 @@
             await connectWebSocket(jobId);
 
             showToast('Resumed your previous session', 'success');
+        }
+
+        // FastAPI/Pydantic validation errors return `detail` as an array of
+        // {msg, loc, ...} objects rather than a string. Stringifying that
+        // array directly (e.g. via `new Error(data.detail)`) produces the
+        // literal text "[object Object]" instead of a readable message.
+        function extractErrorMessage(data, fallback) {
+            const detail = data && data.detail;
+            if (typeof detail === 'string' && detail) return detail;
+            if (Array.isArray(detail) && detail.length > 0) {
+                const messages = detail.map((item) => (item && item.msg) || null).filter(Boolean);
+                if (messages.length > 0) return messages.join(' ');
+            }
+            return fallback;
         }
 
         function log(message, type = 'info') {
@@ -1080,7 +1094,7 @@
                 });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Failed to save preferences');
+                    throw new Error(extractErrorMessage(data, 'Failed to save preferences'));
                 }
                 showToast('Preferences saved.', 'success');
                 loadProfile();
@@ -1110,7 +1124,7 @@
                 });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Failed to update API key mode');
+                    throw new Error(extractErrorMessage(data, 'Failed to update API key mode'));
                 }
                 showToast('API key mode updated.', 'success');
                 loadProfile();
@@ -1136,7 +1150,7 @@
                 });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Failed to update email');
+                    throw new Error(extractErrorMessage(data, 'Failed to update email'));
                 }
                 showToast('Email updated. Please verify your new address.', 'success');
                 document.getElementById('profileEmailForm')?.reset();
@@ -1173,7 +1187,7 @@
                 });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Failed to change password');
+                    throw new Error(extractErrorMessage(data, 'Failed to change password'));
                 }
                 showToast('Password changed successfully.', 'success');
                 document.getElementById('profilePasswordForm')?.reset();
@@ -1188,7 +1202,7 @@
                 const response = await fetch('/api/profile/sessions', { method: 'DELETE' });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Failed to log out sessions');
+                    throw new Error(extractErrorMessage(data, 'Failed to log out sessions'));
                 }
                 showToast('All other sessions have been logged out.', 'success');
             } catch (err) {
@@ -1219,7 +1233,7 @@
                 });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Failed to delete account');
+                    throw new Error(extractErrorMessage(data, 'Failed to delete account'));
                 }
                 showToast('Your account has been deleted.', 'info');
                 closeDeleteAccountModal();
@@ -1267,7 +1281,7 @@
                     let detail = currentStandardMode === 'login' ? 'Invalid email or password.' : 'Sign up failed.';
                     try {
                         const data = await response.json();
-                        if (data.detail) detail = data.detail;
+                        detail = extractErrorMessage(data, detail);
                     } catch (e) { /* ignore */ }
                     throw new Error(detail);
                 }
@@ -1336,7 +1350,7 @@
                     let detail = 'The provided API key could not be validated.';
                     try {
                         const data = await response.json();
-                        if (data.detail) detail = data.detail;
+                        detail = extractErrorMessage(data, detail);
                     } catch (e) { /* ignore */ }
                     throw new Error(detail);
                 }
@@ -1383,7 +1397,7 @@
                 });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Failed to send reset email');
+                    throw new Error(extractErrorMessage(data, 'Failed to send reset email'));
                 }
                 if (successEl) {
                     successEl.textContent = 'Check your email for reset link';
@@ -1444,7 +1458,7 @@
                 });
                 if (!response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    throw new Error(data.detail || 'Failed to reset password');
+                    throw new Error(extractErrorMessage(data, 'Failed to reset password'));
                 }
                 if (successEl) {
                     successEl.textContent = 'Password reset successfully. You can now sign in.';
@@ -3902,7 +3916,7 @@
                             showAuthView('standard', 'login');
                         } else {
                             const data = await response.json().catch(() => ({}));
-                            showToast(data.detail || 'Verification link is invalid or expired', 'error');
+                            showToast(extractErrorMessage(data, 'Verification link is invalid or expired'), 'error');
                             showAuthView('standard', 'login');
                         }
                     } catch (err) {

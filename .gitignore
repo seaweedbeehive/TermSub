@@ -53,5 +53,6 @@ htmlcov/
 docs/
 # Screenshots
 .screenshots/
+.playwright-mcp/
 # Claude Code local settings and skills
 .claude/
