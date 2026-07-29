@@ -2622,6 +2622,8 @@
             ghostLink?.classList.add('hidden');
             exportGrid?.classList.add('hidden');
             exportPanel?.classList.add('hidden');
+            document.getElementById('originalExportPanel')?.classList.add('hidden');
+            document.getElementById('lateTranslateSection')?.classList.add('hidden');
             container.querySelector('#postTranscribeChoices')?.remove();
 
             // Hide all step scenes.
@@ -2659,10 +2661,12 @@
                             if (isProcessing) {
                                 if (primaryBtn) primaryBtn.classList.add('hidden');
                             } else {
-                                primaryBtn.textContent = 'Download Subtitles';
-                                primaryBtn.className = 'w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-normal rounded-xl transition-colors tracking-wide';
-                                primaryBtn.onclick = downloadTranscription;
-                                primaryBtn.disabled = false;
+                                // No target language was chosen at upload, so the
+                                // transcript is the final output here: offer it in
+                                // every format, plus a way to opt into translation.
+                                if (primaryBtn) primaryBtn.classList.add('hidden');
+                                document.getElementById('originalExportPanel')?.classList.remove('hidden');
+                                document.getElementById('lateTranslateSection')?.classList.remove('hidden');
                                 // Load timeline if available.
                                 if (currentVideoId) {
                                     fetch(`/videos/${currentVideoId}`)
@@ -2901,17 +2905,53 @@
             fallbackPollInterval = setInterval(poll, 5000);
         }
 
+        // Keeps the "EN → ES" / "Auto (transcribe only)" summary line in sync with
+        // the current target language and pipeline mode. Called after upload and
+        // again after continueWithConfigCheck() changes the target language (e.g.
+        // via the "translate later" flow), so it doesn't go stale.
+        function updateProjectLangsDisplay() {
+            const projectLangsEl = document.getElementById('projectLangs');
+            if (!projectLangsEl) return;
+            const sourceLangSel = document.getElementById('sourceLanguage');
+            const sourceLang = sourceLangSel && sourceLangSel.value === 'auto'
+                ? 'Auto'
+                : (sourceLangSel ? sourceLangSel.value.toUpperCase() : 'Auto');
+            const targetLangSel = document.getElementById('targetLanguage');
+            const targetLang = targetLangSel ? targetLangSel.value.toUpperCase() : '';
+            projectLangsEl.textContent = targetPipelineMode === 'transcribe'
+                ? `${sourceLang} (transcribe only)`
+                : `${sourceLang} → ${targetLang}`;
+        }
+
+        // Text files always translate (there's no "just get the original" concept
+        // for text - the file already is the original). Video/audio files label
+        // themselves based on whether a target language is currently chosen, since
+        // leaving it blank means "transcript only, no translation" (see
+        // updatePrimaryUploadButtonLabel).
         function updatePipelineButtonsForFileType() {
             const translateBtn = document.getElementById('translateSubtitlesBtn');
-            const originalBtn = document.getElementById('originalSubtitlesBtn');
-            if (!translateBtn || !originalBtn) return;
+            if (!translateBtn) return;
+            updatePrimaryUploadButtonLabel();
+        }
+
+        function updatePrimaryUploadButtonLabel() {
+            const labelEl = document.getElementById('translateSubtitlesBtnLabel');
+            const iconEl = document.getElementById('translateSubtitlesBtnIcon');
+            if (!labelEl || !iconEl) return;
 
             if (currentFileType === 'text') {
-                translateBtn.innerHTML = '<i class="fa-solid fa-language mr-2"></i>Translate Text';
-                originalBtn.classList.add('hidden');
+                labelEl.textContent = 'Translate Text';
+                iconEl.className = 'fa-solid fa-language mr-2';
+                return;
+            }
+
+            const targetLangSelect = document.getElementById('targetLanguage');
+            if (targetLangSelect && targetLangSelect.value) {
+                labelEl.textContent = 'Translate and Get Subtitles';
+                iconEl.className = 'fa-solid fa-language mr-2';
             } else {
-                translateBtn.innerHTML = '<i class="fa-solid fa-language mr-2"></i>Translate and Get Subtitles';
-                originalBtn.classList.remove('hidden');
+                labelEl.textContent = 'Get Subtitles in Original Language';
+                iconEl.className = 'fa-solid fa-closed-captioning mr-2';
             }
         }
 
@@ -3191,6 +3231,7 @@
 
             targetPipelineMode = mode;
             userWizardStep = null; // user continued forward; release back-lock
+            updateProjectLangsDisplay();
 
             // Existing text jobs have their own UI/API path.
             if (currentFileType === 'text' && currentVideoId && window.textPipeline) {
@@ -3340,18 +3381,8 @@
                 if (projectTypeEl) projectTypeEl.innerHTML = 
                     `<i class="fa-solid ${currentFileType === 'text' ? 'fa-file-lines' : 'fa-video'} mr-1"></i>${currentFileType === 'text' ? 'Text File' : 'Video'}`;
                 
-                const sourceLangSel = document.getElementById('sourceLanguage');
-                const sourceLang = sourceLangSel && sourceLangSel.value === 'auto' ? 'Auto' : 
-                    (sourceLangSel ? sourceLangSel.value.toUpperCase() : 'Auto');
-                const targetLangSel = document.getElementById('targetLanguage');
-                const targetLang = targetLangSel ? targetLangSel.value.toUpperCase() : '';
-                const projectLangsEl = document.getElementById('projectLangs');
-                if (projectLangsEl) {
-                    projectLangsEl.textContent = targetPipelineMode === 'transcribe'
-                        ? `${sourceLang} (transcribe only)`
-                        : `${sourceLang} → ${targetLang}`;
-                }
-                
+                updateProjectLangsDisplay();
+
                 const projectIdEl = document.getElementById('projectId');
                 if (projectIdEl) projectIdEl.textContent = currentVideoId.substring(0, 8);
                 
@@ -3375,8 +3406,8 @@
                 const transcriptCheckboxAtUpload = document.getElementById('reviewTranscriptCheckbox');
                 if (window.jobSession) {
                     window.jobSession.saveConfig(currentVideoId, {
-                        sourceLang: sourceLangSel ? sourceLangSel.value : 'auto',
-                        targetLang: targetLangSel ? targetLangSel.value : '',
+                        sourceLang: sourceLangSelect ? sourceLangSelect.value : 'auto',
+                        targetLang: targetLangSelect ? targetLangSelect.value : '',
                         terminology: terminologyCheckbox ? terminologyCheckbox.checked : true,
                         skipGlossary: terminologyCheckbox ? !terminologyCheckbox.checked : false,
                         reviewTranscript: transcriptCheckboxAtUpload ? transcriptCheckboxAtUpload.checked : true,
@@ -3410,9 +3441,7 @@
 
         function setPipelineButtonsDisabled(disabled) {
             const translateSubtitlesBtn = document.getElementById('translateSubtitlesBtn');
-            const originalSubtitlesBtn = document.getElementById('originalSubtitlesBtn');
             if (translateSubtitlesBtn) translateSubtitlesBtn.disabled = disabled;
-            if (originalSubtitlesBtn) originalSubtitlesBtn.disabled = disabled;
         }
 
         // Process file handler (handles both video transcription and text parsing)
@@ -3646,31 +3675,21 @@
             }
         }
 
-        // Generic export handler
-        async function exportFormat(format) {
-            if (!currentVideoId) return;
+        const EXPORT_FORMAT_NAMES = { srt: 'SRT', vtt: 'WebVTT', txt: 'Text', json: 'JSON' };
 
-            await flushPendingEdits();
-
-            const formatNames = {
-                'srt': 'SRT',
-                'vtt': 'WebVTT',
-                'txt': 'Text',
-                'json': 'JSON'
-            };
-            
+        // Shared blob-download boilerplate used by both the translated-subtitle
+        // and original-transcript export handlers below.
+        async function downloadExportFile(url, fallbackFilename, formatLabel) {
             try {
-                const response = await fetch(`/export/${currentVideoId}/${format}`);
-                
+                const response = await fetch(url);
                 if (!response.ok) throw new Error('Export failed');
-                
+
                 const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
+                const objectUrl = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url;
+                a.href = objectUrl;
                 a.style.display = 'none';
-                const fallback = `translation_${currentVideoId.substring(0, 8)}.${format}`;
-                a.download = getFilenameFromHeader(response, fallback);
+                a.download = getFilenameFromHeader(response, fallbackFilename);
                 document.body.appendChild(a);
                 a.click();
 
@@ -3678,15 +3697,31 @@
                 // cleaning up the anchor and revoking the blob URL.
                 setTimeout(() => {
                     a.remove();
-                    window.URL.revokeObjectURL(url);
+                    window.URL.revokeObjectURL(objectUrl);
                 }, 1000);
 
-                log(`${formatNames[format]} exported`, 'success');
+                log(`${formatLabel} exported`, 'success');
                 markDownloadedSession();
-                
             } catch (err) {
                 log('Export failed: ' + err.message, 'error');
             }
+        }
+
+        // Export a translated subtitle/text file.
+        async function exportFormat(format) {
+            if (!currentVideoId) return;
+            await flushPendingEdits();
+            const fallback = `translation_${currentVideoId.substring(0, 8)}.${format}`;
+            await downloadExportFile(`/export/${currentVideoId}/${format}`, fallback, EXPORT_FORMAT_NAMES[format]);
+        }
+
+        // Export the original (untranslated) transcript - used when no target
+        // language was chosen, so the transcript is the final output.
+        async function exportOriginalFormat(format) {
+            if (!currentVideoId) return;
+            await flushPendingEdits();
+            const fallback = `transcript_${currentVideoId.substring(0, 8)}.${format}`;
+            await downloadExportFile(`/export/${currentVideoId}/original/${format}`, fallback, EXPORT_FORMAT_NAMES[format]);
         }
 
         // Download original transcription handler
@@ -4045,6 +4080,12 @@
                 { value: '', label: 'Select target language...', disabled: true, selected: true },
                 ''
             );
+            const lateTargetLanguageSelect = document.getElementById('lateTargetLanguage');
+            const lateTargetTom = initLanguageDropdown(
+                lateTargetLanguageSelect,
+                { value: '', label: 'Select target language...', disabled: true, selected: true },
+                ''
+            );
 
             // Expose the underlying selects and Tom Select instances for code that
             // expects them (including session restore).
@@ -4052,6 +4093,7 @@
             window.termsubTargetLanguage = targetLanguageSelect;
             window.termsubSourceLanguageTom = sourceTom;
             window.termsubTargetLanguageTom = targetTom;
+            window.termsubLateTargetLanguageTom = lateTargetTom;
 
             // --- Help panel toggle ---
             const helpBtn = document.getElementById('helpBtn');
@@ -4157,7 +4199,7 @@
                 }, false);
             }
             
-            // Target language change: clear validation warning
+            // Target language change: clear validation warning, update button label
             const targetLangSelect = document.getElementById('targetLanguage');
             if (targetLangSelect) {
                 targetLangSelect.addEventListener('change', () => {
@@ -4166,29 +4208,26 @@
                         if (warningEl) warningEl.classList.add('hidden');
                         targetLangSelect.classList.remove('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
                     }
+                    updatePrimaryUploadButtonLabel();
                 });
             }
 
-            // Pipeline buttons
+            // Pipeline button. Video/audio files with no target language chosen
+            // are transcript-only (mode='transcribe'); everything else translates.
             const translateSubtitlesBtn = document.getElementById('translateSubtitlesBtn');
-            const originalSubtitlesBtn = document.getElementById('originalSubtitlesBtn');
 
             translateSubtitlesBtn.addEventListener('click', () => {
+                const targetLangSelect = document.getElementById('targetLanguage');
+                const hasTargetLanguage = !!(targetLangSelect && targetLangSelect.value);
                 const reviewTerms = document.getElementById('reviewTerminologyCheckbox').checked;
-                const mode = reviewTerms ? 'terminology' : 'subtitles';
+                const mode = (currentFileType !== 'text' && !hasTargetLanguage)
+                    ? 'transcribe'
+                    : (reviewTerms ? 'terminology' : 'subtitles');
                 console.log(`[pipeline] translateSubtitlesBtn clicked mode=${mode} currentVideoId=${currentVideoId} step=${displayedWizardStep}`);
                 if (currentVideoId) {
                     continueWithConfigCheck(mode);
                 } else {
                     startPipeline(mode);
-                }
-            });
-            originalSubtitlesBtn.addEventListener('click', () => {
-                console.log(`[pipeline] originalSubtitlesBtn clicked currentVideoId=${currentVideoId} step=${displayedWizardStep}`);
-                if (currentVideoId) {
-                    continueWithConfigCheck('transcribe');
-                } else {
-                    startPipeline('transcribe');
                 }
             });
             document.getElementById('startNewProjectBtn').addEventListener('click', resetApp);
@@ -4255,6 +4294,34 @@
             document.getElementById('exportVttBtn').addEventListener('click', () => exportFormat('vtt'));
             document.getElementById('exportTxtBtn').addEventListener('click', () => exportFormat('txt'));
             document.getElementById('exportJsonBtn').addEventListener('click', () => exportFormat('json'));
+            document.getElementById('exportOriginalSrtBtn').addEventListener('click', () => exportOriginalFormat('srt'));
+            document.getElementById('exportOriginalVttBtn').addEventListener('click', () => exportOriginalFormat('vtt'));
+            document.getElementById('exportOriginalTxtBtn').addEventListener('click', () => exportOriginalFormat('txt'));
+            document.getElementById('exportOriginalJsonBtn').addEventListener('click', () => exportOriginalFormat('json'));
+
+            // "Want a translation too?" - opt into translation after leaving
+            // Target Language blank at upload. Syncs the main target-language
+            // control so continueWithConfigCheck() picks up the chosen value.
+            const lateTranslateBtn = document.getElementById('lateTranslateBtn');
+            if (lateTranslateBtn) {
+                lateTranslateBtn.addEventListener('click', () => {
+                    const lateSelect = document.getElementById('lateTargetLanguage');
+                    const value = lateSelect ? lateSelect.value : '';
+                    if (!value) {
+                        showToast('Please select a target language.', 'warning');
+                        return;
+                    }
+                    if (window.termsubTargetLanguageTom) {
+                        window.termsubTargetLanguageTom.setValue(value);
+                    } else {
+                        const mainSelect = document.getElementById('targetLanguage');
+                        if (mainSelect) mainSelect.value = value;
+                    }
+                    const terminologyCheckbox = document.getElementById('reviewTerminologyCheckbox');
+                    const mode = (terminologyCheckbox && terminologyCheckbox.checked) ? 'terminology' : 'subtitles';
+                    continueWithConfigCheck(mode);
+                });
+            }
 
             // Admin dashboard handlers
             const adminRefreshBtn = document.getElementById('adminRefreshBtn');

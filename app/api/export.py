@@ -327,6 +327,189 @@ def generate_original_srt(segments: list[Segment]) -> str:
     return "\n".join(srt_lines)
 
 
+def generate_original_vtt(segments: list[Segment]) -> str:
+    """Generate WebVTT file content from ORIGINAL text (not translated)."""
+    vtt_lines = ["WEBVTT", ""]
+
+    for i, segment in enumerate(segments, 1):
+        text = segment.original_text
+
+        start_time = format_timestamp_vtt(segment.start_time)
+        end_time = format_timestamp_vtt(segment.end_time)
+
+        vtt_lines.append(f"{i}")
+        vtt_lines.append(f"{start_time} --> {end_time}")
+        vtt_lines.append(text)
+        vtt_lines.append("")
+
+    return "\n".join(vtt_lines)
+
+
+def generate_original_json(video: Video, segments: list[Segment]) -> dict[str, Any]:
+    """Generate JSON export of the ORIGINAL (untranslated) transcript."""
+    return {
+        "metadata": {
+            "video_id": video.id,
+            "filename": video.filename,
+            "content_type": video.content_type,
+            "source_language": video.source_language,
+            "status": video.status,
+            "total_segments": len(segments),
+            "created_at": video.created_at.isoformat() if video.created_at else None,
+        },
+        "segments": [
+            {
+                "sequence_number": seg.sequence_number,
+                "start_time": seg.start_time,
+                "end_time": seg.end_time,
+                "text": seg.original_text,
+            }
+            for seg in segments
+        ],
+    }
+
+
+def get_original_segments_or_404(
+    video_id: str, db: Session, identity: RequestIdentity
+) -> tuple[Video, list[Segment]]:
+    """Get video and segments for an original-transcript export.
+
+    Unlike get_segments_or_404, this only requires that transcription has
+    produced segments - it does not require translation (status COMPLETED
+    or translated_text) since the original transcript is available as soon
+    as a video reaches TRANSCRIBED.
+    """
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    require_video_owner(video, identity)
+
+    segments = (
+        db.query(Segment)
+        .filter(Segment.video_id == video_id)
+        .order_by(Segment.sequence_number)
+        .all()
+    )
+    if not segments:
+        raise HTTPException(
+            status_code=400,
+            detail="No segments found. Transcription may not be complete.",
+        )
+
+    return video, segments
+
+
+@router.get("/{video_id}/original/srt")
+def export_original_srt(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
+    """Export the original (untranslated) transcript as SRT."""
+    with get_db_session() as db:
+        video, segments = get_original_segments_or_404(video_id, db, identity)
+
+        srt_content = generate_original_srt(segments)
+        download_name = sanitize_filename(video.filename) + "_original.srt"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "original_srt",
+        )
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{download_name}"',
+        "Content-Type": "text/plain; charset=utf-8",
+    }
+    return Response(content=srt_content.encode("utf-8"), headers=headers)
+
+
+@router.get("/{video_id}/original/vtt")
+def export_original_vtt(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
+    """Export the original (untranslated) transcript as WebVTT."""
+    with get_db_session() as db:
+        video, segments = get_original_segments_or_404(video_id, db, identity)
+
+        vtt_content = generate_original_vtt(segments)
+        download_name = sanitize_filename(video.filename) + "_original.vtt"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "original_vtt",
+        )
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{download_name}"',
+        "Content-Type": "text/vtt; charset=utf-8",
+    }
+    return Response(content=vtt_content.encode("utf-8"), headers=headers)
+
+
+@router.get("/{video_id}/original/txt")
+def export_original_txt_format(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
+    """Export the original (untranslated) transcript as plain text."""
+    with get_db_session() as db:
+        video, segments = get_original_segments_or_404(video_id, db, identity)
+
+        txt_content = generate_original_txt(segments)
+        download_name = sanitize_filename(video.filename) + "_original.txt"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "original_txt",
+        )
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{download_name}"',
+        "Content-Type": "text/plain; charset=utf-8",
+    }
+    return Response(content=txt_content.encode("utf-8"), headers=headers)
+
+
+@router.get("/{video_id}/original/json")
+def export_original_json_format(
+    video_id: str,
+    identity: RequestIdentity = Depends(get_current_user_or_byok),
+) -> Response:
+    """Export the original (untranslated) transcript as JSON."""
+    with get_db_session() as db:
+        video, segments = get_original_segments_or_404(video_id, db, identity)
+
+        json_data = generate_original_json(video, segments)
+        download_name = sanitize_filename(video.filename) + "_original.json"
+        _log_export(
+            identity,
+            video.id,
+            video.filename,
+            video.source_language,
+            video.target_language,
+            "original_json",
+        )
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{download_name}"',
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    return Response(
+        content=json.dumps(json_data, indent=2, ensure_ascii=False).encode("utf-8"),
+        headers=headers,
+    )
+
+
 @router.get("/{video_id}/transcription")
 def export_original_transcription(
     video_id: str,
