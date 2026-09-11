@@ -26,6 +26,9 @@ services:
       - .:/app
     env_file:
       - .env
+    environment:
+      # Serve /docs, /redoc and /openapi.json locally; production leaves this off.
+      ENABLE_API_DOCS: "true"
     working_dir: /app
     command: >
       python -m uvicorn app.main:app
@@ -71,8 +74,10 @@ services:
       POSTGRES_USER: termsub
       POSTGRES_PASSWORD: termsub
       POSTGRES_DB: termsub
+    # Host port 5433 (not 5432) so this doesn't clash with other local
+    # Postgres instances. Containers still reach it internally at db:5432.
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

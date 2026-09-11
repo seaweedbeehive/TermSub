@@ -1,0 +1,40 @@
+# Keep secrets, local data and tooling out of Docker images.
+# Runtime configuration comes from environment variables (Railway) or
+# docker-compose's env_file, never from files baked into the image.
+
+# Secrets
+.env
+.env.*
+
+# Version control and worktrees
+.git
+.git-worktrees
+.github
+
+# Local runtime data
+uploads/
+exports/
+**/*.db
+**/*.sqlite3
+**/*.sqlite3-journal
+
+# Python environments and caches
+venv/
+.venv/
+**/__pycache__
+**/*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor, OS and local tooling
+**/.DS_Store
+.vscode/
+.idea/
+.claude/
+.playwright-mcp/
+.screenshots/
+docs/
+*.log

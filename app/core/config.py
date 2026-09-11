@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_DAYS: int = 7
     ADMIN_API_KEY: str = ""
+    # Interactive API docs (/docs, /redoc) and the /openapi.json schema.
+    # Off by default so production doesn't publish a map of every endpoint;
+    # docker-compose turns it on for local development.
+    ENABLE_API_DOCS: bool = False
 
     # Email (Resend)
     RESEND_API_KEY: str | None = None

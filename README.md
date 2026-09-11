@@ -206,6 +206,8 @@ Open `http://localhost:8000` in your browser, or use the deployed app at [https:
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
+These are only served when `ENABLE_API_DOCS=true` (Docker Compose sets it; production leaves it off).
+
 ---
 
 ## API Endpoints

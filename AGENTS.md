@@ -165,6 +165,7 @@ Copy `.env.example` to `.env` and fill in required values:
 | `JWT_SECRET_KEY` | Yes | Must be strong and random; app refuses weak/default secrets. |
 | `FRONTEND_BASE_URL` | Yes | CORS origin; default `http://localhost:8000`. |
 | `RESEND_API_KEY` | No | Leave blank to disable email. |
+| `ENABLE_API_DOCS` | No | `true` serves `/docs`, `/redoc`, `/openapi.json`. Defaults to `false`; Docker Compose sets it `true` for `web`. Leave unset in production. |
 
 ### Run Locally
 
@@ -177,6 +178,8 @@ docker compose up --build
 ```
 
 This starts a `migrate` service (waits for Postgres, then runs `alembic upgrade head`), `web` (FastAPI, `uvicorn --reload`), `worker` (Celery), `db` (Postgres 15), and `redis`.
+
+The `db` container is published on host port **5433** (not 5432) so it doesn't collide with other local Postgres instances; containers still reach it internally at `db:5432`. Redis is published on host port 6379.
 
 #### Manual / Development
 
@@ -192,7 +195,7 @@ Terminal 2 — FastAPI:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The web UI is at `http://localhost:8000`. API docs are at `/docs` and `/redoc`.
+The web UI is at `http://localhost:8000`. API docs are at `/docs` and `/redoc` when `ENABLE_API_DOCS=true` (off by default; Docker Compose turns it on).
 
 #### Production Entrypoint
 
@@ -210,8 +213,14 @@ pytest -k "quota" -v                         # keyword filter
 ```
 
 Requirements for tests:
-- `DATABASE_URL` must point to a reachable Postgres (`.env.local` uses `localhost:5432`).
-- Redis must be reachable.
+- `DATABASE_URL` must point to a reachable Postgres, and `REDIS_URL` to a reachable Redis. `.env` uses Docker service names (`db`, `redis`) that don't resolve from the host, so for host-side test runs override them from `.env.local` (gitignored), which should contain `DATABASE_URL=postgresql://termsub:termsub@localhost:5433/termsub` and `REDIS_URL=redis://localhost:6379/0`:
+
+  ```bash
+  docker compose up -d db redis
+  set -a; source .env.local; set +a
+  alembic upgrade head
+  pytest
+  ```
 - `conftest.py` creates real `User` rows and clears Redis keys (`rate_limit:*`, `revoked_token:*`, `resend_cooldown:*`) between tests.
 - The `auth_headers` / `authenticated_user` fixtures mint valid JWTs.
 
@@ -368,6 +377,7 @@ The following are current security facts and known risks agents should be aware 
 - Email verification and password-reset tokens are hashed (`hash_token`, SHA-256) before storage in `users.email_verification_token` / `users.password_reset_token` — the raw token only ever exists in the emailed link.
 - `(video_id, sequence_number)` has a `unique=True` index (`idx_segments_video_seq` in `app/models/video.py`) — collisions are now rejected at the DB level.
 - Security headers middleware (`SecurityHeadersMiddleware` in `app/main.py`) sets CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and HSTS (on HTTPS requests).
+- Interactive API docs and the OpenAPI schema are not served unless `ENABLE_API_DOCS=true` (default off).
 - Single migration system: `alembic/` only (see Database Migrations above) — no more parallel `Base.metadata.create_all()`/`ensure_schema()` startup patching.
 
 ### Known Risks (Do Not Reinvent Without Addressing)
